@@ -66,6 +66,8 @@ w:new {
 	id = 100,
 }
 
+table.insert(t, { x = 3, y = 4 })
+
 w:new {
 	vector = {
 		x = 5,
@@ -73,6 +75,8 @@ w:new {
 	},
 	mark = true,
 }
+
+table.insert(t, { x = 5, y = 6 })
 
 w:update()
 
@@ -94,7 +98,19 @@ local function luasum()
 	end
 	return s
 end
+
 print("luasum = ", luasum())
+
+local function luanativesum()
+	local s = 0
+	for _, v in ipairs(t) do
+		s = s + v.x + v.y
+	end
+	return s
+end
+
+print("lnative sum = ", luanativesum())
 
 print("CSUM", timing(csum))
 print("LUASUM", timing(luasum))
+print("LNATIVESUM", timing(luanativesum))

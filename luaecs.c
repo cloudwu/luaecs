@@ -153,6 +153,7 @@ add_component_id_(lua_State *L, struct entity_world *w, int cid, unsigned int ei
 		int stride = pool->stride;
 		if (stride > 0) {
 			void *newbuffer = lua_newuserdatauv(L, newcap * stride, 0);
+			lua_setiuservalue(L, 1, cid * 2 + 2);
 			memcpy(newbuffer, pool->buffer, cap * stride);
 			pool->buffer = newbuffer;
 		}
@@ -614,13 +615,6 @@ struct field {
 	int type;
 };
 
-struct simple_iter {
-	int id;
-	int field_n;
-	struct entity_world *world;
-	struct field f[1];
-};
-
 static int
 check_type(lua_State *L) {
 	int type = lua_tointeger(L, -1);
@@ -718,42 +712,6 @@ read_component(lua_State *L, int field_n, struct field *f, int index, const char
 }
 
 static int
-leach_simple(lua_State *L) {
-	struct simple_iter *iter = lua_touserdata(L, 1); 
-	if (lua_rawgeti(L, 2, 1) != LUA_TNUMBER) {
-		return luaL_error(L, "Invalid simple iterator");
-	}
-	int i = lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	if (i > 0) {
-		void * write_buffer = entity_iter_(iter->world, iter->id, i-1);
-		if (write_buffer == NULL)
-			return luaL_error(L, "Can't write to index %d", i);
-		write_component(L, iter->field_n, iter->f, 2, (char *)write_buffer);
-	}
-	void * read_buffer = entity_iter_(iter->world, iter->id, i++);
-	if (read_buffer == NULL) {
-		return 0;
-	}
-	lua_pushinteger(L, i);
-	lua_rawseti(L, 2, 1);
-	read_component(L, iter->field_n, iter->f,  2, (const char *)read_buffer);
-	lua_settop(L, 2);
-	return 1;
-}
-
-static int
-lpairs_simple(lua_State *L) {
-	struct simple_iter *iter = lua_touserdata(L, 1); 
-	lua_pushcfunction(L, leach_simple);
-	lua_pushvalue(L, 1);
-	lua_createtable(L, 1, iter->field_n);
-	lua_pushinteger(L, 0);
-	lua_rawseti(L, -2, 1);
-	return 3;		
-}
-
-static int
 get_len(lua_State *L, int index) {
 	lua_len(L, index);
 	if (lua_type(L, -1) != LUA_TNUMBER) {
@@ -765,44 +723,6 @@ get_len(lua_State *L, int index) {
 	}
 	lua_pop(L, 1);
 	return n;
-}
-
-static int
-lsimpleiter(lua_State *L) {
-	struct entity_world *w = getW(L);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	int n = get_len(L, 2);
-	if (n == 0) {
-		return luaL_error(L, "At least 1 field");
-	}
-	size_t sz = sizeof(struct simple_iter) + (n-1) * sizeof(struct field);
-	struct simple_iter * iter = (struct simple_iter *)lua_newuserdatauv(L, sz, 1);
-	// refer world
-	lua_pushvalue(L, 1);
-	lua_setiuservalue(L, -2, 1);
-	iter->world = w;
-	iter->field_n = n;
-	if (lua_getfield(L, 2, "id") != LUA_TNUMBER) {
-		return luaL_error(L, "Invalid id");
-	}
-	iter->id = lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	if (iter->id < 0 || iter->id >= MAX_COMPONENT || iter->id == ENTITY_REMOVED || w->c[iter->id].cap == 0) {
-		return luaL_error(L, "Invalid id %d", iter->id);
-	}
-	int i;
-	for (i=0;i<n;i++) {
-		if (lua_geti(L, 2, i+1) != LUA_TTABLE) {
-			luaL_error(L, "Invalid field %d", i);
-		}
-		get_field(L, i+1, &iter->f[i]);
-	}
-	if (luaL_newmetatable(L, "ENTITY_SIMPLEITER")) {
-		lua_pushcfunction(L, lpairs_simple);
-		lua_setfield(L, -2, "__call");
-	}
-	lua_setmetatable(L, -2);
-	return 1;
 }
 
 #define COMPONENT_IN 1
@@ -1262,7 +1182,6 @@ luaopen_ecs_core(lua_State *L) {
 			{ "update", lupdate },
 			{ "clear", lclear_type },
 			{ "_context", lcontext },
-			{ "_simpleiter", lsimpleiter },
 			{ "_groupiter", lgroupiter },
 			{ NULL, NULL },
 		};

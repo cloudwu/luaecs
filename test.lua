@@ -41,8 +41,9 @@ end
 w:update()
 
 local function swap_c()
-	for v in w:each "vector" do
-		v.x, v.y = v.y, v.x
+	for v in w:select "vector:update" do
+		local vec = v.vector
+		vec.x, vec.y = vec.y, vec.x
 	end
 end
 
@@ -100,8 +101,8 @@ print("csum = ", csum())
 
 local function luasum()
 	local s = 0
-	for v in w:each "vector" do
-		s = s + v.x + v.y
+	for v in w:select "vector:in" do
+		s = s + v.vector.x + v.vector.y
 	end
 	return s
 end
@@ -123,7 +124,7 @@ print("LUASUM", timing(luasum))
 print("LNATIVESUM", timing(luanativesum))
 
 print "vector:update"
-for v in w:select "vector:update" do	-- The same with w:each "vector"
+for v in w:select "vector:update" do
 	local vec = v.vector
 	print(vec.x, vec.y)
 	vec.x, vec.y = vec.y , vec.x

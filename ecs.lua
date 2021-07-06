@@ -24,24 +24,8 @@ local function cache_world(obj, k)
 	local c = {
 		typenames = {},
 		id = 0,
-		each = {},
 		select = {},
 	}
-
-	local function cache_each(each, key)
-		local tc = assert(c.typenames[key])
-		local type_desc = { id = tc.id }
-		for i, v in ipairs(tc) do
-			type_desc[i] = tc[i]
-		end
-		each[key] = k:_simpleiter(type_desc)
-		return each[key]
-	end
-
-	setmetatable(c.each, {
-		__mode = "kv",
-		__index = cache_each,
-		})
 
 	local function gen_select_pat(pat)
 		local typenames = c.typenames
@@ -211,10 +195,6 @@ function M:context(t)
 		id[i] = tc.id
 	end
 	return self:_context(id)
-end
-
-function M:each(name)
-	return context[self].each[name]()
 end
 
 function M:select(pat)

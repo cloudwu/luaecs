@@ -143,7 +143,11 @@ do	-- newtype
 		for i, v in ipairs(typeclass) do
 			c[i] = align(c, parse(v))
 		end
-		if c.size > 0 then
+		if typeclass.type == "lua" then
+			assert(c.size == 0)
+			c.size = ecs._LUAOBJECT
+			c.islua = true
+		elseif c.size > 0 then
 			align_struct(c, typeclass[1][1])
 			local pack = "!4="
 			for i = 1, #c do
@@ -180,7 +184,9 @@ function M:new(obj)
 		if not tc then
 			error ("Invalid key : ".. k)
 		end
-		if tc.tag then
+		if tc.islua then
+			self:_addcomponent(eid, tc.id, v)
+		elseif tc.tag then
 			self:_addcomponent(eid, tc.id)
 		elseif tc.type then
 			self:_addcomponent(eid, tc.id, string.pack(tc.pack, mapbool[v] or v))

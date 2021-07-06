@@ -12,13 +12,14 @@
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
 #define DEFAULT_SIZE 128
+#define STRIDE_LUA -1
 #define DUMMY_PTR (void *)(uintptr_t)(~0)
 
 struct component_pool {
 	int cap;
 	int n;
 	int count;
-	int stride;
+	int stride;	// -1 means lua object
 	int last_lookup;
 	unsigned int *id;
 	void *buffer;
@@ -82,12 +83,12 @@ lcount_memory(lua_State *L) {
 		struct component_pool *c = &w->c[i];
 		if (c->id) {
 			sz += c->cap * sizeof(unsigned int);
+			msz += c->n * sizeof(unsigned int);
 		}
-		if (c->buffer) {
+		if (c->buffer != DUMMY_PTR) {
 			sz += c->cap * c->stride;
+			msz += c->cap * c->stride;
 		}
-
-		msz += c->n * (sizeof(unsigned int) + c->stride);
 	}
 	lua_pushinteger(L, sz);
 	lua_pushinteger(L, msz);
@@ -106,14 +107,12 @@ shrink_component_pool(lua_State *L, struct component_pool *c, int id) {
 		lua_setiuservalue(L, 1, id * 2 + 1);
 		lua_pushnil(L);
 		lua_setiuservalue(L, 1, id * 2 + 2);
-	} if (c->n < c->cap) {
+	} else if (c->stride > 0 && c->n < c->cap) {
 		c->cap = c->n;
 		c->id = (unsigned int *)lua_newuserdatauv(L, c->n * sizeof(unsigned int), 0);
 		lua_setiuservalue(L, 1, id * 2 + 1);
-		if (c->stride > 0) {
-			c->buffer = lua_newuserdatauv(L, c->n * c->stride, 0);
-			lua_setiuservalue(L, 1, id * 2 + 2);
-		}
+		c->buffer = lua_newuserdatauv(L, c->n * c->stride, 0);
+		lua_setiuservalue(L, 1, id * 2 + 2);
 	}
 }
 
@@ -127,45 +126,60 @@ lcollect_memory(lua_State *L) {
 	return 0;
 }
 
-static void *
-add_component_(lua_State *L, struct entity_world *w, int cid, unsigned int eid, const void *buffer) {
+static int
+add_component_id_(lua_State *L, struct entity_world *w, int cid, unsigned int eid) {
 	struct component_pool *pool = &w->c[cid];
 	int cap = pool->cap;
 	int index = pool->n;
-	int stride = pool->stride;
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
 			pool->id = (unsigned int *)lua_newuserdatauv(L, cap * sizeof(unsigned int), 0);
 			lua_setiuservalue(L, 1, cid * 2 + 1);
 		}
 		if (pool->buffer == NULL) {
-			pool->buffer = lua_newuserdatauv(L, cap *stride, 0);
+			pool->buffer = lua_newuserdatauv(L, cap * pool->stride, 0);
+			lua_setiuservalue(L, 1, cid * 2 + 2);
+		} else if (pool->stride == STRIDE_LUA) {
+			lua_newtable(L);
 			lua_setiuservalue(L, 1, cid * 2 + 2);
 		}
-	} else {
-		if (pool->n >= pool->cap) {
-			// expand pool
-			int newcap = cap * 3 / 2;
-			unsigned int *newid = (unsigned int *)lua_newuserdatauv(L, newcap * sizeof(unsigned int), 0);
-			lua_setiuservalue(L, 1, cid * 2 + 1);
-			memcpy(newid, pool->id,  cap * sizeof(unsigned int));
-			pool->id = newid;
-			if (stride > 0) {
-				void *newbuffer = lua_newuserdatauv(L, newcap * stride, 0);
-				lua_setiuservalue(L, 1, cid * 2 + 2);
-				memcpy(newbuffer, pool->buffer, cap * stride);
-				pool->buffer = newbuffer;
-			}
-			pool->cap = newcap;
+	} else if (pool->n >= pool->cap) {
+		// expand pool
+		int newcap = cap * 3 / 2;
+		unsigned int *newid = (unsigned int *)lua_newuserdatauv(L, newcap * sizeof(unsigned int), 0);
+		lua_setiuservalue(L, 1, cid * 2 + 1);
+		memcpy(newid, pool->id,  cap * sizeof(unsigned int));
+		pool->id = newid;
+		int stride = pool->stride;
+		if (stride > 0) {
+			void *newbuffer = lua_newuserdatauv(L, newcap * stride, 0);
+			memcpy(newbuffer, pool->buffer, cap * stride);
+			pool->buffer = newbuffer;
 		}
+		pool->cap = newcap;
 	}
 	++pool->n;
 	pool->id[index] = eid;
-	char * ret = (char *)pool->buffer + index * stride;
-	if (buffer) {
-		memcpy(ret, buffer, stride);
-	}
-	return (void *)ret;
+	return index;
+}
+
+static inline void *
+get_ptr(struct component_pool *c, int index) {
+	if (c->stride > 0)
+		return (void *)((char *)c->buffer + c->stride * index);
+	else
+		return c->buffer;
+}
+
+static void *
+add_component_(lua_State *L, struct entity_world *w, int cid, unsigned int eid, const void *buffer) {
+	int index = add_component_id_(L, w, cid, eid);
+	struct component_pool *pool = &w->c[cid];
+	assert(pool->stride != STRIDE_LUA);
+	void *ret = get_ptr(pool, index);
+	if (buffer)
+		memcpy(ret, buffer, pool->stride);
+	return ret;
 }
 
 static inline int
@@ -183,13 +197,27 @@ ladd_component(lua_State *L) {
 	struct entity_world *w = getW(L);
 	unsigned int eid = luaL_checkinteger(L, 2);
 	int cid = check_cid(L, w, 3);
-	size_t sz;
-	const char *buffer = lua_tolstring(L, 4, &sz);
 	int stride = w->c[cid].stride;
-	if ((buffer == NULL && stride > 0) || (sz != stride)) {
-		return luaL_error(L, "Invalid data (size=%d/%d) for type %d", (int)sz, stride, cid);
+	if (stride <= 0) {
+		int index = add_component_id_(L, w, cid, eid);
+		if (stride == STRIDE_LUA) {
+			// lua object
+			lua_settop(L, 4);
+			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+				luaL_error(L, "Missing lua table for %d", cid);
+			}
+			lua_insert(L, -2);
+			lua_rawseti(L, -2, index + 1);
+		}
+	} else {
+		size_t sz;
+		const char *buffer = lua_tolstring(L, 4, &sz);
+		int stride = w->c[cid].stride;
+		if (buffer == NULL || sz != stride) {
+			return luaL_error(L, "Invalid data (size=%d/%d) for type %d", (int)sz, stride, cid);
+		}
+		add_component_(L, w, cid, eid, buffer);
 	}
-	add_component_(L, w, cid, eid, buffer);
 	return 0;
 }
 
@@ -212,7 +240,7 @@ remove_entity_(struct entity_world *w, int cid, int index, void *L) {
 	if (index < 0 || index >= c->count)
 		luaL_error((lua_State *)L, "Invalid index %d/%d", index, c->count);
 	unsigned int eid = c->id[index];
-	add_component_((lua_State *)L, w, ENTITY_REMOVED, eid, NULL);
+	add_component_id_((lua_State *)L, w, ENTITY_REMOVED, eid);
 }
 
 static int
@@ -340,15 +368,32 @@ rearrange(struct entity_world *w) {
 }
 
 static inline void
+move_tag(struct component_pool *pool, int from, int to) {
+	if (from != to) {
+		pool->id[to] = pool->id[from];
+	}
+}
+
+static inline void
 move_item(struct component_pool *pool, int from, int to) {
 	if (from != to) {
 		pool->id[to] = pool->id[from];
-		memcpy((char *)pool->buffer + to * pool->stride, (char *)pool->buffer + from * pool->stride, pool->stride);
+		int stride = pool->stride;
+		memcpy((char *)pool->buffer + to * stride, (char *)pool->buffer + from * stride, stride);
 	}
 }
 
 static void
-remove_all(struct component_pool *pool, struct component_pool *removed) {
+move_object(lua_State *L, struct component_pool *pool, int from, int to) {
+	if (from != to) {
+		pool->id[to] = pool->id[from];
+		lua_rawgeti(L, -1, from+1);
+		lua_rawseti(L, -2, to+1);
+	}
+}
+
+static void
+remove_all(lua_State *L, struct component_pool *pool, struct component_pool *removed, int cid) {
 	int index = 0;
 	int i;
 	unsigned int *id = removed->id;
@@ -367,10 +412,30 @@ remove_all(struct component_pool *pool, struct component_pool *removed) {
 	}
 	if (count > 0) {
 		index = 0;
-		for (i=0;i<pool->n;i++) {
-			if (pool->id[i] != 0) {
-				move_item(pool, i, index);
-				++index;
+		if (pool->stride == STRIDE_LUA) {
+			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+				luaL_error(L, "Missing lua object table for type %d", id);
+			}
+			for (i=0;i<pool->n;i++) {
+				if (pool->id[i] != 0) {
+					move_object(L, pool, i, index);
+					++index;
+				}
+			}
+			lua_pop(L, 1);	// pop lua object table
+		} else if (pool->stride == 0) {
+			for (i=0;i<pool->n;i++) {
+				if (pool->id[i] != 0) {
+					move_tag(pool, i, index);
+					++index;
+				}
+			}
+		} else {
+			for (i=0;i<pool->n;i++) {
+				if (pool->id[i] != 0) {
+					move_item(pool, i, index);
+					++index;
+				}
 			}
 		}
 		pool->n -= count;
@@ -389,7 +454,7 @@ lupdate(lua_State *L) {
 		for (i=1;i<MAX_COMPONENT;i++) {
 			struct component_pool *pool = &w->c[i];
 			if (pool->n > 0)
-				remove_all(pool, removed);
+				remove_all(L, pool, removed, i);
 		}
 		removed->n = 0;
 		removed->count = 0;
@@ -414,7 +479,7 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	assert(index >= 0);
 	if (index >= c->count)
 		return NULL;
-	return (char *)c->buffer + c->stride * index;
+	return get_ptr(c, index);
 }
 
 static void
@@ -442,9 +507,24 @@ entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
 	int result_index = lookup_component(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
-		return (char *)c->buffer + c->stride * result_index;
+		return get_ptr(c, result_index);
 	}
 	return NULL;
+}
+
+static int
+entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_id) {
+	struct component_pool *c = &w->c[cid];
+	if (index < 0 || index >= c->count)
+		return 0;
+	unsigned int eid = c->id[index];
+	c = &w->c[slibling_id];
+	int result_index = lookup_component(c, eid, c->last_lookup);
+	if (result_index >= 0) {
+		c->last_lookup = result_index;
+		return result_index + 1;
+	}
+	return 0;
 }
 
 static void *
@@ -453,7 +533,20 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id,
 	assert(index >=0 && index < c->count);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
+	assert(c->stride != STRIDE_LUA);
 	void * ret = add_component_((lua_State *)L, w, slibling_id, eid, buffer);
+	c->count = c->n;
+	return ret;
+}
+
+static int
+entity_add_sibling_index_(lua_State *L, struct entity_world *w, int cid, int index, int slibling_id) {
+	struct component_pool *c = &w->c[cid];
+	assert(index >=0 && index < c->count);
+	unsigned int eid = c->id[index];
+	// todo: pcall add_component_
+	assert(c->stride == STRIDE_LUA);
+	int ret = add_component_id_(L, w, slibling_id, eid);
 	c->count = c->n;
 	return ret;
 }
@@ -492,6 +585,9 @@ lcontext(lua_State *L) {
 		int cid = ctx->cid[i];
 		if (cid == ENTITY_REMOVED || cid < 0 || cid >= MAX_COMPONENT)
 			return luaL_error(L, "Invalid id (%d) at index %d", cid, i);
+		struct component_pool *c = &w->c[cid];
+		if (c->stride == STRIDE_LUA)
+			return luaL_error(L, "Can't iterate lua component in C (%d)", cid);
 	}
 	return 1;
 }
@@ -712,6 +808,7 @@ lsimpleiter(lua_State *L) {
 #define COMPONENT_IN 1
 #define COMPONENT_OUT 2
 #define COMPONENT_OPTIONAL 4
+#define COMPONENT_OBJECT 8
 
 struct group_key {
 	const char *name;
@@ -734,11 +831,7 @@ struct group_iter {
 };
 
 static int
-get_write_component(lua_State *L, int lua_index, const char *name, int n, struct field *f) {
-	if (n == 0) {
-		// todo : support change tag
-		return luaL_error(L, ".%s is a readonly tag", name);
-	}
+get_write_component(lua_State *L, int lua_index, const char *name, struct field *f, struct component_pool *c) {
 	switch (lua_getfield(L, lua_index, name)) {
 	case LUA_TNIL:
 		lua_pop(L, 1);
@@ -751,6 +844,10 @@ get_write_component(lua_State *L, int lua_index, const char *name, int n, struct
 	case LUA_TTABLE:
 		return 1;
 	default:
+		if (c->stride == STRIDE_LUA) {
+			// lua object
+			return 1;
+		}
 		if (f->key == NULL) {
 			// value type
 			return 1;
@@ -770,33 +867,62 @@ write_component_in_field(lua_State *L, int lua_index, const char *name, int n, s
 }
 
 static void
-update_last_index(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
+update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
 	int i;
 	int mainkey = iter->k[0].id;
+	struct component_pool *c = &iter->world->c[mainkey];
 	if ((iter->k[0].attrib & COMPONENT_OUT)
-		&& get_write_component(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f)) {
-		void * buffer = entity_iter_(iter->world, mainkey, idx);
-		if (buffer == NULL) {
+		&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
+		struct component_pool *c = &iter->world->c[mainkey];
+		if (c->count <= idx) {
 			luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
 		}
-		write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+		if (c->stride == STRIDE_LUA) {
+			if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
+				luaL_error(L, "Missing lua table for %d", mainkey);
+			}
+			lua_insert(L, -2);
+			lua_rawseti(L, -2, idx+1);
+		} else {
+			void * buffer = get_ptr(c, idx);
+			write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+		}
 	}
 
 	struct field *f = iter->f + iter->k[0].field_n;
 
 	for (i=1;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
+		struct component_pool *c = &iter->world->c[k->id];
 		if ((k->attrib & COMPONENT_OUT)
-			&& get_write_component(L, lua_index, k->name, k->field_n, f)) {
-			void * buffer = entity_sibling_(iter->world, mainkey, idx, k->id);
-			if (buffer == NULL) {
+			&& get_write_component(L, lua_index, k->name, f, c)) {
+			int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+			if (index == 0) {
 				luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 			}
-			write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+			if (c->stride == STRIDE_LUA) {
+				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua table for %d", k->id);
+				}
+				lua_insert(L, -2);
+				lua_rawseti(L, -2, index);
+			} else {
+				void *buffer = get_ptr(c, index - 1);
+				write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+			}
 		} else if (is_temporary(k->attrib)
-			&& get_write_component(L, lua_index, k->name, k->field_n, f)) {
-			void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L);
-			write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+			&& get_write_component(L, lua_index, k->name, f, c)) {
+			if (c->stride == STRIDE_LUA) {
+				int index = entity_add_sibling_index_(L, iter->world, mainkey, idx, k->id);
+				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua table for %d", k->id);
+				}
+				lua_insert(L, -2);
+				lua_rawseti(L, -2, index);
+			} else {
+				void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L);
+				write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+			}
 		}
 		f += k->field_n;
 	}
@@ -830,30 +956,38 @@ leach_group(lua_State *L) {
 		return luaL_error(L, "Invalid group iterator");
 	}
 	int i = lua_tointeger(L, -1);
+	if (i < 0)
+		return luaL_error(L, "Invalid iterator index %d", i);
 	lua_pop(L, 1);
+
+	if (lua_getiuservalue(L, 1, 1) != LUA_TUSERDATA) {
+		return luaL_error(L, "Missing world object for iterator");
+	}
+	int world_index = lua_gettop(L);
+
 	if (i > 0 && !iter->readonly) {
-		update_last_index(L, 2, iter, i-1);
+		update_last_index(L, world_index, 2, iter, i-1);
 	}
 	int mainkey = iter->k[0].id;
-	void * buffer[MAX_COMPONENT];
+	unsigned int index[MAX_COMPONENT];
 	int j;
 	do {
-		buffer[0] = entity_iter_(iter->world, mainkey, i);
-		if (buffer[0] == NULL) {
+		if (iter->world->c[mainkey].count <= i) {
 			return 0;
 		}
+		index[0] = i+1;
 		for (j=1;j<iter->nkey;j++) {
 			struct group_key *k = &iter->k[j];
 			if (!is_temporary(k->attrib)) {
-				buffer[j] = entity_sibling_(iter->world, mainkey, i, k->id);
-				if (buffer[j] == NULL) {
+				index[j] = entity_sibling_index_(iter->world, mainkey, i, k->id);
+				if (index[j] == 0) {
 					if (!(k->attrib & COMPONENT_OPTIONAL)) {
 						// required. try next
 						break;
 					}
 				}
 			} else {
-				buffer[j] = NULL;
+				index[j] = 0;
 			}
 		}
 		++i;
@@ -866,14 +1000,30 @@ leach_group(lua_State *L) {
 
 	for (i=0;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		if (k->attrib & COMPONENT_IN) {
-			if (buffer[i]) {
-				read_component_in_field(L, 2, k->name, k->field_n, f, buffer[i]);
+		struct component_pool *c = &iter->world->c[k->id];
+		if (c->stride == STRIDE_LUA) {
+			// lua object component
+			if (index[i]) {
+				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					return luaL_error(L, "Missing lua table for %d", k->id);
+				}
+
+				lua_rawgeti(L, -1, index[i]);
+				lua_setfield(L, 2, k->name);
+				lua_pop(L, 1);
 			} else {
 				lua_pushnil(L);
 				lua_setfield(L, 2, k->name);
 			}
-		} else if (buffer[i] == NULL && !is_temporary(k->attrib)) {
+		} else if (k->attrib & COMPONENT_IN) {
+			if (index[i]) {
+				void *ptr = get_ptr(c, index[i]-1);
+				read_component_in_field(L, 2, k->name, k->field_n, f, ptr);
+			} else {
+				lua_pushnil(L);
+				lua_setfield(L, 2, k->name);
+			}
+		} else if (index[i] == 0 && !is_temporary(k->attrib)) {
 			lua_pushnil(L);
 			lua_setfield(L, 2, k->name);
 		}
@@ -885,7 +1035,7 @@ leach_group(lua_State *L) {
 
 static void
 create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
-	if (k->field_n == 0) {	// is tag?
+	if (k->field_n == 0) {	// is tag or object?
 		return;
 	}
 	if (k->field_n == 1 && f[0].key == NULL) {
@@ -1057,8 +1207,14 @@ lgroupiter(lua_State *L) {
 	for (i=0; i< nkey; i++) {
 		lua_geti(L, 2, i+1);
 		int n = get_key(w, L, &iter->k[i], f);
+		struct component_pool *c = &w->c[iter->k[i].id];
 		f += n;
 		lua_pop(L, 1);
+		if (c->stride == STRIDE_LUA) {
+			if (n != 0)
+				return luaL_error(L, ".%s is object component, no fields needed", iter->k[i].name);
+			iter->k[i].attrib |= COMPONENT_OBJECT;
+		}
 		int attrib = iter->k[i].attrib;
 		int readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
 		if (!readonly)
@@ -1123,6 +1279,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEFLOAT");
 	lua_pushinteger(L, TYPE_BOOL);
 	lua_setfield(L, -2, "_TYPEBOOL");
+	lua_pushinteger(L, STRIDE_LUA);
+	lua_setfield(L, -2, "_LUAOBJECT");
 
 	return 1;
 }

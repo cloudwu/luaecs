@@ -1,6 +1,6 @@
 local ecs = require "ecs"
 
-local N = 1 -- 000
+local N = 1
 
 local w = ecs.world()
 print("memory:", w:memory())
@@ -19,6 +19,13 @@ w:register {
 	name = "id",
 	type = "int"
 }
+
+w:register {
+	name = "object",
+	type = "lua",
+}
+
+w:new { object = "Hello" }
 
 local t = {}
 for i = 1, N do
@@ -134,4 +141,17 @@ print "vector:in id:in"
 
 for v in w:select "vector:in id:in" do
 	print(v.vector.x, v.vector.y, v.id)
+end
+
+print "object:update"
+
+for v in w:select "object:update" do
+	print(v.object)
+	v.object = v.object .. " world"
+end
+
+print "object:in"
+
+for v in w:select "object:in" do
+	print(v.object)
 end

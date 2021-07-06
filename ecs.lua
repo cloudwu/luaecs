@@ -1,10 +1,31 @@
 local ecs = require "ecs.core"
 
+local function get_attrib(opt, inout)
+	local desc = {}
+	if opt == "?" then
+		desc.opt = true
+	else
+		assert(opt == ":")
+	end
+	if inout == "in" then
+		desc.r = true
+	elseif inout == "out" then
+		desc.w = true
+	elseif inout == "update" then
+		desc.r = true
+		desc.w = true
+	else
+		assert(inout == "temp")
+	end
+	return desc
+end
+
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
 		id = 0,
 		each = {},
+		select = {},
 	}
 
 	local function cache_each(each, key)
@@ -21,6 +42,38 @@ local function cache_world(obj, k)
 		__mode = "kv",
 		__index = cache_each,
 		})
+
+	local function gen_select_pat(pat)
+		local typenames = c.typenames
+		local desc = {}
+		local idx = 1
+		for key, opt, inout in pat:gmatch "([_%w]+)([:?])(%l+)" do
+			local tc = assert(typenames[key])
+			local a = get_attrib(opt, inout)
+			a.name = tc.name
+			a.id = tc.id
+			a.type = tc.type
+			local n = #tc
+			for i=1,#tc do
+				a[i] = tc[i]
+			end
+			desc[idx] = a
+			idx = idx + 1
+		end
+		return desc
+	end
+
+	local function cache_select(cache, pat)
+		local pat_desc = gen_select_pat(pat)
+		cache[pat] = k:_groupiter(pat_desc)
+		return cache[pat]
+	end
+
+	setmetatable(c.select, {
+		__mode = "kv",
+		__index = cache_select,
+		})
+
 	obj[k] = c
 	return c
 end
@@ -104,6 +157,7 @@ do	-- newtype
 				c.type = t
 				c.size = typesize[t]
 				c.pack = typepack[t]
+				c[1] = { t, "v", 0 }
 			else
 				c.tag = true
 			end
@@ -154,10 +208,11 @@ function M:context(t)
 end
 
 function M:each(name)
-	local ctx = context[self]
-	local typenames = ctx.typenames
-	local c = assert(typenames[name])
-	return ctx.each[name]()
+	return context[self].each[name]()
+end
+
+function M:select(pat)
+	return context[self].select[pat]()
 end
 
 return ecs

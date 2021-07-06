@@ -9,7 +9,7 @@ struct ecs_capi {
 	void * (*iter)(struct entity_world *w, int cid, int index);
 	void (*clear_type)(struct entity_world *w, int cid);
 	void * (*sibling)(struct entity_world *w, int cid, int index, int slibling_id);
-	void (*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L);
+	void* (*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L);
 	void (*remove)(struct entity_world *w, int cid, int index, void *L);
 };
 
@@ -45,11 +45,11 @@ entity_sibling(struct ecs_context *ctx, int cid, int index, int slibling_id) {
 	return ctx->api->sibling(ctx->world,  ctx->cid[cid], index, ctx->cid[slibling_id]);
 }
 
-static inline void
+static inline void *
 entity_add_sibling(struct ecs_context *ctx, int cid, int index, int slibling_id, const void *buffer) {
 	check_id_(ctx, cid);
 	check_id_(ctx, slibling_id);
-	ctx->api->add_sibling(ctx->world, ctx->cid[cid], index, ctx->cid[slibling_id], buffer, ctx->L);
+	return ctx->api->add_sibling(ctx->world, ctx->cid[cid], index, ctx->cid[slibling_id], buffer, ctx->L);
 }
 
 static inline void

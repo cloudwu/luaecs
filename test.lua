@@ -1,6 +1,6 @@
 local ecs = require "ecs"
 
-local N = 100000
+local N = 1 -- 000
 
 local w = ecs.world()
 print("memory:", w:memory())
@@ -114,3 +114,24 @@ print("lnative sum = ", luanativesum())
 print("CSUM", timing(csum))
 print("LUASUM", timing(luasum))
 print("LNATIVESUM", timing(luanativesum))
+
+print "vector:update"
+for v in w:select "vector:update" do	-- The same with w:each "vector"
+	local vec = v.vector
+	print(vec.x, vec.y)
+	vec.x, vec.y = vec.y , vec.x
+end
+
+print "vector:in id?out"
+for v in w:select "vector:in id?out" do
+	print(v.vector.x, v.vector.y, v.id)
+	if v.id then
+		v.id = 200
+	end
+end
+
+print "vector:in id:in"
+
+for v in w:select "vector:in id:in" do
+	print(v.vector.x, v.vector.y, v.id)
+end

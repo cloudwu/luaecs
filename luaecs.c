@@ -127,7 +127,7 @@ lcollect_memory(lua_State *L) {
 	return 0;
 }
 
-static void
+static void *
 add_component_(lua_State *L, struct entity_world *w, int cid, unsigned int eid, const void *buffer) {
 	struct component_pool *pool = &w->c[cid];
 	int cap = pool->cap;
@@ -161,7 +161,11 @@ add_component_(lua_State *L, struct entity_world *w, int cid, unsigned int eid, 
 	}
 	++pool->n;
 	pool->id[index] = eid;
-	memcpy((char *)pool->buffer + index * stride, buffer, stride);
+	char * ret = (char *)pool->buffer + index * stride;
+	if (buffer) {
+		memcpy(ret, buffer, stride);
+	}
+	return (void *)ret;
 }
 
 static inline int
@@ -443,14 +447,15 @@ entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
 	return NULL;
 }
 
-static void
+static void *
 entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L) {
 	struct component_pool *c = &w->c[cid];
 	assert(index >=0 && index < c->count);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
-	add_component_((lua_State *)L, w, slibling_id, eid, buffer);
+	void * ret = add_component_((lua_State *)L, w, slibling_id, eid, buffer);
 	c->count = c->n;
+	return ret;
 }
 
 static int
@@ -520,22 +525,24 @@ struct simple_iter {
 	struct field f[1];
 };
 
-static void
-get_field(lua_State *L, int index, int i, struct field *f) {
-	if (lua_geti(L, index, i) != LUA_TTABLE) {
-		luaL_error(L, "Invalid field %d", i);
+static int
+check_type(lua_State *L) {
+	int type = lua_tointeger(L, -1);
+	if (type != TYPE_INT &&
+		type != TYPE_FLOAT &&
+		type != TYPE_BOOL) {
+		luaL_error(L, "Invalid field type(%d)", type);
 	}
+	lua_pop(L, 1);
+	return type;
+}
 
+static void
+get_field(lua_State *L, int i, struct field *f) {
 	if (lua_geti(L, -1, 1) != LUA_TNUMBER) {
 		luaL_error(L, "Invalid field %d [1] type", i);
 	}
-	f->type = lua_tointeger(L, -1);
-	if (f->type != TYPE_INT &&
-		f->type != TYPE_FLOAT &&
-		f->type != TYPE_BOOL) {
-		luaL_error(L, "Invalid field %d [1] type(%d)", i, f->type);
-	}
-	lua_pop(L, 1);
+	f->type = check_type(L);
 
 	if (lua_geti(L, -1, 2) != LUA_TSTRING) {
 		luaL_error(L, "Invalid field %d [2] key", i);
@@ -553,52 +560,64 @@ get_field(lua_State *L, int index, int i, struct field *f) {
 }
 
 static void
-write_component(lua_State *L, struct simple_iter *iter, int index, char *buffer) {
-	int i;
-	for (i=0; i < iter->field_n; i++) {
-		int luat = lua_getfield(L, index, iter->f[i].key);
-		char *ptr = buffer + iter->f[i].offset;
-		switch (iter->f[i].type) {
+write_value(lua_State *L, struct field *f, char *buffer) {
+	int luat = lua_type(L, -1);
+	char *ptr = buffer + f->offset;
+	switch (f->type) {
 		case TYPE_INT:
 			if (!lua_isinteger(L, -1))
-				luaL_error(L, "Invalid .%s type %s (int)", iter->f[i].key, lua_typename(L, luat));
+				luaL_error(L, "Invalid .%s type %s (int)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(int *)ptr = lua_tointeger(L, -1);
 			break;
 		case TYPE_FLOAT:
 			if (luat != LUA_TNUMBER)
-				luaL_error(L, "Invalid .%s type %s (float)", iter->f[i].key, lua_typename(L, luat));
+				luaL_error(L, "Invalid .%s type %s (float)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(float *)ptr = lua_tonumber(L, -1);
 			break;
 		case TYPE_BOOL:
 			if (luat != LUA_TBOOLEAN)
-				luaL_error(L, "Invalid .%s type %s (bool)", iter->f[i].key, lua_typename(L, luat));
+				luaL_error(L, "Invalid .%s type %s (bool)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(unsigned char *)ptr = lua_toboolean(L, -1);
-		}
-		lua_pop(L, 1);
+			break;
+	}
+	lua_pop(L, 1);
+}
+
+static inline void
+write_component(lua_State *L, int field_n, struct field *f, int index, char *buffer) {
+	int i;
+	for (i=0; i < field_n; i++) {
+		lua_getfield(L, index, f[i].key);
+		write_value(L, &f[i], buffer);
 	}
 }
 
 static void
-read_component(lua_State *L, struct simple_iter *iter, int index, const char * buffer) {
+read_value(lua_State *L, struct field *f, const char *buffer) {
+	const char * ptr = buffer + f->offset;
+	switch (f->type) {
+	case TYPE_INT:
+		lua_pushinteger(L, *(const int *)ptr);
+		break;
+	case TYPE_FLOAT:
+		lua_pushnumber(L, *(const float *)ptr);
+		break;
+	case TYPE_BOOL:
+		lua_pushboolean(L, *ptr);
+		break;
+	default:
+		// never here
+		luaL_error(L, "Invalid field type %d", f->type);
+		break;
+	}
+}
+
+static void
+read_component(lua_State *L, int field_n, struct field *f, int index, const char * buffer) {
 	int i;
-	for (i=0; i < iter->field_n; i++) {
-		const char * ptr = buffer + iter->f[i].offset;
-		switch (iter->f[i].type) {
-		case TYPE_INT:
-			lua_pushinteger(L, *(const int *)ptr);
-			break;
-		case TYPE_FLOAT:
-			lua_pushnumber(L, *(const float *)ptr);
-			break;
-		case TYPE_BOOL:
-			lua_pushboolean(L, *ptr);
-			break;
-		default:
-			// never here
-			lua_pushnil(L);
-			break;
-		}
-		lua_setfield(L, index, iter->f[i].key);
+	for (i=0; i < field_n; i++) {
+		read_value(L, &f[i], buffer);
+		lua_setfield(L, index, f[i].key);
 	}
 }
 
@@ -614,7 +633,7 @@ leach_simple(lua_State *L) {
 		void * write_buffer = entity_iter_(iter->world, iter->id, i-1);
 		if (write_buffer == NULL)
 			return luaL_error(L, "Can't write to index %d", i);
-		write_component(L, iter, 2, (char *)write_buffer);
+		write_component(L, iter->field_n, iter->f, 2, (char *)write_buffer);
 	}
 	void * read_buffer = entity_iter_(iter->world, iter->id, i++);
 	if (read_buffer == NULL) {
@@ -622,7 +641,7 @@ leach_simple(lua_State *L) {
 	}
 	lua_pushinteger(L, i);
 	lua_rawseti(L, 2, 1);
-	read_component(L, iter, 2, (const char *)read_buffer);
+	read_component(L, iter->field_n, iter->f,  2, (const char *)read_buffer);
 	lua_settop(L, 2);
 	return 1;
 }
@@ -639,20 +658,30 @@ lpairs_simple(lua_State *L) {
 }
 
 static int
+get_len(lua_State *L, int index) {
+	lua_len(L, index);
+	if (lua_type(L, -1) != LUA_TNUMBER) {
+		return luaL_error(L, "Invalid table length");
+	}
+	int n = lua_tointeger(L, -1);
+	if (n < 0) {
+		return luaL_error(L, "Invalid table length %d", n);
+	}
+	lua_pop(L, 1);
+	return n;
+}
+
+static int
 lsimpleiter(lua_State *L) {
 	struct entity_world *w = getW(L);
 	luaL_checktype(L, 2, LUA_TTABLE);
-	lua_len(L, 2);
-	if (lua_type(L, -1) != LUA_TNUMBER) {
-		return luaL_error(L, "Invalid fields");
+	int n = get_len(L, 2);
+	if (n == 0) {
+		return luaL_error(L, "At least 1 field");
 	}
-	int n = lua_tointeger(L, -1);
-	if (n <= 0) {
-		return luaL_error(L, "Invalid fields number %d", n);
-	}
-	lua_pop(L, 1);
 	size_t sz = sizeof(struct simple_iter) + (n-1) * sizeof(struct field);
 	struct simple_iter * iter = (struct simple_iter *)lua_newuserdatauv(L, sz, 1);
+	// refer world
 	lua_pushvalue(L, 1);
 	lua_setiuservalue(L, -2, 1);
 	iter->world = w;
@@ -667,10 +696,382 @@ lsimpleiter(lua_State *L) {
 	}
 	int i;
 	for (i=0;i<n;i++) {
-		get_field(L, 2, i+1, &iter->f[i]);
+		if (lua_geti(L, 2, i+1) != LUA_TTABLE) {
+			luaL_error(L, "Invalid field %d", i);
+		}
+		get_field(L, i+1, &iter->f[i]);
 	}
 	if (luaL_newmetatable(L, "ENTITY_SIMPLEITER")) {
 		lua_pushcfunction(L, lpairs_simple);
+		lua_setfield(L, -2, "__call");
+	}
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
+#define COMPONENT_IN 1
+#define COMPONENT_OUT 2
+#define COMPONENT_OPTIONAL 4
+
+struct group_key {
+	const char *name;
+	int id;
+	int field_n;
+	int attrib;
+};
+
+static inline int
+is_temporary(int attrib) {
+	return (attrib & COMPONENT_IN) == 0 && (attrib & COMPONENT_OUT) == 0;
+}
+
+struct group_iter {
+	struct entity_world *world;
+	struct field *f;
+	int nkey;
+	int readonly;
+	struct group_key k[1];
+};
+
+static int
+get_write_component(lua_State *L, int lua_index, const char *name, int n, struct field *f) {
+	if (n == 0) {
+		// todo : support change tag
+		return luaL_error(L, ".%s is a readonly tag", name);
+	}
+	switch (lua_getfield(L, lua_index, name)) {
+	case LUA_TNIL:
+		lua_pop(L, 1);
+		// restore cache
+		lua_getmetatable(L, lua_index);
+		lua_getfield(L, -1, name);
+		lua_setfield(L, lua_index, name);
+		lua_pop(L, 1);	// pop metatable
+		return 0;
+	case LUA_TTABLE:
+		return 1;
+	default:
+		if (f->key == NULL) {
+			// value type
+			return 1;
+		}
+		return luaL_error(L, "Invalid iterator type %s", lua_typename(L, lua_type(L, -1)));
+	}
+}
+
+static void
+write_component_in_field(lua_State *L, int lua_index, const char *name, int n, struct field *f, void *buffer) {
+	if (f->key == NULL) {
+		write_value(L, f, buffer);
+	} else {
+		write_component(L, n, f, -1, (char *)buffer);
+		lua_pop(L, 1);
+	}
+}
+
+static void
+update_last_index(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
+	int i;
+	int mainkey = iter->k[0].id;
+	if ((iter->k[0].attrib & COMPONENT_OUT)
+		&& get_write_component(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f)) {
+		void * buffer = entity_iter_(iter->world, mainkey, idx);
+		if (buffer == NULL) {
+			luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
+		}
+		write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+	}
+
+	struct field *f = iter->f + iter->k[0].field_n;
+
+	for (i=1;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		if ((k->attrib & COMPONENT_OUT)
+			&& get_write_component(L, lua_index, k->name, k->field_n, f)) {
+			void * buffer = entity_sibling_(iter->world, mainkey, idx, k->id);
+			if (buffer == NULL) {
+				luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
+			}
+			write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+		} else if (is_temporary(k->attrib)
+			&& get_write_component(L, lua_index, k->name, k->field_n, f)) {
+			void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L);
+			write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+		}
+		f += k->field_n;
+	}
+}
+
+static void
+read_component_in_field(lua_State *L, int lua_index, const char *name, int n, struct field *f, void *buffer) {
+	if (n == 0) {
+		// It's tag
+		lua_pushboolean(L, buffer ? 1 : 0);
+		lua_setfield(L, lua_index, name);
+		return;
+	}
+	if (f->key == NULL) {
+		// value type
+		read_value(L, f, buffer);
+		lua_setfield(L, lua_index, name);
+		return;
+	}
+	if (lua_getfield(L, lua_index, name) != LUA_TTABLE) {
+		luaL_error(L, ".%s is missing", name);
+	}
+	read_component(L, n , f, lua_gettop(L), buffer);
+	lua_pop(L, 1);
+}
+
+static int
+leach_group(lua_State *L) {
+	struct group_iter *iter = lua_touserdata(L, 1); 
+	if (lua_rawgeti(L, 2, 1) != LUA_TNUMBER) {
+		return luaL_error(L, "Invalid group iterator");
+	}
+	int i = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	if (i > 0 && !iter->readonly) {
+		update_last_index(L, 2, iter, i-1);
+	}
+	int mainkey = iter->k[0].id;
+	void * buffer[MAX_COMPONENT];
+	int j;
+	do {
+		buffer[0] = entity_iter_(iter->world, mainkey, i);
+		if (buffer[0] == NULL) {
+			return 0;
+		}
+		for (j=1;j<iter->nkey;j++) {
+			struct group_key *k = &iter->k[j];
+			if (!is_temporary(k->attrib)) {
+				buffer[j] = entity_sibling_(iter->world, mainkey, i, k->id);
+				if (buffer[j] == NULL) {
+					if (!(k->attrib & COMPONENT_OPTIONAL)) {
+						// required. try next
+						break;
+					}
+				}
+			} else {
+				buffer[j] = NULL;
+			}
+		}
+		++i;
+	} while (j < iter->nkey);
+
+	lua_pushinteger(L, i);
+	lua_rawseti(L, 2, 1);
+
+	struct field *f = iter->f;
+
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		if (k->attrib & COMPONENT_IN) {
+			if (buffer[i]) {
+				read_component_in_field(L, 2, k->name, k->field_n, f, buffer[i]);
+			} else {
+				lua_pushnil(L);
+				lua_setfield(L, 2, k->name);
+			}
+		} else if (buffer[i] == NULL && !is_temporary(k->attrib)) {
+			lua_pushnil(L);
+			lua_setfield(L, 2, k->name);
+		}
+		f += k->field_n;
+	}
+	lua_settop(L, 2);
+	return 1;
+}
+
+static void
+create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
+	if (k->field_n == 0) {	// is tag?
+		return;
+	}
+	if (k->field_n == 1 && f[0].key == NULL) {
+		// value type
+		switch (f[0].type) {
+		case TYPE_INT:
+			lua_pushinteger(L, 0);
+			break;
+		case TYPE_FLOAT:
+			lua_pushnumber(L, 0);
+			break;
+		case TYPE_BOOL:
+			lua_pushboolean(L, 0);
+			break;
+		default:
+			lua_pushnil(L);
+			break;
+		}
+	} else {
+		lua_createtable(L, 0, k->field_n);
+	}
+	lua_setfield(L, -2, k->name);
+}
+
+static int
+lpairs_group(lua_State *L) {
+	struct group_iter *iter = lua_touserdata(L, 1); 
+	lua_pushcfunction(L, leach_group);
+	lua_pushvalue(L, 1);
+	lua_createtable(L, 1, iter->nkey);
+	int i;
+	int opt = 0;
+	struct field *f = iter->f;
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		create_key_cache(L, k, f);
+		f += k->field_n;
+		if (k->attrib & COMPONENT_OPTIONAL)
+			++opt;
+	}
+	if (opt) {
+		// create backup table in metatable
+		lua_createtable(L, 0, opt);
+		for (i=0;i<iter->nkey;i++) {
+			struct group_key *k = &iter->k[i];
+			if (k->attrib & COMPONENT_OPTIONAL) {
+				lua_getfield(L, -2, k->name);
+				lua_setfield(L, -2, k->name);
+			}
+		}
+		lua_setmetatable(L, -2);
+	}
+	lua_pushinteger(L, 0);
+	lua_rawseti(L, -2, 1);
+	return 3;		
+}
+
+static int
+check_boolean(lua_State *L, const char * key) {
+	int r = 0;
+	switch (lua_getfield(L, -1, key)) {
+	case LUA_TNIL:
+		break;
+	case LUA_TBOOLEAN:
+		r = lua_toboolean(L, -1);
+		break;
+	default:
+		return luaL_error(L, "Invalid boolean type %s", lua_typename(L, lua_type(L, -1)));
+	}
+	lua_pop(L, 1);
+	return r;
+}
+
+static int
+is_value(lua_State *L, struct field *f) {
+	switch (lua_getfield(L, -1, "type")) {
+	case LUA_TNIL:
+		lua_pop(L, 1);
+		return 0;
+	case LUA_TNUMBER:
+		f->key = NULL;
+		f->offset = 0;
+		f->type = check_type(L);
+		return 1;
+	default:
+		return luaL_error(L, "Invalid value type %s", lua_typename(L, lua_type(L, -1)));
+	}
+}
+
+static int
+get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct field *f) {
+	if (lua_getfield(L, -1, "id") != LUA_TNUMBER) {
+		return luaL_error(L, "Invalid id");
+	}
+	key->id = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	if (key->id < 0 || key->id >= MAX_COMPONENT || key->id == ENTITY_REMOVED || w->c[key->id].cap == 0) {
+		return luaL_error(L, "Invalid id %d", key->id);
+	}
+	if (lua_getfield(L, -1, "name") != LUA_TSTRING) {
+		return luaL_error(L, "Invalid component name");
+	}
+	key->name = lua_tostring(L, -1);
+	lua_pop(L, 1);
+	int attrib = 0;
+	if (check_boolean(L, "r")) {
+		attrib |= COMPONENT_IN;
+	}
+	if (check_boolean(L, "w")) {
+		attrib |= COMPONENT_OUT;
+	}
+	if (check_boolean(L, "opt")) {
+		attrib |= COMPONENT_OPTIONAL;
+	}
+	key->attrib = attrib;
+	if (is_value(L, f)) {
+		key->field_n = 1;
+		return 1;
+	} else {
+		int i = 0;
+		int ttype;
+		while ((ttype = lua_geti(L, -1, i+1)) != LUA_TNIL) {
+			if (ttype != LUA_TTABLE) {
+				return luaL_error(L, "Invalid field %d", i+1);
+			}
+			get_field(L, i+1, &f[i]);
+			++i;
+		}
+		key->field_n = i;
+		lua_pop(L, 1);
+		return i;
+	}
+}
+
+static int
+lgroupiter(lua_State *L) {
+	struct entity_world *w = getW(L);
+	luaL_checktype(L, 2, LUA_TTABLE);
+	int nkey = get_len(L, 2);
+	int field_n = 0;
+	int i;
+	if (nkey == 0) {
+		return luaL_error(L, "At least one key");
+	}
+	if (nkey > MAX_COMPONENT) {
+		return luaL_error(L, "Too mant keys");
+	}
+	for (i=0;i<nkey;i++) {
+		if (lua_geti(L, 2, i+1) != LUA_TTABLE) {
+			return luaL_error(L, "index %d is not a table", i);
+		}
+		field_n += get_len(L, -1);
+		lua_pop(L, 1);
+	}
+	size_t header_size = sizeof(struct group_iter) + sizeof(struct group_key) * (nkey-1);
+	const int align_size = sizeof(void *);
+	// align
+	header_size = (header_size + align_size - 1) & ~(align_size - 1);
+	size_t size = header_size + field_n * sizeof(struct field);
+	struct group_iter *iter = (struct group_iter *)lua_newuserdatauv(L, size, 1);
+	// refer world
+	lua_pushvalue(L, 1);
+	lua_setiuservalue(L, -2, 1);
+	iter->nkey = nkey;
+	iter->world = w;
+	iter->readonly = 1;
+	struct field *f = (struct field *)((char *)iter + header_size);
+	iter->f = f;
+	for (i=0; i< nkey; i++) {
+		lua_geti(L, 2, i+1);
+		int n = get_key(w, L, &iter->k[i], f);
+		f += n;
+		lua_pop(L, 1);
+		int attrib = iter->k[i].attrib;
+		int readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
+		if (!readonly)
+			iter->readonly = 0;
+	}
+	if (iter->k[0].attrib & COMPONENT_OPTIONAL) {
+		return luaL_error(L, "The first key should not be optional");
+	}
+	if (!(iter->k[0].attrib & COMPONENT_IN) && !(iter->k[0].attrib & COMPONENT_OUT)) {
+		return luaL_error(L, "The main key can't be temporary");
+	}
+	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
+		lua_pushcfunction(L, lpairs_group);
 		lua_setfield(L, -2, "__call");
 	}
 	lua_setmetatable(L, -2);
@@ -706,6 +1107,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "clear", lclear_type },
 			{ "_context", lcontext },
 			{ "_simpleiter", lsimpleiter },
+			{ "_groupiter", lgroupiter },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);
@@ -721,6 +1123,7 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEFLOAT");
 	lua_pushinteger(L, TYPE_BOOL);
 	lua_setfield(L, -2, "_TYPEBOOL");
+
 	return 1;
 }
 

@@ -206,4 +206,15 @@ function M:clear(name)
 	self:_clear(id)
 end
 
+function ecs.world()
+	local w = ecs._world()
+	context[w].typenames.REMOVED = {
+		name = "REMOVED",
+		id = ecs._REMOVED,
+		size = 0,
+		tag = true,
+	}
+	return w
+end
+
 return ecs

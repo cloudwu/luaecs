@@ -173,6 +173,10 @@ for v in w:select "mark:in" do
 	w:remove(v)
 end
 
+for v in w:select "REMOVED:in vector:in" do
+	print(v.vector.x, v.vector.y, "removed")
+end
+
 w:update()	-- remove all
 
 local n = 0

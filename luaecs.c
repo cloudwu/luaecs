@@ -1173,7 +1173,7 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct fiel
 	}
 	key->id = lua_tointeger(L, -1);
 	lua_pop(L, 1);
-	if (key->id < 0 || key->id >= MAX_COMPONENT || key->id == ENTITY_REMOVED || w->c[key->id].cap == 0) {
+	if (key->id < 0 || key->id >= MAX_COMPONENT || w->c[key->id].cap == 0) {
 		return luaL_error(L, "Invalid id %d", key->id);
 	}
 	if (lua_getfield(L, -1, "name") != LUA_TSTRING) {
@@ -1222,7 +1222,7 @@ lgroupiter(lua_State *L) {
 		return luaL_error(L, "At least one key");
 	}
 	if (nkey > MAX_COMPONENT) {
-		return luaL_error(L, "Too mant keys");
+		return luaL_error(L, "Too many keys");
 	}
 	for (i=0;i<nkey;i++) {
 		if (lua_geti(L, 2, i+1) != LUA_TTABLE) {
@@ -1301,7 +1301,7 @@ LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
-		{ "world", lnew_world },
+		{ "_world", lnew_world },
 		{ "_MAXTYPE", NULL },
 		{ "_METHODS", NULL },
 		{ "_TYPEINT", NULL },
@@ -1342,6 +1342,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEBOOL");
 	lua_pushinteger(L, STRIDE_LUA);
 	lua_setfield(L, -2, "_LUAOBJECT");
+	lua_pushinteger(L, ENTITY_REMOVED);
+	lua_setfield(L, -2, "_REMOVED");
 
 	return 1;
 }

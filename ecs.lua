@@ -201,4 +201,9 @@ function M:select(pat)
 	return context[self].select[pat]()
 end
 
+function M:clear(name)
+	local id = assert(context[self].typenames[name].id)
+	self:_clear(id)
+end
+
 return ecs

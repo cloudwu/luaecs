@@ -177,7 +177,6 @@ w:update()	-- remove all
 
 local n = 0
 for v in w:select "mark:in" do
-	w:remove(v)
 	n = n + 1
 end
 print("Marked", n)
@@ -194,4 +193,24 @@ print "object:in"
 
 for v in w:select "object:in" do
 	print(v.object)
+end
+
+w:register {
+	name = "sum",
+	type = "float",
+}
+
+for v in w:select "vector:in sum:temp" do
+	print(v.vector.x, "+", v.vector.y)
+	v.sum = v.vector.x + v.vector.y
+end
+
+for v in w:select "sum:in" do
+	print(v.sum)
+end
+
+w:clear "sum"
+
+for v in w:select "sum:in" do
+	error "Not empty"
 end

@@ -609,6 +609,7 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id,
 	// todo: pcall add_component_
 	assert(c->stride != STRIDE_LUA);
 	void * ret = add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
+	c = &w->c[slibling_id];
 	c->count = c->n;
 	return ret;
 }
@@ -1320,7 +1321,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_newentity", lnew_entity },
 			{ "_addcomponent", ladd_component },
 			{ "update", lupdate },
-			{ "clear", lclear_type },
+			{ "_clear", lclear_type },
 			{ "_context", lcontext },
 			{ "_groupiter", lgroupiter },
 			{ "remove", lremove },

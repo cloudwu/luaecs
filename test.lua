@@ -25,8 +25,6 @@ w:register {
 	type = "lua",
 }
 
-w:new { object = "Hello" }
-
 local t = {}
 for i = 1, N do
 	w:new {
@@ -131,7 +129,7 @@ for v in w:select "vector:update" do
 end
 
 print "vector:in id?out"
-for v in w:select "vector:in id?out" do
+for v in w:select "vector:in id?temp" do
 	print(v.vector.x, v.vector.y, v.id)
 	if v.id then
 		v.id = 200
@@ -143,6 +141,47 @@ print "vector:in id:in"
 for v in w:select "vector:in id:in" do
 	print(v.vector.x, v.vector.y, v.id)
 end
+
+
+w:new { object = "Hello" , mark = true }
+w:new { object = "World" , mark = true }
+
+w:update()
+
+print "mark:update object:in"
+
+for v in w:select "mark:update object:in" do
+	print(v.object)
+	if v.object == "World" then
+		print "Disable mark where object == World"
+		v.mark = false
+	end
+end
+
+print "mark:in object:in"
+
+for v in w:select "mark:in object:in" do
+	print(v.object)
+end
+
+for v in w:select "object:in mark:out" do
+	v.mark = false
+end
+
+for v in w:select "mark:in" do
+	print("Remove")
+	w:remove(v)
+end
+
+w:update()	-- remove all
+
+local n = 0
+for v in w:select "mark:in" do
+	w:remove(v)
+	n = n + 1
+end
+print("Marked", n)
+
 
 print "object:update"
 

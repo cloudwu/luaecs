@@ -16,6 +16,7 @@ local function get_attrib(opt, inout)
 		desc.w = true
 	elseif inout == "exist" then
 		desc.exist = true
+		assert(not desc.opt)
 	else
 		assert(inout == "temp")
 	end

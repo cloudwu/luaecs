@@ -34,7 +34,9 @@ local function cache_world(obj, k)
 		local typenames = c.typenames
 		local desc = {}
 		local idx = 1
-		for key, opt, inout in pat:gmatch "([_%w]+)([:?])(%l+)" do
+		for token in pat:gmatch "[^ ]+" do
+			local key, opt, inout = token:match "^([_%w]+)([:?])(%l+)$"
+			assert(key, "Invalid pattern")
 			local tc = assert(typenames[key])
 			local a = get_attrib(opt, inout)
 			a.name = tc.name

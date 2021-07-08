@@ -861,6 +861,7 @@ get_len(lua_State *L, int index) {
 #define COMPONENT_OUT 2
 #define COMPONENT_OPTIONAL 4
 #define COMPONENT_OBJECT 8
+#define COMPONENT_EXIST 16
 
 struct group_key {
 	const char *name;
@@ -871,6 +872,8 @@ struct group_key {
 
 static inline int
 is_temporary(int attrib) {
+	if (attrib & COMPONENT_EXIST)
+		return 0;
 	return (attrib & COMPONENT_IN) == 0 && (attrib & COMPONENT_OUT) == 0;
 }
 
@@ -939,26 +942,28 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	int i;
 	int mainkey = iter->k[0].id;
 	struct component_pool *c = &iter->world->c[mainkey];
-	if (c->stride == STRIDE_TAG) {
-		// It's a tag
-		if ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name)) {
-			entity_disable_tag_(iter->world, mainkey, idx, mainkey);
-		}
-	} else if ((iter->k[0].attrib & COMPONENT_OUT)
-		&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
-		struct component_pool *c = &iter->world->c[mainkey];
-		if (c->count <= idx) {
-			luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
-		}
-		if (c->stride == STRIDE_LUA) {
-			if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
-				luaL_error(L, "Missing lua table for %d", mainkey);
+	if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
+		if (c->stride == STRIDE_TAG) {
+			// It's a tag
+			if ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name)) {
+				entity_disable_tag_(iter->world, mainkey, idx, mainkey);
 			}
-			lua_insert(L, -2);
-			lua_rawseti(L, -2, idx+1);
-		} else {
-			void * buffer = get_ptr(c, idx);
-			write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+		} else if ((iter->k[0].attrib & COMPONENT_OUT)
+			&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
+			struct component_pool *c = &iter->world->c[mainkey];
+			if (c->count <= idx) {
+				luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
+			}
+			if (c->stride == STRIDE_LUA) {
+				if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua table for %d", mainkey);
+				}
+				lua_insert(L, -2);
+				lua_rawseti(L, -2, idx+1);
+			} else {
+				void * buffer = get_ptr(c, idx);
+				write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+			}
 		}
 	}
 
@@ -966,53 +971,55 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 
 	for (i=1;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		struct component_pool *c = &iter->world->c[k->id];
-		if (c->stride == STRIDE_TAG) {
-			// It's a tag
-			if ((k->attrib & COMPONENT_OUT) || is_temporary(k->attrib)) {
-				switch (lua_getfield(L, lua_index, k->name)) {
-				case LUA_TNIL:
-					break;
-				case LUA_TBOOLEAN:
-					if (lua_toboolean(L, -1)) {
-						entity_enable_tag_(iter->world, mainkey, idx, k->id, L, world_index);
-					} else {
-						entity_disable_tag_(iter->world, mainkey, idx, k->id);
+		if (!(k->attrib & COMPONENT_EXIST)) {
+			struct component_pool *c = &iter->world->c[k->id];
+			if (c->stride == STRIDE_TAG) {
+				// It's a tag
+				if ((k->attrib & COMPONENT_OUT) || is_temporary(k->attrib)) {
+					switch (lua_getfield(L, lua_index, k->name)) {
+					case LUA_TNIL:
+						break;
+					case LUA_TBOOLEAN:
+						if (lua_toboolean(L, -1)) {
+							entity_enable_tag_(iter->world, mainkey, idx, k->id, L, world_index);
+						} else {
+							entity_disable_tag_(iter->world, mainkey, idx, k->id);
+						}
+						break;
+					default:
+						luaL_error(L, ".%s is a tag , should be a boolean or nil. It's %s", k->name, lua_typename(L, lua_type(L, -1)));
 					}
-					break;
-				default:
-					luaL_error(L, ".%s is a tag , should be a boolean or nil. It's %s", k->name, lua_typename(L, lua_type(L, -1)));
+					lua_pop(L, 1);
 				}
-				lua_pop(L, 1);
-			}
-		} else if ((k->attrib & COMPONENT_OUT)
-			&& get_write_component(L, lua_index, k->name, f, c)) {
-			int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-			if (index == 0) {
-				luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
-			}
-			if (c->stride == STRIDE_LUA) {
-				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
-					luaL_error(L, "Missing lua table for %d", k->id);
+			} else if ((k->attrib & COMPONENT_OUT)
+				&& get_write_component(L, lua_index, k->name, f, c)) {
+				int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+				if (index == 0) {
+					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
-				lua_insert(L, -2);
-				lua_rawseti(L, -2, index);
-			} else {
-				void *buffer = get_ptr(c, index - 1);
-				write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
-			}
-		} else if (is_temporary(k->attrib)
-			&& get_write_component(L, lua_index, k->name, f, c)) {
-			if (c->stride == STRIDE_LUA) {
-				int index = entity_add_sibling_index_(L, world_index, iter->world, mainkey, idx, k->id);
-				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
-					luaL_error(L, "Missing lua table for %d", k->id);
+				if (c->stride == STRIDE_LUA) {
+					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+						luaL_error(L, "Missing lua table for %d", k->id);
+					}
+					lua_insert(L, -2);
+					lua_rawseti(L, -2, index);
+				} else {
+					void *buffer = get_ptr(c, index - 1);
+					write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
 				}
-				lua_insert(L, -2);
-				lua_rawseti(L, -2, index);
-			} else {
-				void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
-				write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+			} else if (is_temporary(k->attrib)
+				&& get_write_component(L, lua_index, k->name, f, c)) {
+				if (c->stride == STRIDE_LUA) {
+					int index = entity_add_sibling_index_(L, world_index, iter->world, mainkey, idx, k->id);
+					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+						luaL_error(L, "Missing lua table for %d", k->id);
+					}
+					lua_insert(L, -2);
+					lua_rawseti(L, -2, index);
+				} else {
+					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
+					write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+				}
 			}
 		}
 		f += k->field_n;
@@ -1107,19 +1114,23 @@ leach_group(lua_State *L) {
 				lua_pushnil(L);
 				lua_setfield(L, 2, k->name);
 			}
-		} else if (k->attrib & COMPONENT_IN) {
-			if (index[i]) {
-				void *ptr = get_ptr(c, index[i]-1);
-				read_component_in_field(L, 2, k->name, k->field_n, f, ptr);
-			} else {
-				lua_pushnil(L);
-				lua_setfield(L, 2, k->name);
+		} else if (c->stride != STRIDE_ORDER) {
+			if (!(k->attrib & COMPONENT_EXIST)) {
+				if (k->attrib & COMPONENT_IN) {
+					if (index[i]) {
+						void *ptr = get_ptr(c, index[i]-1);
+						read_component_in_field(L, 2, k->name, k->field_n, f, ptr);
+					} else {
+						lua_pushnil(L);
+						lua_setfield(L, 2, k->name);
+					}
+				} else if (index[i] == 0 && !is_temporary(k->attrib)) {
+					lua_pushnil(L);
+					lua_setfield(L, 2, k->name);
+				}
 			}
-		} else if (index[i] == 0 && !is_temporary(k->attrib)) {
-			lua_pushnil(L);
-			lua_setfield(L, 2, k->name);
+			f += k->field_n;
 		}
-		f += k->field_n;
 	}
 	lua_settop(L, 2);
 	return 1;
@@ -1127,7 +1138,8 @@ leach_group(lua_State *L) {
 
 static void
 create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
-	if (k->field_n == 0) {	// is tag or object?
+	if (k->field_n == 0 // is tag or object?
+		|| (k->attrib & COMPONENT_EXIST)) {	// only existence
 		return;
 	}
 	if (k->field_n == 1 && f[0].key == NULL) {
@@ -1244,6 +1256,9 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct fiel
 	if (check_boolean(L, "opt")) {
 		attrib |= COMPONENT_OPTIONAL;
 	}
+	if (check_boolean(L, "exist")) {
+		attrib |= COMPONENT_EXIST;
+	}
 	key->attrib = attrib;
 	if (is_value(L, f)) {
 		key->field_n = 1;
@@ -1316,7 +1331,11 @@ lgroupiter(lua_State *L) {
 			}
 		}
 		int attrib = iter->k[i].attrib;
-		int readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
+		int readonly;
+		if (attrib & COMPONENT_EXIST)
+			readonly = 0;
+		else
+			readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
 		if (!readonly)
 			iter->readonly = 0;
 	}

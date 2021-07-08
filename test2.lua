@@ -21,8 +21,8 @@ end
 
 w:update()
 
-for v in w:select "index:in data?in" do
-	print(v.data, v.index)
+for v in w:select "index:exist data?in" do
+	print(v.data)
 end
 
 w:sort("sort", "index")

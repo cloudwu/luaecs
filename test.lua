@@ -158,22 +158,22 @@ for v in w:select "mark:update object:in" do
 	end
 end
 
-print "mark:in object:in"
+print "mark:exist object:in"
 
-for v in w:select "mark:in object:in" do
+for v in w:select "mark:exist object:in" do
 	print(v.object)
 end
 
-for v in w:select "object:in mark:out" do
+for v in w:select "object:exist mark:out" do
 	v.mark = false
 end
 
-for v in w:select "mark:in" do
+for v in w:select "mark:exist" do
 	print("Remove")
 	w:remove(v)
 end
 
-for v in w:select "REMOVED:in vector:in" do
+for v in w:select "REMOVED:exist vector:in" do
 	print(v.vector.x, v.vector.y, "removed")
 end
 
@@ -215,6 +215,6 @@ end
 
 w:clear "sum"
 
-for v in w:select "sum:in" do
+for v in w:select "sum:exist" do
 	error "Not empty"
 end

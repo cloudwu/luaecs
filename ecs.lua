@@ -1,6 +1,9 @@
 local ecs = require "ecs.core"
 
 local function get_attrib(opt, inout)
+	if opt == nil then
+		return { exist = true }
+	end
 	local desc = {}
 	if opt == "?" then
 		desc.opt = true
@@ -35,8 +38,13 @@ local function cache_world(obj, k)
 		local desc = {}
 		local idx = 1
 		for token in pat:gmatch "[^ ]+" do
-			local key, opt, inout = token:match "^([_%w]+)([:?])(%l+)$"
+			local key, padding = token:match "^([_%w]+)(.*)"
 			assert(key, "Invalid pattern")
+			local opt, inout
+			if padding ~= "" then
+				opt, inout = padding:match "^([:?])(%l+)$"
+				assert(opt, "Invalid pattern")
+			end
 			local tc = assert(typenames[key])
 			local a = get_attrib(opt, inout)
 			a.name = tc.name

@@ -21,7 +21,7 @@ end
 
 w:update()
 
-for v in w:select "index:exist data?in" do
+for v in w:select "index data?in" do
 	print(v.data)
 end
 

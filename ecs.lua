@@ -127,7 +127,8 @@ do	-- newtype
 		for i, v in ipairs(typeclass) do
 			c[i] = align(c, parse(v))
 		end
-		if typeclass.type == "lua" then
+		local ttype = typeclass.type
+		if  ttype == "lua" then
 			assert(c.size == 0)
 			c.size = ecs._LUAOBJECT
 			c.islua = true
@@ -140,7 +141,7 @@ do	-- newtype
 			c.pack = pack
 		else
 			-- size == 0, one value
-			if typeclass.type then
+			if ttype then
 				local t = assert(typeid[typeclass.type])
 				c.type = t
 				c.size = typesize[t]
@@ -171,6 +172,7 @@ function M:new(obj)
 		if tc.islua then
 			self:_addcomponent(eid, tc.id, v)
 		elseif tc.tag then
+			assert(tc.size == 0)
 			self:_addcomponent(eid, tc.id)
 		elseif tc.type then
 			self:_addcomponent(eid, tc.id, string.pack(tc.pack, mapbool[v] or v))
@@ -204,6 +206,30 @@ end
 function M:clear(name)
 	local id = assert(context[self].typenames[name].id)
 	self:_clear(id)
+end
+
+function M:sort(sorted, name)
+	local ctx = context[self]
+	local typenames = ctx.typenames
+	local t = assert(typenames[name])
+	assert(t.type == typeid.int or (#t == 1 and t[1][1] == typeid.float))
+	local stype = typenames[sorted]
+	if stype == nil then
+		local id = ctx.id + 1
+		assert(id <= ecs._MAXTYPE)
+		ctx.id = id
+		stype = {
+			id = id,
+			name = sorted,
+			size = ecs._ORDERKEY,
+			tag = true
+		}
+		self:_newtype(id, stype.size)
+		typenames[sorted] = stype
+	else
+		assert(stype.size == ecs._ORDERKEY)
+	end
+	self:_sortkey(stype.id, t.id)
 end
 
 function ecs.world()

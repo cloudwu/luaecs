@@ -12,7 +12,9 @@
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
 #define DEFAULT_SIZE 128
+#define STRIDE_TAG 0
 #define STRIDE_LUA -1
+#define STRIDE_ORDER -2
 #define DUMMY_PTR (void *)(uintptr_t)(~0)
 
 struct component_pool {
@@ -131,6 +133,7 @@ add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid
 	struct component_pool *pool = &w->c[cid];
 	int cap = pool->cap;
 	int index = pool->n;
+	assert(pool->stride != STRIDE_ORDER);
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
 			pool->id = (unsigned int *)lua_newuserdatauv(L, cap * sizeof(unsigned int), 0);
@@ -176,7 +179,7 @@ static void *
 add_component_(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid, const void *buffer) {
 	int index = add_component_id_(L, world_index, w, cid, eid);
 	struct component_pool *pool = &w->c[cid];
-	assert(pool->stride != STRIDE_LUA);
+	assert(pool->stride >= 0);
 	void *ret = get_ptr(pool, index);
 	if (buffer)
 		memcpy(ret, buffer, pool->stride);
@@ -239,7 +242,7 @@ lnew_entity(lua_State *L) {
 static void
 insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid) {
 	struct component_pool *c = &w->c[cid];
-	assert(c->stride == 0);
+	assert(c->stride == STRIDE_TAG);
 	int from = 0;
 	int to = c->count;
 	while(from < to) {
@@ -441,26 +444,38 @@ move_object(lua_State *L, struct component_pool *pool, int from, int to) {
 static void
 remove_all(lua_State *L, struct component_pool *pool, struct component_pool *removed, int cid) {
 	int index = 0;
-	int i;
-	unsigned int *id = removed->id;
-	unsigned int last_id = 0;
 	int count = 0;
-	for (i=0;i<removed->n;i++) {
-		if (id[i] != last_id) {
-			int r = lookup_component(pool, id[i], index);
+	int i;
+	if (pool->stride != STRIDE_ORDER) {
+		unsigned int *id = removed->id;
+		unsigned int last_id = 0;
+		for (i=0;i<removed->n;i++) {
+			if (id[i] != last_id) {
+				// todo : order
+				int r = lookup_component(pool, id[i], index);
+				if (r >= 0) {
+					index = r;
+					pool->id[r] = 0;
+					++count;
+				}
+			}
+		}
+	} else {
+		unsigned int *id = pool->id;
+		for (i=0;i<pool->n;i++) {
+			int r = lookup_component(removed, id[i], 0);
 			if (r >= 0) {
-				index = r;
-				assert(pool->id[r] == id[i]);
-				pool->id[r] = 0;
+				id[i] = 0;
 				++count;
 			}
 		}
 	}
 	if (count > 0) {
 		index = 0;
-		if (pool->stride == STRIDE_LUA) {
+		switch (pool->stride) {
+		case STRIDE_LUA:
 			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
-				luaL_error(L, "Missing lua object table for type %d", id);
+				luaL_error(L, "Missing lua object table for type %d", cid);
 			}
 			for (i=0;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
@@ -469,20 +484,24 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 				}
 			}
 			lua_pop(L, 1);	// pop lua object table
-		} else if (pool->stride == 0) {
+			break;
+		case STRIDE_TAG:
+		case STRIDE_ORDER:
 			for (i=0;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_tag(pool, i, index);
 					++index;
 				}
 			}
-		} else {
+			break;
+		default:
 			for (i=0;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_item(pool, i, index);
 					++index;
 				}
 			}
+			break;
 		}
 		pool->n -= count;
 		pool->count -= count;
@@ -543,7 +562,7 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	assert(index >= 0);
 	if (index >= c->count)
 		return NULL;
-	if (c->stride == 0) {
+	if (c->stride == STRIDE_TAG) {
 		// it's a tag
 		unsigned int eid = c->id[index];
 		if (index > 0 && eid == c->id[index-1]) {
@@ -578,6 +597,7 @@ entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
 		return NULL;
 	unsigned int eid = c->id[index];
 	c = &w->c[slibling_id];
+	assert(c->stride != STRIDE_ORDER);
 	int result_index = lookup_component(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
@@ -593,6 +613,7 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_i
 		return 0;
 	unsigned int eid = c->id[index];
 	c = &w->c[slibling_id];
+	assert(c->stride != STRIDE_ORDER);
 	int result_index = lookup_component(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
@@ -607,7 +628,7 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id,
 	assert(index >=0 && index < c->count);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
-	assert(c->stride != STRIDE_LUA);
+	assert(c->stride >= 0);
 	void * ret = add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
 	c = &w->c[slibling_id];
 	c->count = c->n;
@@ -624,6 +645,37 @@ entity_add_sibling_index_(lua_State *L, int world_index, struct entity_world *w,
 	int ret = add_component_id_(L, world_index, w, slibling_id, eid);
 	c->count = c->n;
 	return ret;
+}
+
+static int
+comp_index(void *v, const void *a, const void *b) {
+	const unsigned int *aa = (const unsigned int *)a;
+	const unsigned int *bb = (const unsigned int *)b;
+	int * vv = (int *)v;
+	return vv[*aa] - vv[*bb];
+}
+
+static void
+entity_sort_key_(struct entity_world *w, int orderid, int cid, void *L, int world_index) {
+	struct component_pool *c = &w->c[cid];
+	assert(c->stride == sizeof(int));
+	struct component_pool *order = &w->c[orderid];
+	assert(order->stride == STRIDE_ORDER);
+
+	if (order->id == NULL || order->cap < c->cap) {
+		order->cap = c->cap;
+		order->id = (unsigned int *)lua_newuserdatauv(L, c->cap * sizeof(unsigned int), 0);
+		lua_setiuservalue(L, world_index, orderid * 2 + 1);
+	}
+	int i;
+	for (i = 0; i < c->count ; i++) {
+		order->id[i] = i;
+	}
+	qsort_s(order->id, c->count, sizeof(unsigned int), comp_index, c->buffer);
+	for (i = 0; i < c->count ; i++) {
+		order->id[i] = c->id[order->id[i]];
+	}
+	order->count = order->n = c->count;
 }
 
 static int
@@ -652,6 +704,7 @@ lcontext(lua_State *L) {
 		entity_remove_,
 		entity_enable_tag_,
 		entity_disable_tag_,
+		entity_sort_key_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;
@@ -886,7 +939,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	int i;
 	int mainkey = iter->k[0].id;
 	struct component_pool *c = &iter->world->c[mainkey];
-	if (c->stride == 0) {
+	if (c->stride == STRIDE_TAG) {
 		// It's a tag
 		if ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name)) {
 			entity_disable_tag_(iter->world, mainkey, idx, mainkey);
@@ -914,7 +967,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	for (i=1;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
 		struct component_pool *c = &iter->world->c[k->id];
-		if (c->stride == 0) {
+		if (c->stride == STRIDE_TAG) {
 			// It's a tag
 			if ((k->attrib & COMPONENT_OUT) || is_temporary(k->attrib)) {
 				switch (lua_getfield(L, lua_index, k->name)) {
@@ -1255,6 +1308,12 @@ lgroupiter(lua_State *L) {
 			if (n != 0)
 				return luaL_error(L, ".%s is object component, no fields needed", iter->k[i].name);
 			iter->k[i].attrib |= COMPONENT_OBJECT;
+		} else if (c->stride == STRIDE_ORDER) {
+			if (i != 0) {
+				return luaL_error(L, ".%s is an order key, must be main key", iter->k[i].name);
+			} else if (iter->k[0].attrib & COMPONENT_OUT) {
+				return luaL_error(L, ".%s is an order key, it should be readonly", iter->k[0].name);
+			}
 		}
 		int attrib = iter->k[i].attrib;
 		int readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
@@ -1262,9 +1321,9 @@ lgroupiter(lua_State *L) {
 			iter->readonly = 0;
 	}
 	if (iter->k[0].attrib & COMPONENT_OPTIONAL) {
-		return luaL_error(L, "The first key should not be optional");
+		return luaL_error(L, "The main key should not be optional");
 	}
-	if (!(iter->k[0].attrib & COMPONENT_IN) && !(iter->k[0].attrib & COMPONENT_OUT)) {
+	if (is_temporary(iter->k[0].attrib)) {
 		return luaL_error(L, "The main key can't be temporary");
 	}
 	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
@@ -1297,6 +1356,15 @@ lremove(lua_State *L) {
 	return 0;
 }
 
+static int
+lsortkey(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int oid = luaL_checkinteger(L, 2);
+	int cid = luaL_checkinteger(L, 3);
+	entity_sort_key_(w, oid, cid, L, 1);
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -1325,6 +1393,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_context", lcontext },
 			{ "_groupiter", lgroupiter },
 			{ "remove", lremove },
+			{ "_sortkey", lsortkey },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);
@@ -1344,6 +1413,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_LUAOBJECT");
 	lua_pushinteger(L, ENTITY_REMOVED);
 	lua_setfield(L, -2, "_REMOVED");
+	lua_pushinteger(L, STRIDE_ORDER);
+	lua_setfield(L, -2, "_ORDERKEY");
 
 	return 1;
 }

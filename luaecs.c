@@ -912,7 +912,7 @@ get_write_component(lua_State *L, int lua_index, const char *name, struct field 
 }
 
 static void
-write_component_in_field(lua_State *L, int lua_index, const char *name, int n, struct field *f, void *buffer) {
+write_component_object(lua_State *L, int lua_index, int n, struct field *f, void *buffer) {
 	if (f->key == NULL) {
 		write_value(L, f, buffer);
 	} else {
@@ -962,7 +962,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				lua_rawseti(L, -2, idx+1);
 			} else {
 				void * buffer = get_ptr(c, idx);
-				write_component_in_field(L, lua_index, iter->k[0].name, iter->k[0].field_n, iter->f, buffer);
+				write_component_object(L, lua_index, iter->k[0].field_n, iter->f, buffer);
 			}
 		}
 	}
@@ -1005,7 +1005,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 					lua_rawseti(L, -2, index);
 				} else {
 					void *buffer = get_ptr(c, index - 1);
-					write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+					write_component_object(L, lua_index, k->field_n, f, buffer);
 				}
 			} else if (is_temporary(k->attrib)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
@@ -1018,7 +1018,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 					lua_rawseti(L, -2, index);
 				} else {
 					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
-					write_component_in_field(L, lua_index, k->name, k->field_n, f, buffer);
+					write_component_object(L, lua_index, k->field_n, f, buffer);
 				}
 			}
 		}
@@ -1384,6 +1384,58 @@ lsortkey(lua_State *L) {
 	return 0;
 }
 
+static int
+lsingleton(lua_State *L) {
+	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
+	int cid = iter->k[0].id;
+	struct entity_world * w = iter->world;
+	if (cid < 0 || cid >=MAX_COMPONENT) {
+		return luaL_error(L, "Invalid singleton %d", cid);
+	}
+	struct component_pool *c = &w->c[cid];
+	if (c->n == 0) {
+		return luaL_error(L, "No singleton %d", cid);
+	}
+	if (c->stride == STRIDE_LUA) {
+		// lua singleton
+		lua_settop(L, 2);
+		if (lua_getiuservalue(L, 1, 1) != LUA_TUSERDATA) {
+			return luaL_error(L, "No world");
+		}
+		if (lua_getiuservalue(L, -1, cid * 2 + 2) != LUA_TTABLE) {
+			return luaL_error(L, "Missing lua table for %d", cid);
+		}
+		if (lua_isnil(L, 2)) {
+			lua_rawgeti(L, -1, 1);
+		} else {
+			lua_pushvalue(L, 2);
+			lua_rawseti(L, -2, 1);
+			lua_settop(L, 2);
+		}
+		return 1;
+	} else if (c->stride <= 0) {
+		return luaL_error(L, "Invalid singleton %d", cid);
+	}
+	struct field *f = iter->f;
+	void * buffer = get_ptr(c, 0);
+	if (lua_isnoneornil(L, 2)) {
+		// read singleton
+		lua_createtable(L, 0, iter->k[0].field_n);
+		if (f->key == NULL) {
+			// value type
+			read_value(L, f, buffer);
+		} else {
+			int index = lua_gettop(L);
+			read_component(L, iter->k[0].field_n, f, index, buffer);
+		}
+	} else {
+		// write singleton
+		lua_pushvalue(L, 2);
+		write_component_object(L, 2, iter->k[0].field_n, f, buffer);
+	}
+	return 1;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -1413,6 +1465,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_groupiter", lgroupiter },
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
+			{ "_singleton", lsingleton },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

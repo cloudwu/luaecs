@@ -1,3 +1,5 @@
+-- test sort
+
 local ecs = require "ecs"
 
 local w = ecs.world()

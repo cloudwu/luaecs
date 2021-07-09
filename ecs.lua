@@ -245,6 +245,14 @@ function M:sort(sorted, name)
 	self:_sortkey(stype.id, t.id)
 end
 
+do
+	local _singleton = M._singleton
+	function M:singleton(name, v)
+		local pat = context[self].select[name]
+		return _singleton(pat, v)
+	end
+end
+
 function ecs.world()
 	local w = ecs._world()
 	context[w].typenames.REMOVED = {

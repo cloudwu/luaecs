@@ -12,10 +12,9 @@ for i = 1, 10 do
 end
 
 for v in w:select "a:in" do
-	if v.a == 5 then
-		v.a = 42
+	if v.a %2 == 0 then
+		v.a = -v.a
 		w:sync("a:out", v)
-		break
 	end
 end
 

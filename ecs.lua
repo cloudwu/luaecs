@@ -216,6 +216,11 @@ function M:select(pat)
 	return context[self].select[pat]()
 end
 
+function M:sync(pat, iter)
+	local p = context[self].select[pat]
+	self:_sync(p, iter)
+end
+
 function M:clear(name)
 	local id = assert(context[self].typenames[name].id)
 	self:_clear(id)

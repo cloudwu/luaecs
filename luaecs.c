@@ -1038,6 +1038,96 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 	lua_pop(L, 1);
 }
 
+// -1 : end ; 0 : next ; 1 : succ
+static int
+query_index(struct group_iter *iter, int mainkey, int idx, unsigned int index[MAX_COMPONENT]) {
+	if (entity_iter_(iter->world, mainkey, idx) == NULL) {
+		return -1;
+	}
+	index[0] = idx+1;
+	int j;
+	for (j=1;j<iter->nkey;j++) {
+		struct group_key *k = &iter->k[j];
+		if (!is_temporary(k->attrib)) {
+			index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+			if (index[j] == 0) {
+				if (!(k->attrib & COMPONENT_OPTIONAL)) {
+					// required. try next
+					return 0;
+				}
+			}
+		} else {
+			index[j] = 0;
+		}
+	}
+	return 1;
+}
+
+static void
+read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter, unsigned int index[MAX_COMPONENT]) {
+	struct field *f = iter->f;
+	int i;
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		struct component_pool *c = &iter->world->c[k->id];
+		if (c->stride == STRIDE_LUA) {
+			// lua object component
+			if (index[i]) {
+				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua table for %d", k->id);
+				}
+
+				lua_rawgeti(L, -1, index[i]);
+				lua_setfield(L, obj_index, k->name);
+				lua_pop(L, 1);
+			} else {
+				lua_pushnil(L);
+				lua_setfield(L, obj_index, k->name);
+			}
+		} else if (c->stride != STRIDE_ORDER) {
+			if (!(k->attrib & COMPONENT_EXIST)) {
+				if (k->attrib & COMPONENT_IN) {
+					if (index[i]) {
+						void *ptr = get_ptr(c, index[i]-1);
+						read_component_in_field(L, obj_index, k->name, k->field_n, f, ptr);
+					} else {
+						lua_pushnil(L);
+						lua_setfield(L, obj_index, k->name);
+					}
+				} else if (index[i] == 0 && !is_temporary(k->attrib)) {
+					lua_pushnil(L);
+					lua_setfield(L, obj_index, k->name);
+				}
+			}
+			f += k->field_n;
+		}
+	}
+}
+
+static int
+lsync(lua_State *L) {
+	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
+	luaL_checktype(L, 3, LUA_TTABLE);
+	if (lua_rawgeti(L, 3, 1) != LUA_TNUMBER) {
+		return luaL_error(L, "Invalid iterator");
+	}
+	int idx = lua_tointeger(L, -1) - 1;
+	if (idx < 0)
+		return luaL_error(L, "Invalid iterator index %d", idx);
+	lua_pop(L, 1);
+
+	if (!iter->readonly) {
+		update_last_index(L, 1, 3, iter, idx);
+	}
+
+	unsigned int index[MAX_COMPONENT];
+	if (query_index(iter, iter->k[0].id, idx, index) <=0) {
+		return luaL_error(L, "Read pattern fail");
+	}
+	read_iter(L, 1, 3, iter, index);
+	return 0;
+}
+
 static int
 leach_group(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 1); 
@@ -1060,69 +1150,19 @@ leach_group(lua_State *L) {
 	}
 	int mainkey = iter->k[0].id;
 	unsigned int index[MAX_COMPONENT];
-	int j;
-	do {
-		if (entity_iter_(iter->world, mainkey, i) == NULL) {
+	for (;;) {
+		int ret = query_index(iter, mainkey, i++, index);
+		if (ret < 0)
 			return 0;
-		}
-		index[0] = i+1;
-		for (j=1;j<iter->nkey;j++) {
-			struct group_key *k = &iter->k[j];
-			if (!is_temporary(k->attrib)) {
-				index[j] = entity_sibling_index_(iter->world, mainkey, i, k->id);
-				if (index[j] == 0) {
-					if (!(k->attrib & COMPONENT_OPTIONAL)) {
-						// required. try next
-						break;
-					}
-				}
-			} else {
-				index[j] = 0;
-			}
-		}
-		++i;
-	} while (j < iter->nkey);
+		if (ret > 0)
+			break;
+	}
 
 	lua_pushinteger(L, i);
 	lua_rawseti(L, 2, 1);
+	
+	read_iter(L, world_index, 2, iter, index);
 
-	struct field *f = iter->f;
-
-	for (i=0;i<iter->nkey;i++) {
-		struct group_key *k = &iter->k[i];
-		struct component_pool *c = &iter->world->c[k->id];
-		if (c->stride == STRIDE_LUA) {
-			// lua object component
-			if (index[i]) {
-				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
-					return luaL_error(L, "Missing lua table for %d", k->id);
-				}
-
-				lua_rawgeti(L, -1, index[i]);
-				lua_setfield(L, 2, k->name);
-				lua_pop(L, 1);
-			} else {
-				lua_pushnil(L);
-				lua_setfield(L, 2, k->name);
-			}
-		} else if (c->stride != STRIDE_ORDER) {
-			if (!(k->attrib & COMPONENT_EXIST)) {
-				if (k->attrib & COMPONENT_IN) {
-					if (index[i]) {
-						void *ptr = get_ptr(c, index[i]-1);
-						read_component_in_field(L, 2, k->name, k->field_n, f, ptr);
-					} else {
-						lua_pushnil(L);
-						lua_setfield(L, 2, k->name);
-					}
-				} else if (index[i] == 0 && !is_temporary(k->attrib)) {
-					lua_pushnil(L);
-					lua_setfield(L, 2, k->name);
-				}
-			}
-			f += k->field_n;
-		}
-	}
 	lua_settop(L, 2);
 	return 1;
 }
@@ -1457,6 +1497,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
 			{ "_singleton", lsingleton },
+			{ "_sync", lsync },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

@@ -881,11 +881,12 @@ get_write_component(lua_State *L, int lua_index, const char *name, struct field 
 	switch (lua_getfield(L, lua_index, name)) {
 	case LUA_TNIL:
 		lua_pop(L, 1);
-		// restore cache
-		lua_getmetatable(L, lua_index);
-		lua_getfield(L, -1, name);
-		lua_setfield(L, lua_index, name);
-		lua_pop(L, 1);	// pop metatable
+		// restore cache (metatable can be absent during sync)
+		if (lua_getmetatable(L, lua_index)) {
+			lua_getfield(L, -1, name);
+			lua_setfield(L, lua_index, name);
+			lua_pop(L, 1);	// pop metatable
+		}
 		return 0;
 	case LUA_TTABLE:
 		return 1;

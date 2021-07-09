@@ -172,7 +172,7 @@ get_ptr(struct component_pool *c, int index) {
 	if (c->stride > 0)
 		return (void *)((char *)c->buffer + c->stride * index);
 	else
-		return c->buffer;
+		return DUMMY_PTR;
 }
 
 static void *
@@ -575,6 +575,32 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	return get_ptr(c, index);
 }
 
+static void *
+entity_iter_lua_(struct entity_world *w, int cid, int index, void *L) {
+	void * ret = entity_iter_(w, cid, index);
+	if (ret != DUMMY_PTR)
+		return ret;
+	if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+		lua_pop(L, 1);
+		return 0;
+	}
+	int t = lua_rawgeti(L, -1, index+1);
+	switch(t) {
+	case LUA_TSTRING:
+		ret = (void *)lua_tostring(L, -1);
+		break;
+	case LUA_TUSERDATA:
+	case LUA_TLIGHTUSERDATA:
+		ret = (void *)lua_touserdata(L, -1);
+		break;
+	default:
+		ret = NULL;
+		break;
+	}
+	lua_pop(L, 2);
+	return ret;
+}
+
 static void
 entity_clear_type_(struct entity_world *w, int cid) {
 	struct component_pool *c = &w->c[cid];
@@ -705,6 +731,7 @@ lcontext(lua_State *L) {
 		entity_enable_tag_,
 		entity_disable_tag_,
 		entity_sort_key_,
+		entity_iter_lua_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;
@@ -718,9 +745,6 @@ lcontext(lua_State *L) {
 		int cid = ctx->cid[i];
 		if (cid == ENTITY_REMOVED || cid < 0 || cid >= MAX_COMPONENT)
 			return luaL_error(L, "Invalid id (%d) at index %d", cid, i);
-		struct component_pool *c = &w->c[cid];
-		if (c->stride == STRIDE_LUA)
-			return luaL_error(L, "Can't iterate lua component in C (%d)", cid);
 	}
 	return 1;
 }
@@ -1498,6 +1522,7 @@ luaopen_ecs_core(lua_State *L) {
 #define COMPONENT_VECTOR2 1
 #define TAG_MARK 2
 #define COMPONENT_ID 3
+#define SINGLETON_STRING 4
 
 struct vector2 {
 	float x;
@@ -1541,6 +1566,15 @@ lsum(lua_State *L) {
 	return 1;
 }
 
+static int
+lget(lua_State *L) {
+	struct ecs_context *ctx = lua_touserdata(L, 1);
+	const char *ret = (const char *)entity_iter_lua(ctx, SINGLETON_STRING, 0);
+	if (ret) {
+		lua_pushfstring(L, "[string:%s]", ret);
+	}
+	return 1;
+}
 
 LUAMOD_API int
 luaopen_ecs_ctest(lua_State *L) {
@@ -1548,6 +1582,7 @@ luaopen_ecs_ctest(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "test", ltest },
 		{ "sum", lsum },
+		{ "get", lget },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

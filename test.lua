@@ -86,12 +86,26 @@ table.insert(t, { x = 5, y = 6 })
 
 w:update()
 
+w:register {
+	name = "singleton",
+	type = "lua"
+}
+
 local context = w:context {
 	"vector",
 	"mark",
 	"id",
+	"singleton",
 }
+
+w:new { singleton = "Hello World" }
+
+w:update()
+
 local test = require "ecs.ctest"
+
+print(test.get(context))
+
 local function csum()
 	return test.sum(context)
 end

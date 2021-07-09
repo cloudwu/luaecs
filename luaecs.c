@@ -16,11 +16,11 @@
 #define STRIDE_LUA -1
 #define STRIDE_ORDER -2
 #define DUMMY_PTR (void *)(uintptr_t)(~0)
+#define REARRANGE_THRESHOLD 0x80000000
 
 struct component_pool {
 	int cap;
 	int n;
-	int count;
 	int stride;	// -1 means lua object
 	int last_lookup;
 	unsigned int *id;
@@ -29,8 +29,6 @@ struct component_pool {
 
 struct entity_world {
 	unsigned int max_id;
-	unsigned int wrap_begin;
-	int wrap;
 	struct component_pool c[MAX_COMPONENT];
 };
 
@@ -39,7 +37,6 @@ init_component_pool(struct entity_world *w, int index, int stride, int opt_size)
 	struct component_pool *c = &w->c[index];
 	c->cap = opt_size;
 	c->n = 0;
-	c->count = 0;
 	c->stride = stride;
 	c->id = NULL;
 	if (stride > 0) {
@@ -229,12 +226,7 @@ static int
 lnew_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
 	unsigned int eid = ++w->max_id;
-	if (eid == 0) {
-		// 0 is reserved
-		w->max_id = ++eid;
-		assert(w->wrap == 0);
-		w->wrap = 1;
-	}
+	assert(eid != 0);
 	lua_pushinteger(L, eid);
 	return 1;
 }
@@ -244,7 +236,7 @@ insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, unsign
 	struct component_pool *c = &w->c[cid];
 	assert(c->stride == STRIDE_TAG);
 	int from = 0;
-	int to = c->count;
+	int to = c->n;
 	while(from < to) {
 		int mid = (from + to)/2;
 		int aa = c->id[mid];
@@ -257,10 +249,10 @@ insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, unsign
 		}
 	}
 	// insert eid at [from]
-	if (from < c->count - 1) {
+	if (from < c->n - 1) {
 		int i;
 		// Any dup id ?
-		for (i=from;i<c->count-1;i++) {
+		for (i=from;i<c->n-1;i++) {
 			if (c->id[i] == c->id[i+1]) {
 				memmove(c->id + from + 1, c->id + from, sizeof(unsigned int) * (i - from));
 				c->id[from] = eid;
@@ -271,13 +263,12 @@ insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, unsign
 	add_component_id_(L, world_index, w, cid, eid);
 	memmove(c->id + from + 1, c->id + from, sizeof(unsigned int) * (c->n - from - 1));
 	c->id[from] = eid;
-	++c->count;
 }
 
 static void
 entity_enable_tag_(struct entity_world *w, int cid, int index, int tag_id, void *L, int world_index) {
 	struct component_pool *c = &w->c[cid];
-	assert(index >=0 && index < c->count);
+	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	insert_id((lua_State *)L, world_index, w, tag_id, eid);
 }
@@ -302,15 +293,15 @@ binary_search(unsigned int *a, int from, int to, unsigned int v) {
 
 static inline int
 lookup_component(struct component_pool *pool, unsigned int eid, int guess_index) {
-	int n = pool->count;
+	int n = pool->n;
 	if (n == 0)
 		return -1;
 	if (guess_index + GUESS_RANGE >= n)
-		return binary_search(pool->id, 0, pool->count, eid);
+		return binary_search(pool->id, 0, pool->n, eid);
 	unsigned int *a = pool->id;
 	int higher = a[guess_index + GUESS_RANGE];
 	if (eid > higher) {
-		return binary_search(a, guess_index + GUESS_RANGE + 1, pool->count, eid);
+		return binary_search(a, guess_index + GUESS_RANGE + 1, pool->n, eid);
 	}
 	int lower = a[guess_index];
 	if (eid < lower) {
@@ -324,7 +315,7 @@ replace_id(struct component_pool *c, int index, unsigned int eid) {
 	unsigned int rid = c->id[index];
 	c->id[index] = eid;
 	int i;
-	for (i=index+1;i<c->count && c->id[i] == rid;i++) {
+	for (i=index+1;i<c->n && c->id[i] == rid;i++) {
 		c->id[i] = eid;
 	}
 }
@@ -332,7 +323,7 @@ replace_id(struct component_pool *c, int index, unsigned int eid) {
 static void
 entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 	struct component_pool *c = &w->c[cid];
-	assert(index >=0 && index < c->count);
+	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	if (cid != tag_id) {
 		c = &w->c[tag_id];
@@ -347,15 +338,13 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 			return;
 		}
 	}
-	for (i=index+1;i<c->count;i++) {
+	for (i=index+1;i<c->n;i++) {
 		if (c->id[i] != eid) {
 			replace_id(c, index, c->id[i]);
 			return;
 		}
 	}
-	c->n -= c->count;
-	memmove(c->id, c->id + c->count, sizeof(unsigned int) * c->n);
-	c->count = 0;
+	c->n = 0;
 }
 
 static void
@@ -376,7 +365,7 @@ find_min(struct rearrange_context *ctx) {
 	struct entity_world *w = ctx->w;
 	for (i=1;i<MAX_COMPONENT;i++) {
 		int index = ctx->ptr[i-1];
-		if (index < w->c[i].count) {
+		if (index < w->c[i].n) {
 			if (w->c[i].id[index] <= m) {
 				m = w->c[i].id[index];
 				r = i;
@@ -397,7 +386,7 @@ rearrange(struct entity_world *w) {
 	while ((cid = find_min(&ctx)) >= 0) {
 		int index = ctx.ptr[cid-1];
 		unsigned int current_id = w->c[cid].id[index];
-//		printf("arrange %d -> %d\n", new_id, w->c[cid].id[index]);
+//		printf("arrange %d <- %d\n", new_id, w->c[cid].id[index]);
 		w->c[cid].id[index] = new_id;
 		if (current_id != last_id) {
 			++new_id;
@@ -405,15 +394,7 @@ rearrange(struct entity_world *w) {
 		}
 		++ctx.ptr[cid-1];
 	}
-	int i,j;
-	for (i=1;i<MAX_COMPONENT;i++) {
-		struct component_pool *pool = &w->c[i];
-		for (j=pool->count;j<pool->n;j++) {
-//			printf("arrange new %d -> %d\n", pool->id[j], new_id + pool->id[j] - w->wrap_begin -1);
-			pool->id[j] = new_id + pool->id[j] - w->wrap_begin -1;
-		}
-	}
-	w->max_id = new_id + w->max_id - w->wrap_begin - 1;
+	w->max_id = new_id;
 }
 
 static inline void
@@ -504,7 +485,6 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			break;
 		}
 		pool->n -= count;
-		pool->count -= count;
 	}
 }
 
@@ -522,19 +502,12 @@ lupdate(lua_State *L) {
 				remove_all(L, pool, removed, i);
 		}
 		removed->n = 0;
-		removed->count = 0;
 	}
 
-	if (w->wrap) {
+	if (w->max_id > REARRANGE_THRESHOLD) {
 		rearrange(w);
-		w->wrap = 0;
 	}
-	w->wrap_begin = w->max_id;
-	// add componets
-	for (i=1;i<MAX_COMPONENT;i++) {
-		struct component_pool *c = &w->c[i];
-		c->count = c->n;
-	}
+
 	return 0;
 }
 
@@ -543,31 +516,28 @@ remove_dup(struct component_pool *c, int index) {
 	int i;
 	unsigned int eid = c->id[index];
 	int to = index;
-	for (i=index+1;i<c->count;i++) {
+	for (i=index+1;i<c->n;i++) {
 		if (c->id[i] != eid) {
 			eid = c->id[i];
 			c->id[to] = eid;
 			++to;
 		}
 	}
-	int n = c->count - to;
-	memmove(&c->id[to], &c->id[c->count], n * sizeof(unsigned int));
-	c->n -= n;
-	c->count = to;
+	c->n = to;
 }
 
 static void *
 entity_iter_(struct entity_world *w, int cid, int index) {
 	struct component_pool *c = &w->c[cid];
 	assert(index >= 0);
-	if (index >= c->count)
+	if (index >= c->n)
 		return NULL;
 	if (c->stride == STRIDE_TAG) {
 		// it's a tag
 		unsigned int eid = c->id[index];
 		if (index > 0 && eid == c->id[index-1]) {
 			remove_dup(c, index);
-			if (index >= c->count)
+			if (index >= c->n)
 				return NULL;
 		}
 		return DUMMY_PTR;
@@ -605,7 +575,6 @@ static void
 entity_clear_type_(struct entity_world *w, int cid) {
 	struct component_pool *c = &w->c[cid];
 	c->n = 0;
-	c->count = 0;
 }
 
 static int
@@ -619,7 +588,7 @@ lclear_type(lua_State *L) {
 static void *
 entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
 	struct component_pool *c = &w->c[cid];
-	if (index < 0 || index >= c->count)
+	if (index < 0 || index >= c->n)
 		return NULL;
 	unsigned int eid = c->id[index];
 	c = &w->c[slibling_id];
@@ -635,7 +604,7 @@ entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
 static int
 entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_id) {
 	struct component_pool *c = &w->c[cid];
-	if (index < 0 || index >= c->count)
+	if (index < 0 || index >= c->n)
 		return 0;
 	unsigned int eid = c->id[index];
 	c = &w->c[slibling_id];
@@ -651,25 +620,23 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_i
 static void *
 entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index) {
 	struct component_pool *c = &w->c[cid];
-	assert(index >=0 && index < c->count);
+	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
 	assert(c->stride >= 0);
 	void * ret = add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
 	c = &w->c[slibling_id];
-	c->count = c->n;
 	return ret;
 }
 
 static int
 entity_add_sibling_index_(lua_State *L, int world_index, struct entity_world *w, int cid, int index, int slibling_id) {
 	struct component_pool *c = &w->c[cid];
-	assert(index >=0 && index < c->count);
+	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
 	assert(c->stride == STRIDE_LUA);
 	int ret = add_component_id_(L, world_index, w, slibling_id, eid);
-	c->count = c->n;
 	return ret;
 }
 
@@ -694,14 +661,14 @@ entity_sort_key_(struct entity_world *w, int orderid, int cid, void *L, int worl
 		lua_setiuservalue(L, world_index, orderid * 2 + 1);
 	}
 	int i;
-	for (i = 0; i < c->count ; i++) {
+	for (i = 0; i < c->n ; i++) {
 		order->id[i] = i;
 	}
-	qsort_s(order->id, c->count, sizeof(unsigned int), comp_index, c->buffer);
-	for (i = 0; i < c->count ; i++) {
+	qsort_s(order->id, c->n, sizeof(unsigned int), comp_index, c->buffer);
+	for (i = 0; i < c->n ; i++) {
 		order->id[i] = c->id[order->id[i]];
 	}
-	order->count = order->n = c->count;
+	order->n = c->n;
 }
 
 static int
@@ -975,7 +942,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 		} else if ((iter->k[0].attrib & COMPONENT_OUT)
 			&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
 			struct component_pool *c = &iter->world->c[mainkey];
-			if (c->count <= idx) {
+			if (c->n <= idx) {
 				luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
 			}
 			if (c->stride == STRIDE_LUA) {

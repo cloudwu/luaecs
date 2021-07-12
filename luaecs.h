@@ -89,4 +89,31 @@ entity_iter_lua(struct ecs_context *ctx, int cid, int index) {
 	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index, ctx->L);
 }
 
+struct ecs_ref_i {
+	struct ecs_capi_ref *api;
+};
+
+struct ecs_ref;
+
+struct ecs_capi_ref {
+	int (*create)(struct ecs_ref *);
+	void (*release)(struct ecs_ref *, int id);
+	void * (*index)(struct ecs_ref *, int id);
+};
+
+static inline int
+robject_create(struct ecs_ref_i *R) {
+	return R->api->create((struct ecs_ref *)R);
+}
+
+static inline void
+robject_release(struct ecs_ref_i *R, int id) {
+	R->api->release((struct ecs_ref *)R, id);
+}
+
+static inline void *
+robject_index(struct ecs_ref_i *R, int id) {
+	return R->api->index((struct ecs_ref *)R, id);
+}
+
 #endif

@@ -167,6 +167,24 @@ do	-- newtype
 		typenames[name] = c
 		self:_newtype(id, c.size)
 	end
+
+	local _ref = ecs._ref
+	function ecs.ref(typeclass)
+		local c = { size = 0 }
+		for i,v in ipairs(typeclass) do
+			c[i] = align(c, parse(v))
+		end
+		if c.size == 0 and typeclass.type then
+			if typeclass.type ~= "lua" then
+				local id = assert(typeid[typeclass.type])
+				c[1] = align(c, { id, nil, 0 })
+			end
+		end
+		if c.size > 0 then
+			align_struct(c, c[1][1])
+		end
+		return _ref(c)
+	end
 end
 
 local mapbool = {

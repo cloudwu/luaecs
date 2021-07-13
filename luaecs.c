@@ -3,6 +3,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -731,6 +732,11 @@ lnew_world(lua_State *L) {
 #define TYPE_INT 0
 #define TYPE_FLOAT 1
 #define TYPE_BOOL 2
+#define TYPE_INT64 3
+#define TYPE_WORD 4
+#define TYPE_BYTE 5
+#define TYPE_DOUBLE 6
+#define TYPE_COUNT 7
 
 struct field {
 	const char *key;
@@ -741,9 +747,7 @@ struct field {
 static int
 check_type(lua_State *L) {
 	int type = lua_tointeger(L, -1);
-	if (type != TYPE_INT &&
-		type != TYPE_FLOAT &&
-		type != TYPE_BOOL) {
+	if (type < 0 || type >= TYPE_COUNT) {
 		luaL_error(L, "Invalid field type(%d)", type);
 	}
 	lua_pop(L, 1);
@@ -792,6 +796,26 @@ write_value(lua_State *L, struct field *f, char *buffer) {
 				luaL_error(L, "Invalid .%s type %s (bool)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(unsigned char *)ptr = lua_toboolean(L, -1);
 			break;
+		case TYPE_INT64:
+			if (!lua_isinteger(L, -1))
+				luaL_error(L, "Invalid .%s type %s (int64)", f->key ? f->key : "*", lua_typename(L, luat));
+			*(int64_t *)ptr = lua_tointeger(L, -1);
+			break;
+		case TYPE_WORD:
+			if (!lua_isinteger(L, -1))
+				luaL_error(L, "Invalid .%s type %s (uint16)", f->key ? f->key : "*", lua_typename(L, luat));
+			*(uint16_t *)ptr = lua_tointeger(L, -1);
+			break;
+		case TYPE_BYTE:
+			if (!lua_isinteger(L, -1))
+				luaL_error(L, "Invalid .%s type %s (uint8)", f->key ? f->key : "*", lua_typename(L, luat));
+			*(uint8_t *)ptr = lua_tointeger(L, -1);
+			break;
+		case TYPE_DOUBLE:
+			if (luat != LUA_TNUMBER)
+				luaL_error(L, "Invalid .%s type %s (double)", f->key ? f->key : "*", lua_typename(L, luat));
+			*(double *)ptr = lua_tonumber(L, -1);
+			break;
 	}
 	lua_pop(L, 1);
 }
@@ -817,6 +841,18 @@ read_value(lua_State *L, struct field *f, const char *buffer) {
 		break;
 	case TYPE_BOOL:
 		lua_pushboolean(L, *ptr);
+		break;
+	case TYPE_INT64:
+		lua_pushinteger(L, *(const int64_t *)ptr);
+		break;
+	case TYPE_WORD:
+		lua_pushinteger(L, *(const uint16_t *)ptr);
+		break;
+	case TYPE_BYTE:
+		lua_pushinteger(L, *(const uint8_t *)ptr);
+		break;
+	case TYPE_DOUBLE:
+		lua_pushnumber(L, *(const double *)ptr);
 		break;
 	default:
 		// never here
@@ -1178,9 +1214,13 @@ create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 		// value type
 		switch (f[0].type) {
 		case TYPE_INT:
+		case TYPE_INT64:
+		case TYPE_WORD:
+		case TYPE_BYTE:
 			lua_pushinteger(L, 0);
 			break;
 		case TYPE_FLOAT:
+		case TYPE_DOUBLE:
 			lua_pushnumber(L, 0);
 			break;
 		case TYPE_BOOL:
@@ -1799,6 +1839,14 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEFLOAT");
 	lua_pushinteger(L, TYPE_BOOL);
 	lua_setfield(L, -2, "_TYPEBOOL");
+	lua_pushinteger(L, TYPE_INT64);
+	lua_setfield(L, -2, "_TYPEINT64");
+	lua_pushinteger(L, TYPE_WORD);
+	lua_setfield(L, -2, "_TYPEWORD");
+	lua_pushinteger(L, TYPE_BYTE);
+	lua_setfield(L, -2, "_TYPEBYTE");
+	lua_pushinteger(L, TYPE_DOUBLE);
+	lua_setfield(L, -2, "_TYPEDOUBLE");
 	lua_pushinteger(L, STRIDE_LUA);
 	lua_setfield(L, -2, "_LUAOBJECT");
 	lua_pushinteger(L, ENTITY_REMOVED);

@@ -80,17 +80,29 @@ local typeid = {
 	int = assert(ecs._TYPEINT),
 	float = assert(ecs._TYPEFLOAT),
 	bool = assert(ecs._TYPEBOOL),
+	int64 = assert(ecs._TYPEINT64),
+	word = assert(ecs._TYPEWORD),
+	byte = assert(ecs._TYPEBYTE),
+	double = assert(ecs._TYPEDOUBLE),
 }
 local typesize = {
 	[typeid.int] = 4,
 	[typeid.float] = 4,
 	[typeid.bool] = 1,
+	[typeid.int64] = 8,
+	[typeid.word] = 2,
+	[typeid.byte] = 1,
+	[typeid.double] = 8,
 }
 
 local typepack = {
 	[typeid.int] = 'i4',
 	[typeid.float] = 'f',
 	[typeid.bool] = 'B',
+	[typeid.int64] = 'i8',
+	[typeid.word] = 'i2',
+	[typeid.byte] = 'B',
+	[typeid.double] = 'd',
 }
 
 local M = ecs._METHODS
@@ -105,23 +117,17 @@ do	-- newtype
 
 	local function align(c, field)
 		local t = field[1]
-		local size = c.size
-		if t == typeid.int or t == typeid.float then
-			local offset = ((size + 3) & ~3)
-			c.size = offset + 4
-			field[3] = offset
-		elseif t == typeid.bool then
-			c.size = size + 1
-			field[3] = size
-		else
-			error("Invalid type " .. t)
-		end
+		local tsize = typesize[t]
+		local offset = ((c.size + tsize - 1) & ~(tsize-1))
+		c.size = offset + tsize
+		field[3] = offset
 		return field
 	end
 
 	local function align_struct(c, t)
-		if t == typeid.int or t == typeid.float then
-			c.size = ((c.size + 3) & ~3)
+		if t then
+			local s = typesize[t] - 1
+			c.size = ((c.size + s) & ~s)
 		end
 	end
 

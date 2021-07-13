@@ -733,10 +733,11 @@ lnew_world(lua_State *L) {
 #define TYPE_FLOAT 1
 #define TYPE_BOOL 2
 #define TYPE_INT64 3
-#define TYPE_WORD 4
-#define TYPE_BYTE 5
-#define TYPE_DOUBLE 6
-#define TYPE_COUNT 7
+#define TYPE_DWORD 4
+#define TYPE_WORD 5
+#define TYPE_BYTE 6
+#define TYPE_DOUBLE 7
+#define TYPE_COUNT 8
 
 struct field {
 	const char *key;
@@ -801,15 +802,38 @@ write_value(lua_State *L, struct field *f, char *buffer) {
 				luaL_error(L, "Invalid .%s type %s (int64)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(int64_t *)ptr = lua_tointeger(L, -1);
 			break;
+		case TYPE_DWORD:
+			if (!lua_isinteger(L, -1))
+				luaL_error(L, "Invalid .%s type %s (uint32)", f->key ? f->key : "*", lua_typename(L, luat));
+			else {
+				int64_t v = lua_tointeger(L, -1);
+				if (v < 0 || v > 0xffffffff) {
+					luaL_error(L, "Invalid DWORD %d", (int)v);
+				}
+				*(uint32_t *)ptr = v;
+			}
+			break;
 		case TYPE_WORD:
 			if (!lua_isinteger(L, -1))
 				luaL_error(L, "Invalid .%s type %s (uint16)", f->key ? f->key : "*", lua_typename(L, luat));
-			*(uint16_t *)ptr = lua_tointeger(L, -1);
+			else {
+				int v = lua_tointeger(L, -1);
+				if (v < 0 || v > 0xffff) {
+					luaL_error(L, "Invalid WORD %d", v);
+				}
+				*(uint16_t *)ptr = v;
+			}
 			break;
 		case TYPE_BYTE:
 			if (!lua_isinteger(L, -1))
 				luaL_error(L, "Invalid .%s type %s (uint8)", f->key ? f->key : "*", lua_typename(L, luat));
-			*(uint8_t *)ptr = lua_tointeger(L, -1);
+			else {
+				int v = lua_tointeger(L, -1);
+				if (v < 0 || v > 255) {
+					luaL_error(L, "Invalid BYTE %d", v);
+				}
+				*(uint16_t *)ptr = v;
+			}
 			break;
 		case TYPE_DOUBLE:
 			if (luat != LUA_TNUMBER)
@@ -844,6 +868,9 @@ read_value(lua_State *L, struct field *f, const char *buffer) {
 		break;
 	case TYPE_INT64:
 		lua_pushinteger(L, *(const int64_t *)ptr);
+		break;
+	case TYPE_DWORD:
+		lua_pushinteger(L, *(const uint32_t *)ptr);
 		break;
 	case TYPE_WORD:
 		lua_pushinteger(L, *(const uint16_t *)ptr);
@@ -1215,6 +1242,7 @@ create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 		switch (f[0].type) {
 		case TYPE_INT:
 		case TYPE_INT64:
+		case TYPE_DWORD:
 		case TYPE_WORD:
 		case TYPE_BYTE:
 			lua_pushinteger(L, 0);
@@ -1841,6 +1869,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEBOOL");
 	lua_pushinteger(L, TYPE_INT64);
 	lua_setfield(L, -2, "_TYPEINT64");
+	lua_pushinteger(L, TYPE_DWORD);
+	lua_setfield(L, -2, "_TYPEDWORD");
 	lua_pushinteger(L, TYPE_WORD);
 	lua_setfield(L, -2, "_TYPEWORD");
 	lua_pushinteger(L, TYPE_BYTE);

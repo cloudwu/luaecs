@@ -156,7 +156,7 @@ do	-- newtype
 			c.islua = true
 		elseif c.size > 0 then
 			align_struct(c, typeclass[1][1])
-			local pack = "!4="
+			local pack = "!8="
 			for i = 1, #c do
 				pack = pack .. typepack[c[i][1]]
 			end
@@ -219,7 +219,11 @@ function M:new(obj)
 		else
 			local tmp = {}
 			for i, f in ipairs(tc) do
-				tmp[i] = v[f[2]]
+				local value = v[f[2]]
+				if value == nil then
+					error ("Missing " .. f[2])
+				end
+				tmp[i] = value
 			end
 			self:_addcomponent(eid, tc.id, string.pack(tc.pack, table.unpack(tmp)))
 		end

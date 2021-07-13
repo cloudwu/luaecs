@@ -113,7 +113,7 @@ local M = ecs._METHODS
 do	-- newtype
 	local function parse(s)
 		-- s is "name:typename"
-		local name, typename = s:match "([%w_]+):(%l+)"
+		local name, typename = s:match "^([%w_]+):(%w+)$"
 		local typeid = assert(typeid[typename])
 		return { typeid, name }
 	end

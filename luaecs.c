@@ -625,9 +625,19 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id,
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
 	assert(c->stride >= 0);
-	void * ret = add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
-	c = &w->c[slibling_id];
-	return ret;
+	return add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
+}
+
+static int
+entity_new_(struct entity_world *w, int cid, const void *buffer, void *L, int world_index) {
+	unsigned int eid = ++w->max_id;
+	assert(eid != 0);
+	struct component_pool *c = &w->c[cid];
+	assert(c->cap > 0 && c->stride >= 0);
+	int index = add_component_id_(L, world_index, w, cid, eid);
+	void *ret = get_ptr(c, index);
+	memcpy(ret, buffer, c->stride);
+	return index;
 }
 
 static int
@@ -695,6 +705,7 @@ lcontext(lua_State *L) {
 		entity_clear_type_,
 		entity_sibling_,
 		entity_add_sibling_,
+		entity_new_,
 		entity_remove_,
 		entity_enable_tag_,
 		entity_disable_tag_,

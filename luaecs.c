@@ -748,7 +748,8 @@ lnew_world(lua_State *L) {
 #define TYPE_WORD 5
 #define TYPE_BYTE 6
 #define TYPE_DOUBLE 7
-#define TYPE_COUNT 8
+#define TYPE_USERDATA 8
+#define TYPE_COUNT 9
 
 struct field {
 	const char *key;
@@ -851,6 +852,11 @@ write_value(lua_State *L, struct field *f, char *buffer) {
 				luaL_error(L, "Invalid .%s type %s (double)", f->key ? f->key : "*", lua_typename(L, luat));
 			*(double *)ptr = lua_tonumber(L, -1);
 			break;
+		case TYPE_USERDATA:
+			if (luat !=  LUA_TLIGHTUSERDATA)
+				luaL_error(L, "Invalid .%s type %s (pointer)", f->key ? f->key : "*", lua_typename(L, luat));
+			*(void **)ptr = lua_touserdata(L, -1);
+			break;
 	}
 	lua_pop(L, 1);
 }
@@ -891,6 +897,9 @@ read_value(lua_State *L, struct field *f, const char *buffer) {
 		break;
 	case TYPE_DOUBLE:
 		lua_pushnumber(L, *(const double *)ptr);
+		break;
+	case TYPE_USERDATA:
+		lua_pushlightuserdata(L, *(void **)ptr);
 		break;
 	default:
 		// never here
@@ -1264,6 +1273,9 @@ create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 			break;
 		case TYPE_BOOL:
 			lua_pushboolean(L, 0);
+			break;
+		case TYPE_USERDATA:
+			lua_pushlightuserdata(L, NULL);
 			break;
 		default:
 			lua_pushnil(L);
@@ -1831,17 +1843,26 @@ lnew_ref(lua_State *L) {
 	return 1;
 }
 
+static int
+lpack_value(lua_State *L) {
+	switch (lua_type(L, 1)) {
+	case LUA_TBOOLEAN:
+		lua_pushinteger(L, lua_toboolean(L, 1));
+		break;
+	case LUA_TLIGHTUSERDATA:
+		lua_pushinteger(L, (uintptr_t)lua_touserdata(L, 1));
+		break;
+	}
+	return 1;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "_world", lnew_world },
 		{ "_ref", lnew_ref },
-		{ "_MAXTYPE", NULL },
-		{ "_METHODS", NULL },
-		{ "_TYPEINT", NULL },
-		{ "_TYPEFLOAT", NULL },
-		{ "_TYPEBOOL", NULL },
+		{ "_pack", lpack_value },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);
@@ -1888,6 +1909,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_TYPEBYTE");
 	lua_pushinteger(L, TYPE_DOUBLE);
 	lua_setfield(L, -2, "_TYPEDOUBLE");
+	lua_pushinteger(L, TYPE_USERDATA);
+	lua_setfield(L, -2, "_TYPEUSERDATA");
 	lua_pushinteger(L, STRIDE_LUA);
 	lua_setfield(L, -2, "_LUAOBJECT");
 	lua_pushinteger(L, ENTITY_REMOVED);
@@ -1971,6 +1994,20 @@ ltestref(lua_State *L) {
 	return 1;
 }
 
+struct userdata_t {
+	unsigned char a;
+	void *b;
+};
+
+static int
+ltestuserdata(lua_State *L) {
+	struct ecs_context *ctx = lua_touserdata(L, 1);
+	struct userdata_t *ud = entity_iter(ctx, 1, 0);
+	ud->a = 1 - ud->a;
+	ud->b = ctx;
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_ecs_ctest(lua_State *L) {
 	luaL_checkversion(L);
@@ -1979,6 +2016,7 @@ luaopen_ecs_ctest(lua_State *L) {
 		{ "sum", lsum },
 		{ "get", lget },
 		{ "testref", ltestref },
+		{ "testuserdata", ltestuserdata },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

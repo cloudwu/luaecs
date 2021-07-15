@@ -85,6 +85,7 @@ local typeid = {
 	word = assert(ecs._TYPEWORD),
 	byte = assert(ecs._TYPEBYTE),
 	double = assert(ecs._TYPEDOUBLE),
+	userdata = assert(ecs._TYPEUSERDATA),
 }
 local typesize = {
 	[typeid.int] = 4,
@@ -95,6 +96,7 @@ local typesize = {
 	[typeid.word] = 2,
 	[typeid.byte] = 1,
 	[typeid.double] = 8,
+	[typeid.userdata] = 8,
 }
 
 local typepack = {
@@ -106,6 +108,7 @@ local typepack = {
 	[typeid.word] = 'I2',
 	[typeid.byte] = 'B',
 	[typeid.double] = 'd',
+	[typeid.userdata] = 'I8',
 }
 
 local M = ecs._METHODS
@@ -196,12 +199,21 @@ do	-- newtype
 	end
 end
 
-local mapbool = {
-	[true] = 1,
-	[false] = 0,
-}
+local function dump(obj)
+	for e,v in pairs(obj) do
+		if type(v) == "table" then
+			for k,v in pairs(v) do
+				print(e,k,v)
+			end
+		else
+			print(e,v)
+		end
+	end
+end
 
+local convert = ecs._pack
 function M:new(obj)
+--	dump(obj)
 	local eid = self:_newentity()
 	local typenames = context[self].typenames
 	for k,v in pairs(obj) do
@@ -215,7 +227,7 @@ function M:new(obj)
 			assert(tc.size == 0)
 			self:_addcomponent(eid, tc.id)
 		elseif tc.type then
-			self:_addcomponent(eid, tc.id, string.pack(tc.pack, mapbool[v] or v))
+			self:_addcomponent(eid, tc.id, string.pack(tc.pack, convert(v)))
 		else
 			local tmp = {}
 			for i, f in ipairs(tc) do
@@ -223,7 +235,7 @@ function M:new(obj)
 				if value == nil then
 					error ("Missing " .. f[2])
 				end
-				tmp[i] = value
+				tmp[i] = convert(value)
 			end
 			self:_addcomponent(eid, tc.id, string.pack(tc.pack, table.unpack(tmp)))
 		end

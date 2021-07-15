@@ -15,7 +15,8 @@ struct ecs_capi {
 	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id, void *L, int world_index);
 	void (*disable_tag)(struct entity_world *w, int cid, int index, int tag_id);
 	void (*sort_key)(struct entity_world *w, int orderid, int cid, void *L, int world_index);
-	void * (*iter_lua)(struct entity_world *w, int cid, int index, void *L);
+	void * (*iter_lua)(struct entity_world *w, int cid, int index, void *L, int world_index);
+	int (*assign_lua)(struct entity_world *w, int cid, int index, void *L, int world_index);
 };
 
 struct ecs_context {
@@ -93,7 +94,13 @@ entity_sort_key(struct ecs_context *ctx, int orderid, int cid) {
 static inline void *
 entity_iter_lua(struct ecs_context *ctx, int cid, int index) {
 	check_id_(ctx, cid);
-	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index, ctx->L);
+	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index, ctx->L, 1);
+}
+
+static inline int
+entity_assign_lua(struct ecs_context *ctx, int cid, int index) {
+	check_id_(ctx, cid);
+	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index, ctx->L, 1);
 }
 
 #endif

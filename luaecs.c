@@ -560,13 +560,13 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 }
 
 static void *
-entity_iter_lua_(struct entity_world *w, int cid, int index, void *L) {
+entity_iter_lua_(struct entity_world *w, int cid, int index, void *L, int world_index) {
 	void * ret = entity_iter_(w, cid, index);
 	if (ret != DUMMY_PTR)
 		return ret;
-	if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+	if (lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE) {
 		lua_pop(L, 1);
-		return 0;
+		return NULL;
 	}
 	int t = lua_rawgeti(L, -1, index+1);
 	switch(t) {
@@ -583,6 +583,23 @@ entity_iter_lua_(struct entity_world *w, int cid, int index, void *L) {
 	}
 	lua_pop(L, 2);
 	return ret;
+}
+
+static int
+entity_assign_lua_(struct entity_world *w, int cid, int index, void *L, int world_index) {
+	struct component_pool *c = &w->c[cid];
+	++index;
+	if (c->stride != STRIDE_LUA
+		|| lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE
+		|| index <=0
+		|| index >=c->n ) {
+		lua_pop(L, 1);
+		return 0;
+	}
+	lua_pushvalue(L, -2);
+	lua_rawseti(L, -2, index + 1);
+	lua_pop(L, 1);
+	return 1;
 }
 
 static void
@@ -724,6 +741,7 @@ lcontext(lua_State *L) {
 		entity_disable_tag_,
 		entity_sort_key_,
 		entity_iter_lua_,
+		entity_assign_lua_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;

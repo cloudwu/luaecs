@@ -99,18 +99,6 @@ local typesize = {
 	[typeid.userdata] = 8,
 }
 
-local typepack = {
-	[typeid.int] = 'i4',
-	[typeid.float] = 'f',
-	[typeid.bool] = 'B',
-	[typeid.int64] = 'i8',
-	[typeid.dword] = 'I4',
-	[typeid.word] = 'I2',
-	[typeid.byte] = 'B',
-	[typeid.double] = 'd',
-	[typeid.userdata] = 'I8',
-}
-
 local M = ecs._METHODS
 
 do	-- newtype
@@ -153,24 +141,18 @@ do	-- newtype
 			c[i] = align(c, parse(v))
 		end
 		local ttype = typeclass.type
-		if  ttype == "lua" then
+		if ttype == "lua" then
 			assert(c.size == 0)
 			c.size = ecs._LUAOBJECT
 			c.islua = true
 		elseif c.size > 0 then
 			align_struct(c, typeclass[1][1])
-			local pack = "!8="
-			for i = 1, #c do
-				pack = pack .. typepack[c[i][1]]
-			end
-			c.pack = pack
 		else
 			-- size == 0, one value
 			if ttype then
 				local t = assert(typeid[typeclass.type])
 				c.type = t
 				c.size = typesize[t]
-				c.pack = typepack[t]
 				c[1] = { t, "v", 0 }
 			else
 				c.tag = true
@@ -178,24 +160,10 @@ do	-- newtype
 		end
 		typenames[name] = c
 		self:_newtype(id, c.size)
-	end
-
-	local _ref = ecs._ref
-	function ecs.ref(typeclass)
-		local c = { size = 0 }
-		for i,v in ipairs(typeclass) do
-			c[i] = align(c, parse(v))
+		if typeclass.ref then
+			self:register { name = name .. "_live" }
+			self:register { name = name .. "_dead" }
 		end
-		if c.size == 0 and typeclass.type then
-			if typeclass.type ~= "lua" then
-				local id = assert(typeid[typeclass.type])
-				c[1] = align(c, { id, nil, 0 })
-			end
-		end
-		if c.size > 0 then
-			align_struct(c, c[1][1])
-		end
-		return _ref(c)
 	end
 end
 
@@ -211,7 +179,6 @@ local function dump(obj)
 	end
 end
 
-local convert = ecs._pack
 function M:new(obj)
 --	dump(obj)
 	local eid = self:_newentity()
@@ -221,25 +188,48 @@ function M:new(obj)
 		if not tc then
 			error ("Invalid key : ".. k)
 		end
-		if tc.islua then
-			self:_addcomponent(eid, tc.id, v)
-		elseif tc.tag then
-			assert(tc.size == 0)
-			self:_addcomponent(eid, tc.id)
-		elseif tc.type then
-			self:_addcomponent(eid, tc.id, string.pack(tc.pack, convert(v)))
-		else
-			local tmp = {}
-			for i, f in ipairs(tc) do
-				local value = v[f[2]]
-				if value == nil then
-					error ("Missing " .. f[2])
-				end
-				tmp[i] = convert(value)
-			end
-			self:_addcomponent(eid, tc.id, string.pack(tc.pack, table.unpack(tmp)))
-		end
+		local id = self:_addcomponent(eid, tc.id)
+		self:object(k, v, id)
 	end
+end
+
+local ref_key = setmetatable({} , { __index = function(cache, key)
+	local select_key = string.format("%s_dead:out %s_live?out %s:out", key, key, key)
+	cache[key] = select_key
+	return select_key
+end })
+
+function M:ref(name, obj)
+	local ctx = context[self]
+	local typenames = ctx.typenames
+	local tc = assert(typenames[name])
+	local live = name .. "_live"
+	local dead = name .. "_dead"
+	for v in self:select(dead) do
+		v[dead] = false
+		v[live] = true
+		v[name] = obj
+		return self:sync(ref_key[name] , v)
+	end
+	local eid = self:_newentity()
+	local id = self:_addcomponent(eid, tc.id)
+	self:object(name, obj, id)
+	self:object(live, true, self:_addcomponent(eid, typenames[live].id))
+	return id
+end
+
+local release_key = setmetatable({}, { __index = function(cache, key)
+	local ret = string.format("%s %s_live?out %s_dead?out", key, key, key)
+	cache[key] = ret
+	return ret
+end })
+
+function M:release(name, id)
+	self:sync(release_key[name], {
+		id,
+		[name .. "_live"] = false,
+		[name .. "_dead"] = true,
+	})
 end
 
 function M:context(t)
@@ -261,7 +251,7 @@ end
 
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
-	self:_sync(p, iter)
+	return self:_sync(p, iter)
 end
 
 function M:clear(name)
@@ -294,10 +284,10 @@ function M:sort(sorted, name)
 end
 
 do
-	local _singleton = M._singleton
-	function M:singleton(name, v)
+	local _object = M._object
+	function M:object(name, v, refid)
 		local pat = context[self].select[name]
-		return _singleton(pat, v)
+		return _object(pat, v, refid)
 	end
 end
 

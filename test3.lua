@@ -1,39 +1,31 @@
--- test singleton
+-- test object
 local ecs = require "ecs"
 
 local w = ecs.world()
 
 w:register {
-	name = "lsingleton",
-	type = "lua",
-}
-
-w:register {
-	name = "vsingleton",
+	name = "refobject",
 	type = "int",
+	ref = true,
 }
 
-w:register {
-	name = "msingleton",
-	"x:float",
-	"y:float",
-}
+local id1 = w:ref("refobject", 42)
+local id2 = w:ref("refobject", 0)
+local id3 = w:ref("refobject", 100)
+print(w:object("refobject", nil , id1))
 
-w:new { lsingleton = "Init", vsingleton = 42, msingleton = { x = 1, y = 2 } }
+print("Release", id1)
 
-w:update()
+w:release("refobject", id1)
 
-print(w:singleton "lsingleton")
-w:singleton("lsingleton", "Hello World")
-print(w:singleton "lsingleton")
+for v in w:select "refobject_live refobject:in" do
+	print(v.refobject)
+end
 
-print(w:singleton "vsingleton")
-print(w:singleton("vsingleton", 100))
-print(w:singleton("vsingleton"))
+w:ref("refobject", -42)
+w:release("refobject", id2)
+w:release("refobject", id3)
 
-local v = w:singleton "msingleton"
-print(v.x, v.y)
-
-v.x, v.y = v.y, v.x
-local v = w:singleton("msingleton" , v)
-print(v.x, v.y)
+for v in w:select "refobject_live refobject:in" do
+	print(v.refobject)
+end

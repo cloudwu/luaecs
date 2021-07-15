@@ -199,6 +199,17 @@ ladd_component(lua_State *L) {
 	struct entity_world *w = getW(L);
 	unsigned int eid = luaL_checkinteger(L, 2);
 	int cid = check_cid(L, w, 3);
+	int index = add_component_id_(L, 1, w, cid, eid);
+	lua_pushinteger(L, index + 1);
+	return 1;
+}
+
+/*
+static int
+ladd_component(lua_State *L) {
+	struct entity_world *w = getW(L);
+	unsigned int eid = luaL_checkinteger(L, 2);
+	int cid = check_cid(L, w, 3);
 	int stride = w->c[cid].stride;
 	if (stride <= 0) {
 		int index = add_component_id_(L, 1, w, cid, eid);
@@ -211,6 +222,7 @@ ladd_component(lua_State *L) {
 			lua_insert(L, -2);
 			lua_rawseti(L, -2, index + 1);
 		}
+		lua_pushinteger(L, index + 1);
 	} else {
 		size_t sz;
 		const char *buffer = lua_tolstring(L, 4, &sz);
@@ -219,10 +231,11 @@ ladd_component(lua_State *L) {
 			return luaL_error(L, "Invalid data (size=%d/%d) for type %d", (int)sz, stride, cid);
 		}
 		add_component_(L, 1, w, cid, eid, buffer);
+		lua_pushinteger(L, w->c[cid].n);
 	}
-	return 0;
+	return 1;
 }
-
+*/
 static int
 lnew_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -1009,20 +1022,21 @@ remove_tag(lua_State *L, int lua_index, const char *name) {
 	default:
 		return luaL_error(L, "Invalid tag type %s", lua_typename(L, lua_type(L, -1)));
 	}
+	lua_pop(L, 1);
 	return r;
 }
 
-static void
+static int
 update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
+	int ret = 0;
 	int i;
 	int mainkey = iter->k[0].id;
 	struct component_pool *c = &iter->world->c[mainkey];
+	int disable_mainkey = 0;
 	if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
 		if (c->stride == STRIDE_TAG) {
-			// It's a tag
-			if ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name)) {
-				entity_disable_tag_(iter->world, mainkey, idx, mainkey);
-			}
+			// The mainkey is a tag, delay disable
+			disable_mainkey = ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name));
 		} else if ((iter->k[0].attrib & COMPONENT_OUT)
 			&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
 			struct component_pool *c = &iter->world->c[mainkey];
@@ -1072,6 +1086,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				if (index == 0) {
 					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
+				ret = index;
 				if (c->stride == STRIDE_LUA) {
 					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
@@ -1099,6 +1114,10 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 		}
 		f += k->field_n;
 	}
+	if (disable_mainkey) {
+		entity_disable_tag_(iter->world, mainkey, idx, mainkey);
+	}
+	return ret;
 }
 
 static void
@@ -1200,16 +1219,22 @@ lsync(lua_State *L) {
 		return luaL_error(L, "Invalid iterator index %d", idx);
 	lua_pop(L, 1);
 
-	if (!iter->readonly) {
-		update_last_index(L, 1, 3, iter, idx);
-	}
-
 	unsigned int index[MAX_COMPONENT];
 	if (query_index(iter, iter->k[0].id, idx, index) <=0) {
 		return luaL_error(L, "Read pattern fail");
 	}
+
+	int ret = 0;
+	if (!iter->readonly) {
+		ret = update_last_index(L, 1, 3, iter, idx);
+	}
 	read_iter(L, 1, 3, iter, index);
-	return 0;
+	if (ret) {
+		lua_pushinteger(L, ret);
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 static int
@@ -1508,20 +1533,21 @@ lsortkey(lua_State *L) {
 }
 
 static int
-lsingleton(lua_State *L) {
+lobject(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
+	int index = luaL_optinteger(L, 3, 1) - 1;
 	int cid = iter->k[0].id;
 	struct entity_world * w = iter->world;
 	if (cid < 0 || cid >=MAX_COMPONENT) {
-		return luaL_error(L, "Invalid singleton %d", cid);
+		return luaL_error(L, "Invalid object %d", cid);
 	}
+	lua_settop(L, 2);
 	struct component_pool *c = &w->c[cid];
-	if (c->n == 0) {
-		return luaL_error(L, "No singleton %d", cid);
+	if (c->n <= index) {
+		return luaL_error(L, "No object %d", cid);
 	}
 	if (c->stride == STRIDE_LUA) {
-		// lua singleton
-		lua_settop(L, 2);
+		// lua object
 		if (lua_getiuservalue(L, 1, 1) != LUA_TUSERDATA) {
 			return luaL_error(L, "No world");
 		}
@@ -1529,329 +1555,38 @@ lsingleton(lua_State *L) {
 			return luaL_error(L, "Missing lua table for %d", cid);
 		}
 		if (lua_isnil(L, 2)) {
-			lua_rawgeti(L, -1, 1);
+			lua_rawgeti(L, -1, index + 1);
 		} else {
 			lua_pushvalue(L, 2);
-			lua_rawseti(L, -2, 1);
+			lua_rawseti(L, -2, index + 1);
 			lua_settop(L, 2);
 		}
 		return 1;
-	} else if (c->stride <= 0) {
-		return luaL_error(L, "Invalid singleton %d", cid);
+	} else if (c->stride == 0) {
+		if (lua_type(L, 2) != LUA_TBOOLEAN)
+			return luaL_error(L, "%s is a tag, need boolean", iter->k[0].name);
+		if (!lua_toboolean(L, 2)) {
+			entity_disable_tag_(w, cid, index, cid);
+		}
+	} else if (c->stride < 0) {
+		return luaL_error(L, "Invalid object %d", cid);
 	}
 	struct field *f = iter->f;
-	void * buffer = get_ptr(c, 0);
+	void * buffer = get_ptr(c, index);
 	if (lua_isnoneornil(L, 2)) {
-		// read singleton
-		lua_createtable(L, 0, iter->k[0].field_n);
+		// read object
 		if (f->key == NULL) {
 			// value type
 			read_value(L, f, buffer);
 		} else {
-			int index = lua_gettop(L);
-			read_component(L, iter->k[0].field_n, f, index, buffer);
+			lua_createtable(L, 0, iter->k[0].field_n);
+			int lua_index = lua_gettop(L);
+			read_component(L, iter->k[0].field_n, f, lua_index, buffer);
 		}
 	} else {
-		// write singleton
+		// write object
 		lua_pushvalue(L, 2);
 		write_component_object(L, iter->k[0].field_n, f, buffer);
-	}
-	return 1;
-}
-
-// reference object
-
-struct ecs_ref {
-	struct ecs_ref_i interface;
-	void *data;
-	lua_State *L;
-	int n;
-	int cap;
-	int stride;
-	int nkey;
-	int freelist;
-	struct field f[1];
-};
-
-struct ref_freenode {
-	int freelist;
-};
-
-static void
-init_fields(struct ecs_ref *R, lua_State *L, int index, int nkey) {
-	if (nkey == 0) {
-		// lua object
-		R->stride = 0;
-		lua_newtable(R->L);
-		if (lua_gettop(R->L) != 1) {
-			luaL_error(L, "Invalid ref context");
-		}
-	} else {
-		if (lua_getfield(L, index, "size") != LUA_TNUMBER) {
-			luaL_error(L, "need .size");
-		}
-		R->stride = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-		int i;
-		for (i=0;i<nkey;i++) {
-			struct field *f = &R->f[i];
-			if (lua_geti(L, index, i+1) != LUA_TTABLE) {
-				luaL_error(L, "Invalid field %d, need table, it's %s", i+1, lua_typename(L, lua_type(L, -1)));
-			}
-			if (lua_geti(L, -1, 1) != LUA_TNUMBER) {
-				luaL_error(L, "Invalid type id in [%d]", i+1);
-			}
-			f->type = lua_tointeger(L, -1);
-			lua_pop(L, 1);
-			if (lua_geti(L, -1, 2) != LUA_TSTRING) {
-				if (lua_type(L, -1) == LUA_TNIL && i == 0) {
-					f->key = NULL;
-				} else {
-					luaL_error(L, "Invalid key name in [%d]", i+1);
-				}
-			} else {
-				f->key = lua_tostring(L, -1);
-			}
-			lua_pop(L, 1);
-			if (lua_geti(L, -1, 3) != LUA_TNUMBER) {
-				luaL_error(L, "Invalid offset in [%d]", i+1);
-			}
-			f->offset = lua_tointeger(L, -1);
-			if (f->offset >= R->stride) {
-				luaL_error(L, "Invalid offset (%d/%d) in [%d]", f->offset, R->stride, i+1);
-			}
-			lua_pop(L, 2);
-		}
-	}
-}
-
-static inline void *
-ref_index_ptr(struct ecs_ref *R, int index) {
-	return (void *)((char *)R->data + R->stride * index);
-}
-
-static int
-alloc_id(struct ecs_ref *R) {
-	if (R->data == NULL) {
-		lua_settop(R->L, 0);
-		R->data = lua_newuserdata(R->L, R->stride * R->cap);
-		R->n = 1;
-		return 1;
-	}
-	if (R->freelist) {
-		int r = R->freelist - 1;
-		struct ref_freenode * node = (struct ref_freenode *)ref_index_ptr(R, r);
-		R->freelist = node->freelist;
-		return r;
-	}
-	if (R->n >= R->cap) {
-		int newcap = R->cap * 3 / 2;
-		void *data = lua_newuserdata(R->L, R->stride * newcap);
-		memcpy(R->data, data, R->stride * R->n);
-		lua_replace(R->L, 1);
-		R->data = data;
-		R->cap = newcap;
-	}
-	return ++R->n;
-}
-
-static int
-lnew_object(lua_State *L) {
-	struct ecs_ref *R = (struct ecs_ref *)luaL_checkudata(L, 1, "ENTITY_REFOBJECT");
-	int n;
-	if (R->stride == 0) {
-		// lua object
-		if (!lua_istable(R->L, 1)) {
-			return luaL_error(L, "Invalid ref context");
-		}
-		n = lua_rawlen(R->L, 1);
-		lua_settop(L, 2);
-		lua_xmove(L, R->L, 1);
-		lua_rawseti(R->L, 1, n+1);
-		lua_pushinteger(L, n+1);
-	} else {
-		n = alloc_id(R);
-		void * buffer = ref_index_ptr(R, n-1);
-		if (R->f[0].key == NULL) {
-			write_value(L, R->f, buffer);
-		} else {
-			write_component(L, R->nkey, R->f, 2, buffer);
-		}
-		lua_pushinteger(L, n);
-	}
-	return 1;
-}
-
-static void
-release_object(struct ecs_ref *R, int id) {
-	if (R->stride == 0) {
-		// lua object
-		if (!lua_istable(R->L, 1)) {
-			luaL_error(R->L, "Invalid ref context");
-		}
-		lua_pushnil(R->L);
-		lua_rawseti(R->L, 1, id);
-	} else {
-		if (id <= 0 || id > R->n)
-			luaL_error(R->L, "Invalid id %d", id);
-		if (id == R->n) {
-			--R->n;
-		} else {
-			struct ref_freenode * node = (struct ref_freenode *)ref_index_ptr(R, id-1);
-			node->freelist = R->freelist;
-			R->freelist = id;
-		}
-	}
-}
-
-static void *
-index_object(struct ecs_ref *R, int id) {
-	if (R->stride == 0) {
-		luaL_error(R->L, "Can't index lua object");
-	} else if (id <=0 || id > R->n) {
-		luaL_error(R->L, "Invalid id %d", id);
-	}
-	return ref_index_ptr(R, id-1);
-}
-
-static int
-ldelete_object(lua_State *L) {
-	struct ecs_ref *R = (struct ecs_ref *)luaL_checkudata(L, 1, "ENTITY_REFOBJECT");
-	int id = luaL_checkinteger(L, 2);
-	release_object(R, id);
-	return 0;
-}
-
-#define KEY(s) s, sizeof(""s)
-
-static int
-iskey(const char *name, size_t sz, const char *keyname, size_t keysize) {
-	return (sz+1 == keysize) && memcmp(name, keyname, sz) == 0;
-}
-
-static inline int
-method(lua_State *L, int index) {
-	size_t sz;
-	const char * name = lua_tolstring(L, index, &sz);
-	if (iskey(name, sz, KEY("new"))) {
-		lua_pushcfunction(L, lnew_object);
-	} else if (iskey(name, sz, KEY("delete"))) {
-		lua_pushcfunction(L, ldelete_object);
-	} else {
-		return luaL_error(L, "Invalid method %s", name);
-	}
-	return 1;
-}
-
-static inline int
-index_ref(lua_State *L, int index) {
-	int id = lua_tointeger(L, index);
-	if (id <= 0) {
-		return luaL_error(L, "Invalid index %d", id);
-	}
-	struct ecs_ref *R = (struct ecs_ref *)lua_touserdata(L, 1);
-	if (R->stride == 0) {
-		// lua object
-		if (!lua_istable(R->L, 1)) {
-			return luaL_error(L, "Invalid ref context");
-		}
-		lua_rawgeti(R->L, 1, id);
-		lua_xmove(R->L, L, 1);
-	} else {
-		if (id <= 0 || id > R->n) {
-			return luaL_error(L, "Invalid id %d\n", id);
-		}
-		void * buffer = ref_index_ptr(R, id-1);
-		if (R->f->key == NULL) {
-			read_value(L, R->f, buffer);
-		} else {
-			lua_createtable(L, 0, R->nkey);
-			int index = lua_gettop(L);
-			read_component(L, R->nkey, R->f, index, buffer);
-		}
-	}
-	return 1;
-}
-
-static int
-lread_ref(lua_State *L) {
-	switch(lua_type(L, 2)) {
-	case LUA_TSTRING:
-		return method(L, 2);
-	case LUA_TNUMBER:
-		return index_ref(L, 2);
-	default:
-		return luaL_error(L, "Invalid key type %s", lua_typename(L, lua_type(L, -1)));
-	}
-}
-
-static int
-lwrite_ref(lua_State *L) {
-	struct ecs_ref *R = (struct ecs_ref *)lua_touserdata(L, 1);
-	int id = luaL_checkinteger(L, 2);
-	if (R->stride == 0) {
-		// lua object
-		if (!lua_istable(R->L, 1)) {
-			return luaL_error(L, "Invalid ref context");
-		}
-		lua_xmove(L, R->L, 1);
-		lua_rawseti(R->L, 1, id);
-	}
-	if (id <= 0 && id > R->n)
-		return luaL_error(L, "Invalid id %d", id);
-	void * buffer = ref_index_ptr(R, id-1);
-	write_component_object(L, R->nkey, R->f, buffer);
-	return 0;
-}
-
-static int
-lnew_ref(lua_State *L) {
-	size_t sz;
-	int nkey;
-	if (lua_isnoneornil(L, 1)) {
-		sz = offsetof(struct ecs_ref, f);
-		nkey = 0;
-	} else {
-		luaL_checktype(L, 1, LUA_TTABLE);
-		nkey = get_len(L, 1);
-		sz = sizeof(struct ecs_ref) + (nkey - 1) * sizeof(struct field);
-	}
-	struct ecs_ref * R = (struct ecs_ref *)lua_newuserdatauv(L, sz, 1);
-	static struct ecs_capi_ref apis = {
-		alloc_id,
-		release_object,
-		index_object,
-	};
-	R->interface.api = &apis;
-	R->data = NULL;
-	R->n = 0;
-	R->cap = DEFAULT_SIZE;
-	R->nkey = nkey;
-	R->freelist = 0;
-	R->L = lua_newthread(L);
-	lua_setiuservalue(L, -2, 1);
-	init_fields(R, L, 1, nkey);
-	if (luaL_newmetatable(L, "ENTITY_REFOBJECT")) {
-		luaL_Reg l[] = {
-			{ "__index", lread_ref },
-			{ "__newindex", lwrite_ref },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L,l,0);
-	}
-	lua_setmetatable(L, -2);
-	return 1;
-}
-
-static int
-lpack_value(lua_State *L) {
-	switch (lua_type(L, 1)) {
-	case LUA_TBOOLEAN:
-		lua_pushinteger(L, lua_toboolean(L, 1));
-		break;
-	case LUA_TLIGHTUSERDATA:
-		lua_pushinteger(L, (uintptr_t)lua_touserdata(L, 1));
-		break;
 	}
 	return 1;
 }
@@ -1861,8 +1596,6 @@ luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "_world", lnew_world },
-		{ "_ref", lnew_ref },
-		{ "_pack", lpack_value },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);
@@ -1882,7 +1615,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_groupiter", lgroupiter },
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
-			{ "_singleton", lsingleton },
+			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ NULL, NULL },
 		};
@@ -1917,6 +1650,8 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_REMOVED");
 	lua_pushinteger(L, STRIDE_ORDER);
 	lua_setfield(L, -2, "_ORDERKEY");
+	lua_pushlightuserdata(L, NULL);
+	lua_setfield(L, -2, "NULL");
 
 	return 1;
 }
@@ -1982,18 +1717,6 @@ lget(lua_State *L) {
 	return 1;
 }
 
-static int
-ltestref(lua_State *L) {
-	struct ecs_ref_i * R = (struct ecs_ref_i *)lua_touserdata(L, 1);
-	int id = robject_create(R);
-	printf("create id = %d\n", id);
-	struct vector2 * vec = robject_index(R, id);
-	vec->x = 42.0f;
-	vec->y = 24.0f;
-	lua_pushinteger(L, id);
-	return 1;
-}
-
 struct userdata_t {
 	unsigned char a;
 	void *b;
@@ -2015,7 +1738,6 @@ luaopen_ecs_ctest(lua_State *L) {
 		{ "test", ltest },
 		{ "sum", lsum },
 		{ "get", lget },
-		{ "testref", ltestref },
 		{ "testuserdata", ltestuserdata },
 		{ NULL, NULL },
 	};

@@ -1,34 +1,35 @@
 local ecs = require "ecs"
 
-local ref1 = ecs.ref {
-	"x:float",
-	"y:float",
+local w = ecs.world()
+
+w:register {
+	name = "t",
+	"a:bool",
+	"b:userdata",
 }
 
-local ref2 = ecs.ref { type = "lua" }
+w:new {
+	t = {
+		a = false,
+		b = ecs.NULL,
+	}
+}
 
-local ref3 = ecs.ref { type = "int" }
+local function print_v()
+	local v = w:object "t"
 
+	print(".a = ",v.a)
+	print(".b = ",v.b)
+end
 
-local id = ref1:new { x = 1, y = 2 }
-local v = ref1[id]
-v.x, v.y = v.y , v.x
-ref1[id] = v
-print(v.x, v.y)
+local ctx = w:context { "t" }
 
-local id1 = ref2:new "Hello"
-local id2 = ref2:new "World"
-print(ref2[id1], ref2[id2])
-ref2:delete(id1)
-print(ref2[id1], ref2[id2])
-
-local id = ref3:new(100)
-print(ref3[id])
-ref3[id] = 42
-print(ref3[id])
-ref3:delete(id)
+print("ctx = ", ctx)
 
 local test = require "ecs.ctest"
-local id = test.testref(ref1)
-local v = ref1[id]
-print(v.x, v.y)
+
+print_v()
+
+test.testuserdata(ctx)
+
+print_v()

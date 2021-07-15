@@ -45,7 +45,10 @@ local function cache_world(obj, k)
 				opt, inout = padding:match "^([:?])(%l+)$"
 				assert(opt, "Invalid pattern")
 			end
-			local tc = assert(typenames[key])
+			local tc = typenames[key]
+			if tc == nil then
+				error("Unknown type " .. key)
+			end
 			local a = get_attrib(opt, inout)
 			a.name = tc.name
 			a.id = tc.id

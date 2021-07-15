@@ -589,15 +589,18 @@ static int
 entity_assign_lua_(struct entity_world *w, int cid, int index, void *L, int world_index) {
 	struct component_pool *c = &w->c[cid];
 	++index;
-	if (c->stride != STRIDE_LUA
-		|| lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE
-		|| index <=0
-		|| index >=c->n ) {
+	assert(lua_gettop(L) > 1);
+	if (c->stride != STRIDE_LUA || index <=0 || index > c->n) {
 		lua_pop(L, 1);
 		return 0;
 	}
-	lua_pushvalue(L, -2);
-	lua_rawseti(L, -2, index + 1);
+	if (lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE) {
+		lua_pop(L, 2);
+		return 0;
+	}
+	lua_insert(L, -2);
+	// table value
+	lua_rawseti(L, -2, index);
 	lua_pop(L, 1);
 	return 1;
 }
@@ -616,29 +619,13 @@ lclear_type(lua_State *L) {
 	return 0;
 }
 
-static void *
-entity_sibling_(struct entity_world *w, int cid, int index, int slibling_id) {
-	struct component_pool *c = &w->c[cid];
-	if (index < 0 || index >= c->n)
-		return NULL;
-	unsigned int eid = c->id[index];
-	c = &w->c[slibling_id];
-	assert(c->stride != STRIDE_ORDER);
-	int result_index = lookup_component(c, eid, c->last_lookup);
-	if (result_index >= 0) {
-		c->last_lookup = result_index;
-		return get_ptr(c, result_index);
-	}
-	return NULL;
-}
-
 static int
-entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_id) {
+entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_id) {
 	struct component_pool *c = &w->c[cid];
 	if (index < 0 || index >= c->n)
 		return 0;
 	unsigned int eid = c->id[index];
-	c = &w->c[slibling_id];
+	c = &w->c[silbling_id];
 	assert(c->stride != STRIDE_ORDER);
 	int result_index = lookup_component(c, eid, c->last_lookup);
 	if (result_index >= 0) {
@@ -649,13 +636,13 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int slibling_i
 }
 
 static void *
-entity_add_sibling_(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index) {
+entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id, const void *buffer, void *L, int world_index) {
 	struct component_pool *c = &w->c[cid];
 	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
 	assert(c->stride >= 0);
-	return add_component_((lua_State *)L, world_index, w, slibling_id, eid, buffer);
+	return add_component_((lua_State *)L, world_index, w, silbling_id, eid, buffer);
 }
 
 static int
@@ -663,11 +650,16 @@ entity_new_(struct entity_world *w, int cid, const void *buffer, void *L, int wo
 	unsigned int eid = ++w->max_id;
 	assert(eid != 0);
 	struct component_pool *c = &w->c[cid];
-	assert(c->cap > 0 && c->stride >= 0);
-	int index = add_component_id_(L, world_index, w, cid, eid);
-	void *ret = get_ptr(c, index);
-	memcpy(ret, buffer, c->stride);
-	return index;
+	assert(c->cap > 0);
+	if (buffer == NULL) {
+		return add_component_id_(L, world_index, w, cid, eid);
+	} else {
+		assert(c->stride >= 0);
+		int index = add_component_id_(L, world_index, w, cid, eid);
+		void *ret = get_ptr(c, index);
+		memcpy(ret, buffer, c->stride);
+		return index;
+	}
 }
 
 static int
@@ -733,7 +725,7 @@ lcontext(lua_State *L) {
 	static struct ecs_capi c_api = {
 		entity_iter_,
 		entity_clear_type_,
-		entity_sibling_,
+		entity_sibling_index_,
 		entity_add_sibling_,
 		entity_new_,
 		entity_remove_,

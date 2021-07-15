@@ -8,7 +8,7 @@ struct entity_world;
 struct ecs_capi {
 	void * (*iter)(struct entity_world *w, int cid, int index);
 	void (*clear_type)(struct entity_world *w, int cid);
-	void * (*sibling)(struct entity_world *w, int cid, int index, int slibling_id);
+	int (*sibling_id)(struct entity_world *w, int cid, int index, int slibling_id);
 	void* (*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer, void *L, int world_index);
 	void (*remove)(struct entity_world *w, int cid, int index, void *L, int world_index);
@@ -44,18 +44,30 @@ entity_clear_type(struct ecs_context *ctx, int cid) {
 	ctx->api->clear_type(ctx->world, ctx->cid[cid]);
 }
 
-static inline void *
-entity_sibling(struct ecs_context *ctx, int cid, int index, int slibling_id) {
+static inline int
+entity_sibling_id(struct ecs_context *ctx, int cid, int index, int sibling_id) {
 	check_id_(ctx, cid);
-	check_id_(ctx, slibling_id);
-	return ctx->api->sibling(ctx->world,  ctx->cid[cid], index, ctx->cid[slibling_id]);
+	check_id_(ctx, sibling_id);
+	return ctx->api->sibling_id(ctx->world,  ctx->cid[cid], index, ctx->cid[sibling_id]);
 }
 
 static inline void *
-entity_add_sibling(struct ecs_context *ctx, int cid, int index, int slibling_id, const void *buffer) {
+entity_sibling(struct ecs_context *ctx, int cid, int index, int sibling_id) {
 	check_id_(ctx, cid);
-	check_id_(ctx, slibling_id);
-	return ctx->api->add_sibling(ctx->world, ctx->cid[cid], index, ctx->cid[slibling_id], buffer, ctx->L, 1);
+	check_id_(ctx, sibling_id);
+	int id = ctx->api->sibling_id(ctx->world,  ctx->cid[cid], index, ctx->cid[sibling_id]);
+	if (id == 0) {
+		return NULL;
+	} else {
+		return ctx->api->iter(ctx->world, ctx->cid[sibling_id], id-1);
+	}
+}
+
+static inline void *
+entity_add_sibling(struct ecs_context *ctx, int cid, int index, int sibling_id, const void *buffer) {
+	check_id_(ctx, cid);
+	check_id_(ctx, sibling_id);
+	return ctx->api->add_sibling(ctx->world, ctx->cid[cid], index, ctx->cid[sibling_id], buffer, ctx->L, 1);
 }
 
 static inline int
@@ -101,6 +113,36 @@ static inline int
 entity_assign_lua(struct ecs_context *ctx, int cid, int index) {
 	check_id_(ctx, cid);
 	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index, ctx->L, 1);
+}
+
+static inline int
+entity_new_ref(struct ecs_context *ctx, int cid) {
+	check_id_(ctx, cid);
+	int object_id = ctx->cid[cid];
+	int live_tag = object_id + 1;
+	int dead_tag = object_id + 2;
+	int id;
+	if (ctx->api->iter(ctx->world, dead_tag, 0)) {
+		// reuse
+		id = ctx->api->sibling_id(ctx->world, dead_tag, 0, object_id);
+		assert(id > 0);
+		--id;
+		ctx->api->disable_tag(ctx->world, dead_tag, 0, dead_tag);
+	} else {
+		id = ctx->api->new_entity(ctx->world, object_id, NULL, ctx->L, 1);
+	}
+	ctx->api->enable_tag(ctx->world, object_id, id, live_tag, ctx->L, 1);
+	return id;
+}
+
+static inline void
+entity_release_ref(struct ecs_context *ctx, int cid, int id) {
+	check_id_(ctx, cid);
+	int object_id = ctx->cid[cid];
+	int live_tag = object_id + 1;
+	int dead_tag = object_id + 2;
+	ctx->api->enable_tag(ctx->world, object_id, id, live_tag, ctx->L, 1);
+	ctx->api->disable_tag(ctx->world, object_id, id, dead_tag);
 }
 
 #endif

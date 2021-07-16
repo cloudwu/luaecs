@@ -38,6 +38,14 @@ entity_iter(struct ecs_context *ctx, int cid, int index) {
 	return ctx->api->iter(ctx->world, ctx->cid[cid], index);
 }
 
+static inline void *
+entity_ref_object(struct ecs_context *ctx, int cid, int index) {
+	if (index <= 0)
+		return NULL;
+	check_id_(ctx, cid);
+	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index - 1, ctx->L, 1);
+}
+
 static inline void
 entity_clear_type(struct ecs_context *ctx, int cid) {
 	check_id_(ctx, cid);
@@ -103,16 +111,11 @@ entity_sort_key(struct ecs_context *ctx, int orderid, int cid) {
 	ctx->api->sort_key(ctx->world, ctx->cid[orderid], ctx->cid[cid], ctx->L, 1);
 }
 
-static inline void *
-entity_iter_lua(struct ecs_context *ctx, int cid, int index) {
-	check_id_(ctx, cid);
-	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index, ctx->L, 1);
-}
-
 static inline int
 entity_assign_lua(struct ecs_context *ctx, int cid, int index) {
 	check_id_(ctx, cid);
-	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index, ctx->L, 1);
+	assert(index > 0);
+	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index-1, ctx->L, 1);
 }
 
 static inline int
@@ -132,17 +135,19 @@ entity_new_ref(struct ecs_context *ctx, int cid) {
 		id = ctx->api->new_entity(ctx->world, object_id, NULL, ctx->L, 1);
 	}
 	ctx->api->enable_tag(ctx->world, object_id, id, live_tag, ctx->L, 1);
-	return id;
+	return id + 1;
 }
 
 static inline void
 entity_release_ref(struct ecs_context *ctx, int cid, int id) {
+	if (id == 0)
+		return;
 	check_id_(ctx, cid);
 	int object_id = ctx->cid[cid];
 	int live_tag = object_id + 1;
 	int dead_tag = object_id + 2;
-	ctx->api->enable_tag(ctx->world, object_id, id, live_tag, ctx->L, 1);
-	ctx->api->disable_tag(ctx->world, object_id, id, dead_tag);
+	ctx->api->enable_tag(ctx->world, object_id, id-1, live_tag, ctx->L, 1);
+	ctx->api->disable_tag(ctx->world, object_id, id-1, dead_tag);
 }
 
 #endif

@@ -1721,7 +1721,7 @@ lsum(lua_State *L) {
 static int
 lget(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
-	const char *ret = (const char *)entity_iter_lua(ctx, SINGLETON_STRING, 0);
+	const char *ret = (const char *)entity_ref_object(ctx, SINGLETON_STRING, 1);
 	if (ret) {
 		lua_pushfstring(L, "[string:%s]", ret);
 	}

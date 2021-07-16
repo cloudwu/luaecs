@@ -1578,6 +1578,7 @@ lobject(lua_State *L) {
 		if (!lua_toboolean(L, 2)) {
 			entity_disable_tag_(w, cid, index, cid);
 		}
+		return 1;
 	} else if (c->stride < 0) {
 		return luaL_error(L, "Invalid object %d", cid);
 	}

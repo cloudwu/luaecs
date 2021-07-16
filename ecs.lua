@@ -208,6 +208,7 @@ function M:ref(name, obj)
 	local tc = assert(typenames[name])
 	local live = name .. "_live"
 	local dead = name .. "_dead"
+	obj = obj or tc.tag
 	for v in self:select(dead) do
 		v[dead] = false
 		v[live] = true

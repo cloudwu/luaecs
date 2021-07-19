@@ -673,12 +673,17 @@ entity_add_sibling_index_(lua_State *L, int world_index, struct entity_world *w,
 	return ret;
 }
 
-static int
-comp_index(void *v, const void *a, const void *b) {
+static inline int
+comp_index(const void *a, const void *b, void *v) {
 	const unsigned int *aa = (const unsigned int *)a;
 	const unsigned int *bb = (const unsigned int *)b;
 	int * vv = (int *)v;
 	return vv[*aa] - vv[*bb];
+}
+
+static inline int
+comp_index_s(void *v, const void *a, const void *b) {
+	return comp_index(a,b,v);
 }
 
 static void
@@ -697,7 +702,11 @@ entity_sort_key_(struct entity_world *w, int orderid, int cid, void *L, int worl
 	for (i = 0; i < c->n ; i++) {
 		order->id[i] = i;
 	}
-	qsort_s(order->id, c->n, sizeof(unsigned int), comp_index, c->buffer);
+#ifdef _GNU_SOURCE
+	qsort_r(order->id, c->n, sizeof(unsigned int), comp_index, c->buffer);
+#else
+	qsort_s(order->id, c->n, sizeof(unsigned int), comp_index_s, c->buffer);
+#endif
 	for (i = 0; i < c->n ; i++) {
 		order->id[i] = c->id[order->id[i]];
 	}

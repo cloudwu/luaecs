@@ -704,8 +704,12 @@ entity_sort_key_(struct entity_world *w, int orderid, int cid, void *L, int worl
 	}
 #ifdef _GNU_SOURCE
 	qsort_r(order->id, c->n, sizeof(unsigned int), comp_index, c->buffer);
-#else
+#elif defined(__APPLE__)
+	qsort_r(order->id, c->n, sizeof(unsigned int), c->buffer, comp_index_s);
+#elif defined(_WIN32)
 	qsort_s(order->id, c->n, sizeof(unsigned int), comp_index_s, c->buffer);
+#else
+#   error Unknown operating system
 #endif
 	for (i = 0; i < c->n ; i++) {
 		order->id[i] = c->id[order->id[i]];

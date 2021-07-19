@@ -236,7 +236,7 @@ function M:new(obj)
 			error ("Invalid key : ".. k)
 		end
 		local id = self:_addcomponent(eid, tc.id)
-		self:object(k, v, id)
+		self:object(k, id, v)
 	end
 end
 
@@ -261,8 +261,8 @@ function M:ref(name, obj)
 	end
 	local eid = self:_newentity()
 	local id = self:_addcomponent(eid, tc.id)
-	self:object(name, obj, id)
-	self:object(live, true, self:_addcomponent(eid, typenames[live].id))
+	self:object(name, id, obj)
+	self:object(live, self:_addcomponent(eid, typenames[live].id), true)
 	return id
 end
 
@@ -324,9 +324,14 @@ end
 
 do
 	local _object = M._object
-	function M:object(name, v, refid)
+	function M:object(name, refid, v)
 		local pat = context[self].ref[name]
 		return _object(pat, v, refid)
+	end
+
+	function M:singleton(name, v)
+		local pat = context[self].ref[name]
+		return _object(pat, v)
 	end
 end
 

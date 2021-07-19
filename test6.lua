@@ -16,7 +16,7 @@ w:new {
 }
 
 local function print_v()
-	local v = w:object "t"
+	local v = w:singleton "t"
 
 	print(".a = ",v.a)
 	print(".b = ",v.b)

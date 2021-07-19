@@ -1611,6 +1611,18 @@ lobject(lua_State *L) {
 	return 1;
 }
 
+static int
+lrelease(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = luaL_checkinteger(L, 2);
+	int refid = luaL_checkinteger(L, 3) - 1;
+	int live_tag = cid + 1;
+	int dead_tag = cid + 2;
+	entity_disable_tag_(w, cid, refid, live_tag);
+	entity_enable_tag_(w, cid, refid, dead_tag, L, 1);
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -1637,6 +1649,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_sortkey", lsortkey },
 			{ "_object", lobject },
 			{ "_sync", lsync },
+			{ "_release", lrelease },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

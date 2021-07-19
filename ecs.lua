@@ -12,7 +12,7 @@ local function get_attrib(opt, inout)
 	end
 	if inout == "in" then
 		desc.r = true
-	elseif inout == "out" then
+	elseif inout == "out" or inout == "new" then
 		desc.w = true
 	elseif inout == "update" then
 		desc.r = true
@@ -31,7 +31,29 @@ local function cache_world(obj, k)
 		typenames = {},
 		id = 0,
 		select = {},
+		ref = {},
 	}
+
+	local function gen_ref_pat(key)
+		local typenames = c.typenames
+		local desc = {}
+		local tc = typenames[key]
+		if tc == nil then
+			error("Unknown type " .. key)
+		end
+		local a = {
+			exist = true,
+			name = tc.name,
+			id = tc.id,
+			type = tc.type,
+		}
+		local n = #tc
+		for i=1,#tc do
+			a[i] = tc[i]
+		end
+		desc[1] = a
+		return desc
+	end
 
 	local function gen_select_pat(pat)
 		local typenames = c.typenames
@@ -48,6 +70,16 @@ local function cache_world(obj, k)
 			local tc = typenames[key]
 			if tc == nil then
 				error("Unknown type " .. key)
+			end
+			if tc.ref and inout ~= "new" then
+				local live = typenames[key .. "_live"]
+				local a = {
+					exist = true,
+					name = live.name,
+					id = live.id,
+				}
+				desc[idx] = a
+				idx = idx + 1
 			end
 			local a = get_attrib(opt, inout)
 			a.name = tc.name
@@ -72,6 +104,17 @@ local function cache_world(obj, k)
 	setmetatable(c.select, {
 		__mode = "kv",
 		__index = cache_select,
+		})
+
+	local function cache_ref(cache, pat)
+		local pat_desc = gen_ref_pat(pat)
+		cache[pat] = k:_groupiter(pat_desc)
+		return cache[pat]
+	end
+
+	setmetatable(c.ref, {
+		__mode = "kv",
+		__index = cache_ref,
 		})
 
 	obj[k] = c
@@ -164,6 +207,7 @@ do	-- newtype
 		typenames[name] = c
 		self:_newtype(id, c.size)
 		if typeclass.ref then
+			c.ref = true
 			self:register { name = name .. "_live" }
 			self:register { name = name .. "_dead" }
 		end
@@ -197,7 +241,7 @@ function M:new(obj)
 end
 
 local ref_key = setmetatable({} , { __index = function(cache, key)
-	local select_key = string.format("%s_dead:out %s_live?out %s:out", key, key, key)
+	local select_key = string.format("%s_dead:out %s_live?out %s:new", key, key, key)
 	cache[key] = select_key
 	return select_key
 end })
@@ -222,18 +266,9 @@ function M:ref(name, obj)
 	return id
 end
 
-local release_key = setmetatable({}, { __index = function(cache, key)
-	local ret = string.format("%s %s_live?out %s_dead?out", key, key, key)
-	cache[key] = ret
-	return ret
-end })
-
-function M:release(name, id)
-	self:sync(release_key[name], {
-		id,
-		[name .. "_live"] = false,
-		[name .. "_dead"] = true,
-	})
+function M:release(name, refid)
+	local id = assert(context[self].typenames[name].id)
+	self:_release(id, refid)
 end
 
 function M:context(t)
@@ -290,7 +325,7 @@ end
 do
 	local _object = M._object
 	function M:object(name, v, refid)
-		local pat = context[self].select[name]
+		local pat = context[self].ref[name]
 		return _object(pat, v, refid)
 	end
 end

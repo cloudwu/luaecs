@@ -146,8 +146,8 @@ entity_release_ref(struct ecs_context *ctx, int cid, int id) {
 	int object_id = ctx->cid[cid];
 	int live_tag = object_id + 1;
 	int dead_tag = object_id + 2;
-	ctx->api->enable_tag(ctx->world, object_id, id-1, live_tag, ctx->L, 1);
-	ctx->api->disable_tag(ctx->world, object_id, id-1, dead_tag);
+	ctx->api->disable_tag(ctx->world, object_id, id-1, live_tag);
+	ctx->api->enable_tag(ctx->world, object_id, id-1, dead_tag, ctx->L, 1);
 }
 
 #endif

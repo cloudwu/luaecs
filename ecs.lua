@@ -302,7 +302,7 @@ function M:sort(sorted, name)
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local t = assert(typenames[name])
-	assert(t.type == typeid.int or (#t == 1 and t[1][1] == typeid.float))
+	assert(t.type == typeid.int or (#t == 1 and t[1][1] == typeid.int))
 	local stype = typenames[sorted]
 	if stype == nil then
 		local id = ctx.id + 1
@@ -320,6 +320,13 @@ function M:sort(sorted, name)
 		assert(stype.size == ecs._ORDERKEY)
 	end
 	self:_sortkey(stype.id, t.id)
+end
+
+function M:bsearch(sorted, name, value)
+	local typenames = context[self].typenames
+	local sorted_id = typenames[sorted].id
+	local value_id = typenames[name].id
+	return self:_bsearch(sorted_id, value_id, value)
 end
 
 do

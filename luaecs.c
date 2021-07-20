@@ -1549,9 +1549,42 @@ lremove(lua_State *L) {
 static int
 lsortkey(lua_State *L) {
 	struct entity_world *w = getW(L);
-	int oid = luaL_checkinteger(L, 2);
-	int cid = luaL_checkinteger(L, 3);
+	int oid = check_cid(L, w, 2);
+	int cid = check_cid(L, w, 3);
 	entity_sort_key_(w, oid, cid, L, 1);
+	return 0;
+}
+
+static int
+lbsearch(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int sorted_id = check_cid(L, w, 2);
+	int value_id = check_cid(L, w, 3);
+	int value = luaL_checkinteger(L, 4);
+
+	struct component_pool *c = &w->c[sorted_id];
+
+	int begin = 0, end = c->n;
+	while (begin < end) {
+		int mid = (begin + end)/2;
+		int index = entity_sibling_index_(w, sorted_id, mid, value_id);
+		if (index == 0) {
+			return luaL_error(L, "Invalid value component");
+		}
+		int * v = entity_iter_(w, value_id, index - 1);
+		if (*v == value) {
+			// found
+			lua_createtable(L, 1, 0);
+			lua_pushinteger(L, index);
+			lua_seti(L, -2, 1);
+			return 1;
+		}
+		if (*v < value) {
+			begin = mid + 1;
+		} else {
+			end = mid;
+		}
+	}
 	return 0;
 }
 
@@ -1654,6 +1687,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_release", lrelease },
+			{ "_bsearch", lbsearch },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

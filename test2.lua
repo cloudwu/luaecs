@@ -31,6 +31,10 @@ w:sort("sort", "index")
 
 print "sorted"
 
-for v in w:select "sort:in data:in index:in" do
+for v in w:select "sort data:in index:in" do
 	print(v.data, v.index)
 end
+
+local iter = w:bsearch("sort", "index", 4)
+w:sync("index data:in", iter)
+print("Found", iter.data)

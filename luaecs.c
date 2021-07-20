@@ -1565,24 +1565,44 @@ lbsearch(lua_State *L) {
 	struct component_pool *c = &w->c[sorted_id];
 
 	int begin = 0, end = c->n;
-	while (begin < end) {
-		int mid = (begin + end)/2;
-		int index = entity_sibling_index_(w, sorted_id, mid, value_id);
-		if (index == 0) {
-			return luaL_error(L, "Invalid value component");
+
+	if (sorted_id == value_id) {
+		while (begin < end) {
+			int mid = (begin + end)/2;
+			int * v = entity_iter_(w, value_id, mid);
+			if (*v == value) {
+				// found
+				lua_createtable(L, 1, 0);
+				lua_pushinteger(L, mid);
+				lua_seti(L, -2, 1);
+				return 1;
+			}
+			if (*v < value) {
+				begin = mid + 1;
+			} else {
+				end = mid;
+			}
 		}
-		int * v = entity_iter_(w, value_id, index - 1);
-		if (*v == value) {
-			// found
-			lua_createtable(L, 1, 0);
-			lua_pushinteger(L, index);
-			lua_seti(L, -2, 1);
-			return 1;
-		}
-		if (*v < value) {
-			begin = mid + 1;
-		} else {
-			end = mid;
+	} else {
+		while (begin < end) {
+			int mid = (begin + end)/2;
+			int index = entity_sibling_index_(w, sorted_id, mid, value_id);
+			if (index == 0) {
+				return luaL_error(L, "Invalid value component");
+			}
+			int * v = entity_iter_(w, value_id, index - 1);
+			if (*v == value) {
+				// found
+				lua_createtable(L, 1, 0);
+				lua_pushinteger(L, index);
+				lua_seti(L, -2, 1);
+				return 1;
+			}
+			if (*v < value) {
+				begin = mid + 1;
+			} else {
+				end = mid;
+			}
 		}
 	}
 	return 0;

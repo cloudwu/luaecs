@@ -38,3 +38,16 @@ end
 local iter = w:bsearch("sort", "index", 4)
 w:sync("index data:in", iter)
 print("Found", iter.data)
+
+w:register {
+	name = "sorted_index",
+	type = "int",
+}
+
+for i = 1, 10 do
+	w:new { data = i * 0.5 , sorted_index = i * 2 }
+end
+
+local iter = w:bsearch("sorted_index", 4)
+w:sync("sorted_index data:in", iter)
+print("Found", iter.data)

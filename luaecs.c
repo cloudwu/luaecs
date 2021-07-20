@@ -641,7 +641,6 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id,
 	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
-	assert(c->stride >= 0);
 	return add_component_((lua_State *)L, world_index, w, silbling_id, eid, buffer);
 }
 
@@ -668,7 +667,6 @@ entity_add_sibling_index_(lua_State *L, int world_index, struct entity_world *w,
 	assert(index >=0 && index < c->n);
 	unsigned int eid = c->id[index];
 	// todo: pcall add_component_
-	assert(c->stride == STRIDE_LUA);
 	int ret = add_component_id_(L, world_index, w, slibling_id, eid);
 	return ret;
 }
@@ -972,6 +970,8 @@ get_len(lua_State *L, int index) {
 #define COMPONENT_OPTIONAL 4
 #define COMPONENT_OBJECT 8
 #define COMPONENT_EXIST 16
+#define COMPONENT_REFINDEX 32
+#define COMPONENT_REFOBJECT 64
 
 struct group_key {
 	const char *name;
@@ -1105,7 +1105,17 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+				int index;
+				if (k->attrib & COMPONENT_REFOBJECT) {
+					struct group_key *index_k = &iter->k[i-1];
+					index = entity_sibling_index_(iter->world, mainkey, idx, index_k->id);
+					if (index) {
+						int *ref = entity_iter_(iter->world, index_k->id, index-1);
+						index = *ref;
+					}
+				} else {
+					index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+				}
 				if (index == 0) {
 					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
@@ -1122,7 +1132,33 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				}
 			} else if (is_temporary(k->attrib)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				if (c->stride == STRIDE_LUA) {
+				if (k->attrib & COMPONENT_REFOBJECT) {
+					// new ref object
+					struct group_key *index_k = &iter->k[i-1];
+					int live_tag = k->id + 1;
+					int dead_tag = k->id + 2;
+					int id;
+					if (entity_iter_(iter->world, dead_tag, 0)) {
+						// reuse
+						id = entity_sibling_index_(iter->world, dead_tag, 0, k->id);
+						entity_disable_tag_(iter->world, dead_tag, 0, dead_tag);
+					} else {
+						id = entity_new_(iter->world, k->id, NULL, L, world_index);
+					}
+					entity_enable_tag_(iter->world, k->id, id-1 , live_tag, L, world_index);
+					if (c->stride == STRIDE_LUA) {
+						if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+							luaL_error(L, "Missing lua table for %d", k->id);
+						}
+						lua_insert(L, -2);
+						lua_rawseti(L, -2, id);
+					} else {
+						void *buffer = entity_iter_(iter->world, k->id, id - 1);
+						write_component_object(L, k->field_n, f, buffer);
+					}
+					// write ref id
+					entity_add_sibling_(iter->world, mainkey, idx, index_k->id, &id, L, world_index);
+				} else if (c->stride == STRIDE_LUA) {
 					int index = entity_add_sibling_index_(L, world_index, iter->world, mainkey, idx, k->id);
 					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
@@ -1174,7 +1210,14 @@ query_index(struct group_iter *iter, int mainkey, int idx, unsigned int index[MA
 	int j;
 	for (j=1;j<iter->nkey;j++) {
 		struct group_key *k = &iter->k[j];
-		if (!is_temporary(k->attrib)) {
+		if (k->attrib & COMPONENT_REFOBJECT) {
+			if (index[j-1]) {
+				struct group_key *index_k = &iter->k[j-1];
+				int *ref = entity_iter_(iter->world, index_k->id, index[j-1]-1);
+				index[j] = *ref;
+				index[j-1] = 0;
+			}
+		} else if (!is_temporary(k->attrib)) {
 			index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
 			if (index[j] == 0) {
 				if (!(k->attrib & COMPONENT_OPTIONAL)) {
@@ -1292,7 +1335,7 @@ leach_group(lua_State *L) {
 
 	lua_pushinteger(L, i);
 	lua_rawseti(L, 2, 1);
-	
+
 	read_iter(L, world_index, 2, iter, index);
 
 	lua_settop(L, 2);
@@ -1302,7 +1345,7 @@ leach_group(lua_State *L) {
 static void
 create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 	if (k->field_n == 0 // is tag or object?
-		|| (k->attrib & COMPONENT_EXIST)) {	// only existence
+		|| (k->attrib & (COMPONENT_EXIST | COMPONENT_REFINDEX))) {	// existence or ref
 		return;
 	}
 	if (k->field_n == 1 && f[0].key == NULL) {
@@ -1430,6 +1473,9 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct fiel
 	if (check_boolean(L, "exist")) {
 		attrib |= COMPONENT_EXIST;
 	}
+	if (check_boolean(L, "ref")) {
+		attrib |= COMPONENT_REFINDEX;
+	}
 	key->attrib = attrib;
 	if (is_value(L, f)) {
 		key->field_n = 1;
@@ -1467,7 +1513,14 @@ lgroupiter(lua_State *L) {
 		if (lua_geti(L, 2, i+1) != LUA_TTABLE) {
 			return luaL_error(L, "index %d is not a table", i);
 		}
-		field_n += get_len(L, -1);
+		int n = get_len(L, -1);
+		if (n == 0) {
+			struct field f;
+			if (is_value(L, &f)) {
+				n = 1;
+			}
+		}
+		field_n += n;
 		lua_pop(L, 1);
 	}
 	size_t header_size = sizeof(struct group_iter) + sizeof(struct group_key) * (nkey-1);
@@ -1487,6 +1540,9 @@ lgroupiter(lua_State *L) {
 	for (i=0; i< nkey; i++) {
 		lua_geti(L, 2, i+1);
 		int n = get_key(w, L, &iter->k[i], f);
+		if (i>0 && (iter->k[i-1].attrib & COMPONENT_REFINDEX)) {
+			iter->k[i].attrib |= COMPONENT_REFOBJECT;
+		}
 		struct component_pool *c = &w->c[iter->k[i].id];
 		f += n;
 		lua_pop(L, 1);

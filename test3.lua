@@ -37,3 +37,41 @@ w:release("refobject", id3)
 for v in w:select "refobject:in" do
 	print(v.refobject)
 end
+
+w:register {
+	name = "index",
+	type = "int",
+}
+
+w:new {
+	index = id4
+}
+
+for v in w:select "refobject(index):in" do
+	print(v.refobject)
+end
+
+w:register {
+	name = "name",
+	type = "lua",
+}
+
+w:new {
+	name = "Hello"
+}
+
+for v in w:select "name refobject(index):temp" do
+	v.refobject = 42
+end
+
+for v in w:select "refobject:in" do
+	print(v.refobject)
+end
+
+for v in w:select "refobject(index):update" do
+	v.refobject = v.refobject + 1
+end
+
+for v in w:select "refobject:in" do
+	print(v.refobject)
+end

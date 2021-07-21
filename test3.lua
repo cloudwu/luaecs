@@ -34,6 +34,8 @@ print ("Release", id3)
 
 w:release("refobject", id3)
 
+print "List refobject"
+
 for v in w:select "refobject:in" do
 	print(v.refobject)
 end
@@ -47,6 +49,12 @@ w:new {
 	index = id4
 }
 
+for v in w:select "index:in" do
+	print(v.index)
+end
+
+print "Index refobject"
+
 for v in w:select "refobject(index):in" do
 	print(v.refobject)
 end
@@ -59,6 +67,11 @@ w:register {
 w:new {
 	name = "Hello"
 }
+
+for v in w:select "index:in" do
+	print(v.index)
+end
+
 
 for v in w:select "name refobject(index):temp" do
 	v.refobject = 42

@@ -86,15 +86,6 @@ local function cache_world(obj, k)
 				a.ref = true
 				desc[idx] = a
 				idx = idx + 1
-			elseif tc.ref and inout ~= "new" then
-				local live = typenames[key .. "_live"]
-				local a = {
-					exist = true,
-					name = live.name,
-					id = live.id,
-				}
-				desc[idx] = a
-				idx = idx + 1
 			end
 			local a = get_attrib(opt, inout)
 			a.name = tc.name
@@ -106,6 +97,16 @@ local function cache_world(obj, k)
 			end
 			desc[idx] = a
 			idx = idx + 1
+			if tc.ref and inout ~= "new" and index == "" then
+				local dead = typenames[key .. "_dead"]
+				local a = {
+					absent = true,
+					name = dead.name,
+					id = dead.id,
+				}
+				desc[idx] = a
+				idx = idx + 1
+			end
 		end
 		return desc
 	end
@@ -223,7 +224,6 @@ do	-- newtype
 		self:_newtype(id, c.size)
 		if typeclass.ref then
 			c.ref = true
-			self:register { name = name .. "_live" }
 			self:register { name = name .. "_dead" }
 		end
 	end
@@ -256,7 +256,7 @@ function M:new(obj)
 end
 
 local ref_key = setmetatable({} , { __index = function(cache, key)
-	local select_key = string.format("%s_dead:out %s_live?out %s:new", key, key, key)
+	local select_key = string.format("%s_dead:out %s:new", key, key)
 	cache[key] = select_key
 	return select_key
 end })
@@ -265,19 +265,16 @@ function M:ref(name, obj)
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local tc = assert(typenames[name])
-	local live = name .. "_live"
 	local dead = name .. "_dead"
 	obj = obj or tc.tag
 	for v in self:select(dead) do
 		v[dead] = false
-		v[live] = true
 		v[name] = obj
 		return self:sync(ref_key[name] , v)
 	end
 	local eid = self:_newentity()
 	local id = self:_addcomponent(eid, tc.id)
 	self:object(name, id, obj)
-	self:object(live, self:_addcomponent(eid, typenames[live].id), true)
 	return id
 end
 

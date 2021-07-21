@@ -122,8 +122,7 @@ static inline int
 entity_new_ref(struct ecs_context *ctx, int cid) {
 	check_id_(ctx, cid);
 	int object_id = ctx->cid[cid];
-	int live_tag = object_id + 1;
-	int dead_tag = object_id + 2;
+	int dead_tag = object_id + 1;
 	int id;
 	if (ctx->api->iter(ctx->world, dead_tag, 0)) {
 		// reuse
@@ -134,7 +133,6 @@ entity_new_ref(struct ecs_context *ctx, int cid) {
 	} else {
 		id = ctx->api->new_entity(ctx->world, object_id, NULL, ctx->L, 1);
 	}
-	ctx->api->enable_tag(ctx->world, object_id, id, live_tag, ctx->L, 1);
 	return id + 1;
 }
 
@@ -144,9 +142,7 @@ entity_release_ref(struct ecs_context *ctx, int cid, int id) {
 		return;
 	check_id_(ctx, cid);
 	int object_id = ctx->cid[cid];
-	int live_tag = object_id + 1;
-	int dead_tag = object_id + 2;
-	ctx->api->disable_tag(ctx->world, object_id, id-1, live_tag);
+	int dead_tag = object_id + 1;
 	ctx->api->enable_tag(ctx->world, object_id, id-1, dead_tag, ctx->L, 1);
 }
 

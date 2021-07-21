@@ -1085,7 +1085,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 
 	for (i=1;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		if (!(k->attrib & COMPONENT_FILTER)) {
+		if (!(k->attrib & (COMPONENT_FILTER | COMPONENT_REFINDEX))) {
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_TAG) {
 				// It's a tag
@@ -1137,8 +1137,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				if (k->attrib & COMPONENT_REFOBJECT) {
 					// new ref object
 					struct group_key *index_k = &iter->k[i-1];
-					int live_tag = k->id + 1;
-					int dead_tag = k->id + 2;
+					int dead_tag = k->id + 1;
 					int id;
 					if (entity_iter_(iter->world, dead_tag, 0)) {
 						// reuse
@@ -1147,7 +1146,6 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 					} else {
 						id = entity_new_(iter->world, k->id, NULL, L, world_index);
 					}
-					entity_enable_tag_(iter->world, k->id, id-1 , live_tag, L, world_index);
 					if (c->stride == STRIDE_LUA) {
 						if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
 							luaL_error(L, "Missing lua table for %d", k->id);
@@ -1744,9 +1742,7 @@ lrelease(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int cid = luaL_checkinteger(L, 2);
 	int refid = luaL_checkinteger(L, 3) - 1;
-	int live_tag = cid + 1;
-	int dead_tag = cid + 2;
-	entity_disable_tag_(w, cid, refid, live_tag);
+	int dead_tag = cid + 1;
 	entity_enable_tag_(w, cid, refid, dead_tag, L, 1);
 	return 0;
 }

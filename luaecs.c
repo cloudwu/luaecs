@@ -969,9 +969,11 @@ get_len(lua_State *L, int index) {
 #define COMPONENT_OUT 2
 #define COMPONENT_OPTIONAL 4
 #define COMPONENT_OBJECT 8
-#define COMPONENT_EXIST 16
-#define COMPONENT_REFINDEX 32
-#define COMPONENT_REFOBJECT 64
+#define COMPONENT_EXIST 0x10
+#define COMPONENT_ABSENT 0x20
+#define COMPONENT_FILTER (COMPONENT_EXIST | COMPONENT_ABSENT)
+#define COMPONENT_REFINDEX 0x40
+#define COMPONENT_REFOBJECT 0x80
 
 struct group_key {
 	const char *name;
@@ -982,7 +984,7 @@ struct group_key {
 
 static inline int
 is_temporary(int attrib) {
-	if (attrib & COMPONENT_EXIST)
+	if (attrib & COMPONENT_FILTER)
 		return 0;
 	return (attrib & COMPONENT_IN) == 0 && (attrib & COMPONENT_OUT) == 0;
 }
@@ -1056,7 +1058,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	int mainkey = iter->k[0].id;
 	struct component_pool *c = &iter->world->c[mainkey];
 	int disable_mainkey = 0;
-	if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
+	if (!(iter->k[0].attrib & COMPONENT_FILTER)) {
 		if (c->stride == STRIDE_TAG) {
 			// The mainkey is a tag, delay disable
 			disable_mainkey = ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name));
@@ -1083,7 +1085,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 
 	for (i=1;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		if (!(k->attrib & COMPONENT_EXIST)) {
+		if (!(k->attrib & COMPONENT_FILTER)) {
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_TAG) {
 				// It's a tag
@@ -1210,7 +1212,13 @@ query_index(struct group_iter *iter, int mainkey, int idx, unsigned int index[MA
 	int j;
 	for (j=1;j<iter->nkey;j++) {
 		struct group_key *k = &iter->k[j];
-		if (k->attrib & COMPONENT_REFOBJECT) {
+		if (k->attrib & COMPONENT_ABSENT) {
+			if (entity_sibling_index_(iter->world, mainkey, idx, k->id)) {
+				// exist. try next
+				return 0;
+			}
+			index[j] = 0;
+		} else if (k->attrib & COMPONENT_REFOBJECT) {
 			if (index[j-1]) {
 				struct group_key *index_k = &iter->k[j-1];
 				int *ref = entity_iter_(iter->world, index_k->id, index[j-1]-1);
@@ -1254,7 +1262,7 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 				lua_setfield(L, obj_index, k->name);
 			}
 		} else if (c->stride != STRIDE_ORDER) {
-			if (!(k->attrib & COMPONENT_EXIST)) {
+			if (!(k->attrib & COMPONENT_FILTER)) {
 				if (k->attrib & COMPONENT_IN) {
 					if (index[i]) {
 						void *ptr = get_ptr(c, index[i]-1);
@@ -1345,7 +1353,7 @@ leach_group(lua_State *L) {
 static void
 create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 	if (k->field_n == 0 // is tag or object?
-		|| (k->attrib & (COMPONENT_EXIST | COMPONENT_REFINDEX))) {	// existence or ref
+		|| (k->attrib & COMPONENT_FILTER)) {	// existence or ref
 		return;
 	}
 	if (k->field_n == 1 && f[0].key == NULL) {
@@ -1473,6 +1481,9 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct fiel
 	if (check_boolean(L, "exist")) {
 		attrib |= COMPONENT_EXIST;
 	}
+	if (check_boolean(L, "absent")) {
+		attrib |= COMPONENT_ABSENT;
+	}
 	if (check_boolean(L, "ref")) {
 		attrib |= COMPONENT_REFINDEX;
 	}
@@ -1559,18 +1570,22 @@ lgroupiter(lua_State *L) {
 		}
 		int attrib = iter->k[i].attrib;
 		int readonly;
-		if (attrib & COMPONENT_EXIST)
+		if (attrib & COMPONENT_FILTER)
 			readonly = 0;
 		else
 			readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
 		if (!readonly)
 			iter->readonly = 0;
 	}
-	if (iter->k[0].attrib & COMPONENT_OPTIONAL) {
+	int mainkey_attrib = iter->k[0].attrib;
+	if (mainkey_attrib & COMPONENT_OPTIONAL) {
 		return luaL_error(L, "The main key should not be optional");
 	}
-	if (is_temporary(iter->k[0].attrib)) {
+	if (is_temporary(mainkey_attrib)) {
 		return luaL_error(L, "The main key can't be temporary");
+	}
+	if (mainkey_attrib & COMPONENT_ABSENT) {
+		return luaL_error(L, "The main key can't be absent");
 	}
 	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
 		lua_pushcfunction(L, lpairs_group);

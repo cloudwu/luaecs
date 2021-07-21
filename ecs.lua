@@ -20,6 +20,9 @@ local function get_attrib(opt, inout)
 	elseif inout == "exist" then
 		desc.exist = true
 		assert(not desc.opt)
+	elseif inout == "absent" then
+		desc.absent = true
+		assert(not desc.opt)
 	else
 		assert(inout == "temp")
 	end

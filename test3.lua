@@ -88,3 +88,13 @@ end
 for v in w:select "refobject:in" do
 	print(v.refobject)
 end
+
+w:register {
+	name = "mark"
+}
+
+w:sync("refobject mark?out", { id4 , mark=true })
+
+for v in w:select "mark refobject?in" do
+	print(v.refobject)
+end

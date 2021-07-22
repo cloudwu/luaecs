@@ -270,7 +270,9 @@ function M:ref(name, obj)
 	for v in self:select(dead) do
 		v[dead] = false
 		v[name] = obj
-		return self:sync(ref_key[name] , v)
+		local pat = ref_key[name]
+		local p = context[self].select[pat]
+		return self:_sync(p, v)
 	end
 	local eid = self:_newentity()
 	local id = self:_addcomponent(eid, tc.id)
@@ -302,7 +304,7 @@ end
 
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
-	return self:_sync(p, iter)
+	self:_sync(p, iter)
 end
 
 function M:clear(name)

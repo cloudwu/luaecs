@@ -1670,7 +1670,12 @@ lbsearch(lua_State *L) {
 static int
 lobject(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
-	int index = luaL_optinteger(L, 3, 1) - 1;
+	int index;
+	if (lua_gettop(L) >= 3) {
+		index = luaL_checkinteger(L, 3) - 1;
+	} else {
+		index = 0;
+	}
 	int cid = iter->k[0].id;
 	struct entity_world * w = iter->world;
 	if (cid < 0 || cid >=MAX_COMPONENT) {

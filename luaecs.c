@@ -1061,7 +1061,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_TAG) {
 				// It's a tag
-				if ((k->attrib & COMPONENT_OUT) || is_temporary(k->attrib)) {
+				if ((k->attrib & COMPONENT_OUT)) {
 					switch (lua_getfield(L, lua_index, k->name)) {
 					case LUA_TNIL:
 						break;
@@ -1517,6 +1517,9 @@ lgroupiter(lua_State *L) {
 			iter->k[i].attrib |= COMPONENT_REFOBJECT;
 		}
 		struct component_pool *c = &w->c[iter->k[i].id];
+		if (c->stride == STRIDE_TAG && is_temporary(iter->k[i].attrib)) {
+			return luaL_error(L, "%s is a tag, use %s?out instead", iter->k[i].name, iter->k[i].name);
+		}
 		f += n;
 		lua_pop(L, 1);
 		if (c->stride == STRIDE_LUA) {

@@ -1244,23 +1244,23 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 	int i;
 	for (i=0;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		struct component_pool *c = &iter->world->c[k->id];
-		if (c->stride == STRIDE_LUA) {
-			// lua object component
-			if (index[i]) {
-				if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
-					luaL_error(L, "Missing lua table for %d", k->id);
-				}
+		if (!(k->attrib & COMPONENT_FILTER)) {
+			struct component_pool *c = &iter->world->c[k->id];
+			if (c->stride == STRIDE_LUA) {
+				// lua object component
+				if (index[i]) {
+					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+						luaL_error(L, "Missing lua table for %d", k->id);
+					}
 
-				lua_rawgeti(L, -1, index[i]);
-				lua_setfield(L, obj_index, k->name);
-				lua_pop(L, 1);
-			} else {
-				lua_pushnil(L);
-				lua_setfield(L, obj_index, k->name);
-			}
-		} else if (c->stride != STRIDE_ORDER) {
-			if (!(k->attrib & COMPONENT_FILTER)) {
+					lua_rawgeti(L, -1, index[i]);
+					lua_setfield(L, obj_index, k->name);
+					lua_pop(L, 1);
+				} else {
+					lua_pushnil(L);
+					lua_setfield(L, obj_index, k->name);
+				}
+			} else if (c->stride != STRIDE_ORDER) {
 				if (k->attrib & COMPONENT_IN) {
 					if (index[i]) {
 						void *ptr = get_ptr(c, index[i]-1);
@@ -1274,8 +1274,8 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 					lua_setfield(L, obj_index, k->name);
 				}
 			}
-			f += k->field_n;
 		}
+		f += k->field_n;
 	}
 }
 

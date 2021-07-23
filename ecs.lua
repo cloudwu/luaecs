@@ -206,7 +206,7 @@ do	-- newtype
 		if ttype == "lua" then
 			assert(c.size == 0)
 			c.size = ecs._LUAOBJECT
-			c.islua = true
+			assert(c[1] == nil)
 		elseif c.size > 0 then
 			align_struct(c, typeclass[1][1])
 		else

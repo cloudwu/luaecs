@@ -1071,6 +1071,11 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 						} else {
 							entity_disable_tag_(iter->world, mainkey, idx, k->id);
 						}
+						if (!(k->attrib & COMPONENT_IN)) {
+							// reset tag
+							lua_pushnil(L);
+							lua_setfield(L, lua_index, k->name);
+						}
 						break;
 					default:
 						luaL_error(L, ".%s is a tag , should be a boolean or nil. It's %s", k->name, lua_typename(L, lua_type(L, -1)));

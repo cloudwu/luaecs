@@ -262,7 +262,6 @@ function M:ref(name, refobj)
 	local tc = assert(typenames[name])
 	local refid = self:_reuse(tc.id)
 	if refid then
-		refobj[1] = refid
 		local p = context[self].select[name .. ":out"]
 		self:_sync(p, refobj)
 	else
@@ -270,6 +269,7 @@ function M:ref(name, refobj)
 		refid = self:_addcomponent(eid, tc.id)
 		self:object(name, refid, obj)
 	end
+	refobj[1] = refid
 	for k,v in pairs(refobj) do
 		if (v == true or v == false) and name ~= k then
 			local p = context[self].select[string.format("%s %s?out", name, k)]

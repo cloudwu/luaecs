@@ -1632,7 +1632,7 @@ lbsearch(lua_State *L) {
 			if (*v == value) {
 				// found
 				lua_createtable(L, 1, 0);
-				lua_pushinteger(L, mid);
+				lua_pushinteger(L, mid + 1);
 				lua_seti(L, -2, 1);
 				return 1;
 			}

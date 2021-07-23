@@ -48,6 +48,10 @@ for i = 1, 10 do
 	w:new { data = i * 0.5 , sorted_index = i * 2 }
 end
 
+for v in w:select "sorted_index:in data?in" do
+	print(v.sorted_index, "=>", v.data)
+end
+
 local iter = w:bsearch("sorted_index", "sorted_index", 4)
 w:sync("sorted_index data:in", iter)
 print("Found", iter.data)

@@ -97,7 +97,7 @@ local function cache_world(obj, k)
 			end
 			desc[idx] = a
 			idx = idx + 1
-			if tc.ref and inout ~= "new" and index == "" then
+			if tc.ref and index == "" then
 				local dead = typenames[key .. "_dead"]
 				local a = {
 					absent = true,
@@ -255,29 +255,28 @@ function M:new(obj)
 	end
 end
 
-local ref_key = setmetatable({} , { __index = function(cache, key)
-	local select_key = string.format("%s_dead:out %s:new", key, key)
-	cache[key] = select_key
-	return select_key
-end })
-
-function M:ref(name, obj)
+function M:ref(name, refobj)
+	local obj = assert(refobj[name])
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local tc = assert(typenames[name])
-	local dead = name .. "_dead"
-	obj = obj or tc.tag
-	for v in self:select(dead) do
-		v[dead] = false
-		v[name] = obj
-		local pat = ref_key[name]
-		local p = context[self].select[pat]
-		return self:_sync(p, v)
+	local refid = self:_reuse(tc.id)
+	if refid then
+		refobj[1] = refid
+		local p = context[self].select[name .. ":out"]
+		self:_sync(p, refobj)
+	else
+		local eid = self:_newentity()
+		refid = self:_addcomponent(eid, tc.id)
+		self:object(name, id, obj)
 	end
-	local eid = self:_newentity()
-	local id = self:_addcomponent(eid, tc.id)
-	self:object(name, id, obj)
-	return id
+	for k,v in pairs(refobj) do
+		if (v == true or v == false) and name ~= k then
+			local p = context[self].select[string.format("%s %s?out", name, k)]
+			self:_sync(p, refobj)
+		end
+	end
+	return refid
 end
 
 function M:release(name, refid)
@@ -305,6 +304,7 @@ end
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
 	self:_sync(p, iter)
+	return iter
 end
 
 function M:clear(name)

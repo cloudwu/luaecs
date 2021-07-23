@@ -1051,9 +1051,8 @@ remove_tag(lua_State *L, int lua_index, const char *name) {
 	return r;
 }
 
-static int
+static void
 update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
-	int ret = 0;
 	int i;
 	int mainkey = iter->k[0].id;
 	struct component_pool *c = &iter->world->c[mainkey];
@@ -1121,7 +1120,6 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				if (index == 0) {
 					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
-				ret = index;
 				if (c->stride == STRIDE_LUA) {
 					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
@@ -1176,7 +1174,6 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	if (disable_mainkey) {
 		entity_disable_tag_(iter->world, mainkey, idx, mainkey);
 	}
-	return ret;
 }
 
 static void
@@ -1296,17 +1293,11 @@ lsync(lua_State *L) {
 		return luaL_error(L, "Read pattern fail");
 	}
 
-	int ret = 0;
 	if (!iter->readonly) {
-		ret = update_last_index(L, 1, 3, iter, idx);
+		update_last_index(L, 1, 3, iter, idx);
 	}
 	read_iter(L, 1, 3, iter, index);
-	if (ret) {
-		lua_pushinteger(L, ret);
-		return 1;
-	} else {
-		return 0;
-	}
+	return 0;
 }
 
 static int
@@ -1740,11 +1731,30 @@ lobject(lua_State *L) {
 static int
 lrelease(lua_State *L) {
 	struct entity_world *w = getW(L);
-	int cid = luaL_checkinteger(L, 2);
+	int cid = check_cid(L, w, 2);
 	int refid = luaL_checkinteger(L, 3) - 1;
 	int dead_tag = cid + 1;
 	entity_enable_tag_(w, cid, refid, dead_tag, L, 1);
 	return 0;
+}
+
+static int
+lreuse(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = check_cid(L, w, 2);
+	int dead_tagid = cid + 1;
+	struct component_pool *c = &w->c[dead_tagid];
+	if (c->stride != STRIDE_TAG) {
+		return luaL_error(L, "%d is not a tag", dead_tagid);
+	}
+	if (c->n == 0)
+		return 0;
+	int id = entity_sibling_index_(w, dead_tagid, 0, cid);
+	if (id == 0)
+		return luaL_error(L, "Invalid ref component %d", cid);
+	entity_disable_tag_(w, dead_tagid, 0, dead_tagid);
+	lua_pushinteger(L, id);
+	return 1;
 }
 
 LUAMOD_API int
@@ -1775,6 +1785,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_sync", lsync },
 			{ "_release", lrelease },
 			{ "_bsearch", lbsearch },
+			{ "_reuse", lreuse },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

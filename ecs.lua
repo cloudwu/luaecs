@@ -360,7 +360,7 @@ do
 
 	function M:singleton(name, v)
 		local pat = context[self].ref[name]
-		return _object(pat, v)
+		return _object(pat, v, 1)
 	end
 end
 

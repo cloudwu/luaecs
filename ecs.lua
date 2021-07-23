@@ -268,7 +268,7 @@ function M:ref(name, refobj)
 	else
 		local eid = self:_newentity()
 		refid = self:_addcomponent(eid, tc.id)
-		self:object(name, id, obj)
+		self:object(name, refid, obj)
 	end
 	for k,v in pairs(refobj) do
 		if (v == true or v == false) and name ~= k then
@@ -312,11 +312,10 @@ function M:clear(name)
 	self:_clear(id)
 end
 
-function M:sort(sorted, name)
+local function gen_sorted_id(self, sorted, name)
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local t = assert(typenames[name])
-	assert(t.type == typeid.int or (#t == 1 and t[1][1] == typeid.int))
 	local stype = typenames[sorted]
 	if stype == nil then
 		local id = ctx.id + 1
@@ -333,7 +332,16 @@ function M:sort(sorted, name)
 	else
 		assert(stype.size == ecs._ORDERKEY)
 	end
-	self:_sortkey(stype.id, t.id)
+	return stype.id, t.id
+end
+
+function M:sort(sorted, name)
+	self:_sortkey(gen_sorted_id(self, sorted, name))
+end
+
+function M:order(sorted, refname, order_array)
+	local sid, rid = gen_sorted_id(self, sorted, refname)
+	self:_orderkey(sid, rid, order_array)
 end
 
 function M:bsearch(sorted, name, value)

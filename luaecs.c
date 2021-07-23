@@ -204,38 +204,6 @@ ladd_component(lua_State *L) {
 	return 1;
 }
 
-/*
-static int
-ladd_component(lua_State *L) {
-	struct entity_world *w = getW(L);
-	unsigned int eid = luaL_checkinteger(L, 2);
-	int cid = check_cid(L, w, 3);
-	int stride = w->c[cid].stride;
-	if (stride <= 0) {
-		int index = add_component_id_(L, 1, w, cid, eid);
-		if (stride == STRIDE_LUA) {
-			// lua object
-			lua_settop(L, 4);
-			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
-				luaL_error(L, "Missing lua table for %d", cid);
-			}
-			lua_insert(L, -2);
-			lua_rawseti(L, -2, index + 1);
-		}
-		lua_pushinteger(L, index + 1);
-	} else {
-		size_t sz;
-		const char *buffer = lua_tolstring(L, 4, &sz);
-		int stride = w->c[cid].stride;
-		if (buffer == NULL || sz != stride) {
-			return luaL_error(L, "Invalid data (size=%d/%d) for type %d", (int)sz, stride, cid);
-		}
-		add_component_(L, 1, w, cid, eid, buffer);
-		lua_pushinteger(L, w->c[cid].n);
-	}
-	return 1;
-}
-*/
 static int
 lnew_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -684,18 +652,23 @@ comp_index_s(void *v, const void *a, const void *b) {
 	return comp_index(a,b,v);
 }
 
+static inline void
+reserve_(struct entity_world *w, int orderid, int cap, void *L, int world_index) {
+	struct component_pool *c = &w->c[orderid];
+	if (c->id == NULL || c->cap < cap) {
+		c->cap = cap;
+		c->id = (unsigned int *)lua_newuserdatauv(L, cap * sizeof(unsigned int), 0);
+		lua_setiuservalue(L, world_index, orderid * 2 + 1);
+	}
+}
+
 static void
 entity_sort_key_(struct entity_world *w, int orderid, int cid, void *L, int world_index) {
 	struct component_pool *c = &w->c[cid];
 	assert(c->stride == sizeof(int));
 	struct component_pool *order = &w->c[orderid];
 	assert(order->stride == STRIDE_ORDER);
-
-	if (order->id == NULL || order->cap < c->cap) {
-		order->cap = c->cap;
-		order->id = (unsigned int *)lua_newuserdatauv(L, c->cap * sizeof(unsigned int), 0);
-		lua_setiuservalue(L, world_index, orderid * 2 + 1);
-	}
+	reserve_(w, orderid, c->cap, L, world_index);
 	int i;
 	for (i = 0; i < c->n ; i++) {
 		order->id[i] = i;
@@ -1616,6 +1589,32 @@ lsortkey(lua_State *L) {
 }
 
 static int
+lorderkey(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int oid = check_cid(L, w, 2);
+	int cid = check_cid(L, w, 3);
+	struct component_pool *c = &w->c[oid];
+	if (c->stride != STRIDE_ORDER)
+		return luaL_error(L, "Need order component");
+	int n = get_len(L, 4);
+	reserve_(w, oid, n, L, 1);
+	struct component_pool *ref = &w->c[cid];
+	if (n > ref->n) {
+		return luaL_error(L, "Invalid length of order array (%d/%d)", n, ref->n);
+	}
+	int i;
+	for (i=0;i<n;i++) {
+		int refid = get_integer(L, 4, i+1, "order");
+		if (refid > ref->n) {
+			return luaL_error(L, "Invalid refid %d", refid);
+		}
+		c->id[i] = ref->id[refid - 1];
+	}
+	c->n = n;
+	return 0;
+}
+
+static int
 lbsearch(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int sorted_id = check_cid(L, w, 2);
@@ -1781,6 +1780,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_groupiter", lgroupiter },
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
+			{ "_orderkey", lorderkey },
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_release", lrelease },

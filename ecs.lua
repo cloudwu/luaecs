@@ -274,7 +274,7 @@ function M:ref(name, refobj)
 	end
 	for k,v in pairs(refobj) do
 		if (v == true or v == false) and name ~= k then
-			local p = context[self].select[string.format("%s %s?out", name, k)]
+			local p = context[self].select[k .. "?out"]
 			self:_sync(p, refobj)
 		end
 	end

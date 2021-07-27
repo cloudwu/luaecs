@@ -261,14 +261,15 @@ function M:ref(name, refobj)
 	local typenames = ctx.typenames
 	local tc = assert(typenames[name])
 	local refid = self:_reuse(tc.id)
-	refobj[1] = refid
 	refobj[2] = tc.id
 	if refid then
 		local p = context[self].select[name .. ":out"]
+		refobj[1] = refid
 		self:_sync(p, refobj)
 	else
 		local eid = self:_newentity()
 		refid = self:_addcomponent(eid, tc.id)
+		refobj[1] = refid
 		self:object(name, refid, obj)
 	end
 	for k,v in pairs(refobj) do

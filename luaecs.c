@@ -1025,37 +1025,14 @@ remove_tag(lua_State *L, int lua_index, const char *name) {
 }
 
 static void
-update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
+update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx, int mainkey, int skip) {
+	struct field *f = iter->f;
+
 	int i;
-	int mainkey = iter->k[0].id;
-	struct component_pool *c = &iter->world->c[mainkey];
-	int disable_mainkey = 0;
-	if (!(iter->k[0].attrib & COMPONENT_FILTER)) {
-		if (c->stride == STRIDE_TAG) {
-			// The mainkey is a tag, delay disable
-			disable_mainkey = ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name));
-		} else if ((iter->k[0].attrib & COMPONENT_OUT)
-			&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
-			struct component_pool *c = &iter->world->c[mainkey];
-			if (c->n <= idx) {
-				luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
-			}
-			if (c->stride == STRIDE_LUA) {
-				if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
-					luaL_error(L, "Missing lua table for %d", mainkey);
-				}
-				lua_insert(L, -2);
-				lua_rawseti(L, -2, idx+1);
-			} else {
-				void * buffer = get_ptr(c, idx);
-				write_component_object(L, iter->k[0].field_n, iter->f, buffer);
-			}
-		}
+	for (i=0;i<skip;i++) {
+		f += iter->k[i].field_n;
 	}
-
-	struct field *f = iter->f + iter->k[0].field_n;
-
-	for (i=1;i<iter->nkey;i++) {
+	for (i=skip;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
 		if (!(k->attrib & (COMPONENT_FILTER | COMPONENT_REFINDEX))) {
 			struct component_pool *c = &iter->world->c[k->id];
@@ -1149,6 +1126,38 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 		}
 		f += k->field_n;
 	}
+}
+
+static void
+update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
+	int mainkey = iter->k[0].id;
+	struct component_pool *c = &iter->world->c[mainkey];
+	int disable_mainkey = 0;
+	if (!(iter->k[0].attrib & COMPONENT_FILTER)) {
+		if (c->stride == STRIDE_TAG) {
+			// The mainkey is a tag, delay disable
+			disable_mainkey = ((iter->k[0].attrib & COMPONENT_OUT) && remove_tag(L, lua_index, iter->k[0].name));
+		} else if ((iter->k[0].attrib & COMPONENT_OUT)
+			&& get_write_component(L, lua_index, iter->k[0].name, iter->f, c)) {
+			struct component_pool *c = &iter->world->c[mainkey];
+			if (c->n <= idx) {
+				luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
+			}
+			if (c->stride == STRIDE_LUA) {
+				if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua table for %d", mainkey);
+				}
+				lua_insert(L, -2);
+				lua_rawseti(L, -2, idx+1);
+			} else {
+				void * buffer = get_ptr(c, idx);
+				write_component_object(L, iter->k[0].field_n, iter->f, buffer);
+			}
+		}
+	}
+
+	update_iter(L, world_index, lua_index, iter, idx, mainkey, 1);
+
 	if (disable_mainkey) {
 		entity_disable_tag_(iter->world, mainkey, idx, mainkey);
 	}
@@ -1277,7 +1286,7 @@ lsync(lua_State *L) {
 	}
 
 	if (!iter->readonly) {
-		update_last_index(L, 1, 3, iter, idx);
+		update_iter(L, 1, 3, iter, idx, mainkey, 0);
 	}
 	read_iter(L, 1, 3, iter, index);
 	return 0;

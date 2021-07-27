@@ -108,3 +108,19 @@ print "Marked refobject"
 for v in w:select "mark refobject?in" do
 	print(v.refobject)
 end
+
+w:register {
+	name = "refobject2",
+	type = "int",
+	ref = true,
+}
+
+w:register {
+	name = "mark2"
+}
+
+w:ref ("refobject2", {
+	refobject2 = 42,
+	mark = true,
+	mark2 = false,
+})

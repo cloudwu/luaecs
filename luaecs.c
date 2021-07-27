@@ -1177,13 +1177,12 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 
 // -1 : end ; 0 : next ; 1 : succ
 static int
-query_index(struct group_iter *iter, int mainkey, int idx, unsigned int index[MAX_COMPONENT]) {
+query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned int index[MAX_COMPONENT]) {
 	if (entity_iter_(iter->world, mainkey, idx) == NULL) {
 		return -1;
 	}
-	index[0] = idx+1;
 	int j;
-	for (j=1;j<iter->nkey;j++) {
+	for (j=skip;j<iter->nkey;j++) {
 		struct group_key *k = &iter->k[j];
 		if (k->attrib & COMPONENT_ABSENT) {
 			if (entity_sibling_index_(iter->world, mainkey, idx, k->id)) {
@@ -1255,19 +1254,25 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 }
 
 static int
+get_integer(lua_State *L, int index, int i, const char *key) {
+	if (lua_rawgeti(L, index, i) != LUA_TNUMBER) {
+		return luaL_error(L, "Can't find %s in iterator", key);
+	}
+	int r = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	if (r <= 0)
+		return luaL_error(L, "Invalid %s (%d)", key, r);
+	return r;
+}
+
+static int
 lsync(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
 	luaL_checktype(L, 3, LUA_TTABLE);
-	if (lua_rawgeti(L, 3, 1) != LUA_TNUMBER) {
-		return luaL_error(L, "Invalid iterator");
-	}
-	int idx = lua_tointeger(L, -1) - 1;
-	if (idx < 0)
-		return luaL_error(L, "Invalid iterator index %d", idx);
-	lua_pop(L, 1);
-
+	int idx = get_integer(L, 3, 1, "index") - 1;
+	int mainkey = get_integer(L, 3, 2, "mainkey");
 	unsigned int index[MAX_COMPONENT];
-	if (query_index(iter, iter->k[0].id, idx, index) <=0) {
+	if (query_index(iter, 0, mainkey, idx, index) <=0) {
 		return luaL_error(L, "Read pattern fail");
 	}
 
@@ -1301,7 +1306,9 @@ leach_group(lua_State *L) {
 	int mainkey = iter->k[0].id;
 	unsigned int index[MAX_COMPONENT];
 	for (;;) {
-		int ret = query_index(iter, mainkey, i++, index);
+		int idx = i++;
+		index[0] = idx + 1;
+		int ret = query_index(iter, 1, mainkey, idx, index);
 		if (ret < 0)
 			return 0;
 		if (ret > 0)
@@ -1548,12 +1555,6 @@ lgroupiter(lua_State *L) {
 			iter->readonly = 0;
 	}
 	int mainkey_attrib = iter->k[0].attrib;
-	if (mainkey_attrib & COMPONENT_OPTIONAL) {
-		return luaL_error(L, "The main key should not be optional");
-	}
-	if (is_temporary(mainkey_attrib)) {
-		return luaL_error(L, "The main key can't be temporary");
-	}
 	if (mainkey_attrib & COMPONENT_ABSENT) {
 		return luaL_error(L, "The main key can't be absent");
 	}
@@ -1563,18 +1564,6 @@ lgroupiter(lua_State *L) {
 	}
 	lua_setmetatable(L, -2);
 	return 1;
-}
-
-static int
-get_integer(lua_State *L, int index, int i, const char *key) {
-	if (lua_rawgeti(L, index, i) != LUA_TNUMBER) {
-		return luaL_error(L, "Can't find %s in iterator", key);
-	}
-	int r = lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	if (r <= 0)
-		return luaL_error(L, "Invalid %s (%d)", key, r);
-	return r;
 }
 
 static int
@@ -1639,9 +1628,11 @@ lbsearch(lua_State *L) {
 			int * v = entity_iter_(w, value_id, mid);
 			if (*v == value) {
 				// found
-				lua_createtable(L, 1, 0);
+				lua_createtable(L, 2, 0);
 				lua_pushinteger(L, mid + 1);
 				lua_seti(L, -2, 1);
+				lua_pushinteger(L, sorted_id);
+				lua_seti(L, -2, 2);
 				return 1;
 			}
 			if (*v < value) {
@@ -1660,9 +1651,11 @@ lbsearch(lua_State *L) {
 			int * v = entity_iter_(w, value_id, index - 1);
 			if (*v == value) {
 				// found
-				lua_createtable(L, 1, 0);
+				lua_createtable(L, 2, 0);
 				lua_pushinteger(L, index);
 				lua_seti(L, -2, 1);
+				lua_pushinteger(L, sorted_id);
+				lua_seti(L, -2, 2);
 				return 1;
 			}
 			if (*v < value) {

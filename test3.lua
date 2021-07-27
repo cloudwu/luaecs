@@ -93,7 +93,9 @@ w:register {
 	name = "mark"
 }
 
-w:sync("refobject mark?out", { id4 , mark=true })
+local ref = w:object_ref("refobject", id4)
+ref.mark = true
+w:sync("mark?out", ref)
 
 
 w:ref ("refobject",  {

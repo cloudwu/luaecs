@@ -261,6 +261,8 @@ function M:ref(name, refobj)
 	local typenames = ctx.typenames
 	local tc = assert(typenames[name])
 	local refid = self:_reuse(tc.id)
+	refobj[1] = refid
+	refobj[2] = tc.id
 	if refid then
 		local p = context[self].select[name .. ":out"]
 		self:_sync(p, refobj)
@@ -269,7 +271,6 @@ function M:ref(name, refobj)
 		refid = self:_addcomponent(eid, tc.id)
 		self:object(name, refid, obj)
 	end
-	refobj[1] = refid
 	for k,v in pairs(refobj) do
 		if (v == true or v == false) and name ~= k then
 			local p = context[self].select[string.format("%s %s?out", name, k)]
@@ -277,6 +278,11 @@ function M:ref(name, refobj)
 		end
 	end
 	return refid
+end
+
+function M:object_ref(name, refid)
+	local typenames = context[self].typenames
+	return { refid, typenames[name].id }
 end
 
 function M:release(name, refid)

@@ -322,7 +322,7 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 	}
 	for (i=index+1;i<c->n;i++) {
 		if (c->id[i] != eid) {
-			replace_id(c, index, c->id[i]);
+			replace_id(c, 0, c->id[i]);
 			return;
 		}
 	}
@@ -517,10 +517,8 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	if (c->stride == STRIDE_TAG) {
 		// it's a tag
 		unsigned int eid = c->id[index];
-		if (index > 0 && eid == c->id[index-1]) {
-			remove_dup(c, index);
-			if (index >= c->n)
-				return NULL;
+		if (index < c->n - 1 && eid == c->id[index+1]) {
+			remove_dup(c, index+1);
 		}
 		return DUMMY_PTR;
 	}

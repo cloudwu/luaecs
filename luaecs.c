@@ -312,27 +312,25 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 			return;
 	}
 	int from,to;
-	for (from=index-1; from>=0; from--) {
-		if (c->id[from] != eid) {
-			++from;
-			for (to=index+1; to<c->n; to++) {
-				if (c->id[to] != eid) {
-					replace_id(c, from, to, c->id[from-1]);
-					return;
-				}
-			}
-			// strip
-			c->n = from;
-			return;
-		}
-	}
-	for (to=index+1;to<c->n;to++) {
+	// find next tag. You may disable subsquent tags in iteration.
+	// For example, The sequence is 1 3 5 7 9 . We are now on 5 , and disable 7 .
+	// We should change 7 to 9 ( 1 3 5 9 9 ) rather than 7 to 5 ( 1 3 5 5 9 )
+	//                   iterator ->   ^                                ^
+	for (to = index+1; to<c->n; to++) {
 		if (c->id[to] != eid) {
-			replace_id(c, 0, to, c->id[to]);
+			for (from = index-1; from>=0; from--) {
+				if (c->id[from] != eid)
+					break;
+			}
+			replace_id(c, from+1, to, c->id[to]);
 			return;
 		}
 	}
-	c->n = 0;
+	for (from = index-1; from>=0; from--) {
+		if (c->id[from] != eid)
+			break;
+	}
+	c->n = from + 1;
 }
 
 static void

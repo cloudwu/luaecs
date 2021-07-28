@@ -293,11 +293,9 @@ lookup_component(struct component_pool *pool, unsigned int eid, int guess_index)
 }
 
 static inline void
-replace_id(struct component_pool *c, int index, unsigned int eid) {
-	unsigned int rid = c->id[index];
-	c->id[index] = eid;
+replace_id(struct component_pool *c, int from, int to, unsigned int eid) {
 	int i;
-	for (i=index+1;i<c->n && c->id[i] == rid;i++) {
+	for (i=from;i<to;i++) {
 		c->id[i] = eid;
 	}
 }
@@ -313,16 +311,24 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 		if (index < 0)
 			return;
 	}
-	int i;
-	for (i=index - 1; i>=0; i--) {
-		if (c->id[i] != eid) {
-			replace_id(c, i+1, c->id[i]);
+	int from,to;
+	for (from=index-1; from>=0; from--) {
+		if (c->id[from] != eid) {
+			++from;
+			for (to=index+1; to<c->n; to++) {
+				if (c->id[to] != eid) {
+					replace_id(c, from, to, c->id[from-1]);
+					return;
+				}
+			}
+			// strip
+			c->n = from;
 			return;
 		}
 	}
-	for (i=index+1;i<c->n;i++) {
-		if (c->id[i] != eid) {
-			replace_id(c, 0, c->id[i]);
+	for (to=index+1;to<c->n;to++) {
+		if (c->id[to] != eid) {
+			replace_id(c, 0, to, c->id[to]);
 			return;
 		}
 	}

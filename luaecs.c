@@ -1099,7 +1099,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						id = entity_sibling_index_(iter->world, dead_tag, 0, k->id);
 						entity_disable_tag_(iter->world, dead_tag, 0, dead_tag);
 					} else {
-						id = entity_new_(iter->world, k->id, NULL, L, world_index);
+						id = entity_new_(iter->world, k->id, NULL, L, world_index) + 1;
 					}
 					if (c->stride == STRIDE_LUA) {
 						if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {

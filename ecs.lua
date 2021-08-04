@@ -58,6 +58,32 @@ local function cache_world(obj, k)
 		return desc
 	end
 
+	local function gen_all_pat()
+		local desc = {}
+		local i = 1
+		for name,t in pairs(c.typenames) do
+			local a = {
+				name = t.name,
+				id = t.id,
+				type = t.type,
+				opt = true,
+				r = true,
+			}
+			table.move(t, 1, #t, 1, a)
+			desc[i] = a
+			i = i + 1
+		end
+		return desc
+	end
+
+	setmetatable(c, { __index = function(_, key)
+		if key == "all" then
+			local all = k:_groupiter(gen_all_pat())
+			c.all = all
+			return all
+		end
+	end })
+
 	local function gen_select_pat(pat)
 		local typenames = c.typenames
 		local desc = {}
@@ -190,6 +216,7 @@ do	-- newtype
 	function M:register(typeclass)
 		local name = assert(typeclass.name)
 		local ctx = context[self]
+		ctx.all = nil	-- clear all pattern
 		local typenames = ctx.typenames
 		local id = ctx.id + 1
 		assert(typenames[name] == nil and id <= ecs._MAXTYPE)
@@ -310,6 +337,12 @@ end
 
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
+	self:_sync(p, iter)
+	return iter
+end
+
+function M:readall(iter)
+	local p = context[self].all
 	self:_sync(p, iter)
 	return iter
 end

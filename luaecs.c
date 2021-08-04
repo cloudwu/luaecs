@@ -1180,7 +1180,10 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 		return;
 	}
 	if (lua_getfield(L, lua_index, name) != LUA_TTABLE) {
-		luaL_error(L, ".%s is missing", name);
+		lua_pop(L, 1);
+		lua_newtable(L);
+		lua_pushvalue(L, -1);
+		lua_setfield(L, lua_index, name);
 	}
 	read_component(L, n , f, lua_gettop(L), buffer);
 	lua_pop(L, 1);

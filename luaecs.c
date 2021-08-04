@@ -162,6 +162,9 @@ add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid
 	}
 	++pool->n;
 	pool->id[index] = eid;
+	if (index > 0 && eid <= pool->id[index-1]) {
+		luaL_error(L, "Add component %d fail", cid);
+	}
 	return index;
 }
 
@@ -1119,7 +1122,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
-					lua_rawseti(L, -2, index);
+					lua_rawseti(L, -2, index + 1);
 				} else {
 					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
 					write_component_object(L, k->field_n, f, buffer);

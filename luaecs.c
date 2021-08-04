@@ -162,7 +162,7 @@ add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid
 	}
 	++pool->n;
 	pool->id[index] = eid;
-	if (index > 0 && eid <= pool->id[index-1]) {
+	if (index > 0 && eid < pool->id[index-1]) {
 		luaL_error(L, "Add component %d fail", cid);
 	}
 	return index;

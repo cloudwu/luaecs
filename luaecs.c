@@ -245,7 +245,8 @@ insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, unsign
 			}
 		}
 	}
-	add_component_id_(L, world_index, w, cid, eid);
+	// 0xffffffff max uint avoid check
+	add_component_id_(L, world_index, w, cid, 0xffffffff);
 	memmove(c->id + from + 1, c->id + from, sizeof(unsigned int) * (c->n - from - 1));
 	c->id[from] = eid;
 }

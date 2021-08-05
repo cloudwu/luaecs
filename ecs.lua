@@ -436,9 +436,22 @@ do
 		return _object(pat, v, refid)
 	end
 
-	function M:singleton(name, v)
-		local pat = context[self].ref[name]
-		return _object(pat, v, 1)
+	function M:singleton(name, pattern, iter)
+		local typenames = context[self].typenames
+		if iter == nil then
+			iter = { 1, typenames[name].id }
+			if pattern then
+				local p = context[self].select[pattern]
+				self:_sync(p, iter)
+			end
+			return iter
+		else
+			iter[1] = 1
+			iter[2] = typenames[name].id
+			local p = context[self].select[pattern]
+			self:_sync(p, iter)
+		end
+		return iter
 	end
 end
 

@@ -16,10 +16,13 @@ w:new {
 }
 
 local function print_v()
+	local v = w:singleton("t", "t:in")
+	print(".a = ",v.t.a)
+	print(".b = ",v.t.b)
 	local v = w:singleton "t"
-
-	print(".a = ",v.a)
-	print(".b = ",v.b)
+	w:sync("t:in", v)
+	print(".a = ", v.t.a)
+	print(".a = ", v.t.b)
 end
 
 local ctx = w:context { "t" }

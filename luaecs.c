@@ -1850,6 +1850,22 @@ find_boundary(int from, int to, unsigned int *a, unsigned int eid) {
 	return to;
 }
 
+static inline int
+next_removed_index(int removed_index, struct component_pool *removed, unsigned int *removed_eid) {
+	for (;;) {
+		++removed_index;
+		if (removed_index >= removed->n) {
+			*removed_eid = 0;
+			break;
+		}
+		unsigned int last_eid = *removed_eid;
+		*removed_eid = removed->id[removed_index];
+		if (*removed_eid != last_eid)
+			break;
+	}
+	return removed_index;
+}
+
 static int
 lupdate_reference(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -1872,20 +1888,15 @@ lupdate_reference(lua_State *L) {
 		if (lua_geti(L, -1, i+1) != LUA_TTABLE) {
 			return luaL_error(L, "Invalid reference object");
 		}
+		if (removed_eid) {
+			while (removed_eid < reference->id[i]) {
+				removed_index = next_removed_index(removed_index, removed, &removed_eid);
+			}
+		}
 		if (removed_eid == reference->id[i]) {
 			// removed reference, clear reference id
 			lua_pushnil(L);
-			for (;;) {
-				++removed_index;
-				if (removed_index >= removed->n) {
-					removed_eid = 0;
-					break;
-				}
-				unsigned int last_eid = removed_eid;
-				removed_eid = removed->id[removed_index];
-				if (removed_eid != last_eid)
-					break;
-			}
+			removed_index = next_removed_index(removed_index, removed, &removed_eid);
 		} else {
 			// update reference id
 			lua_pushinteger(L, reference_index);

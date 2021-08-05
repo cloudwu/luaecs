@@ -15,6 +15,16 @@ for i=1, 42 do
 		value = i,
 		reference = true,
 	}
+	w:new {
+		value = -i,
+	}
+end
+
+for v in w:select("value:in") do
+	print(v.value)
+	if v.value < 0 then
+		w:remove(v)
+	end
 end
 
 local function read(i)
@@ -31,4 +41,8 @@ w:update()
 
 for i=1,42 do
 	print(pcall(read,i))
+end
+
+for v in w:select("value:in") do
+	print(v.value)
 end

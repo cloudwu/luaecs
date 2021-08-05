@@ -1834,6 +1834,69 @@ lreuse(lua_State *L) {
 	return 1;
 }
 
+static int
+find_boundary(int from, int to, unsigned int *a, unsigned int eid) {
+	while(from < to) {
+		int mid = (from + to)/2;
+		unsigned int aa = a[mid];
+		if (aa == eid)
+			return mid;
+		else if (aa < eid) {
+			from = mid + 1;
+		} else {
+			to = mid;
+		}
+	}
+	return to;
+}
+
+static int
+lupdate_reference(lua_State *L) {
+	struct entity_world *w = getW(L);
+	struct component_pool *removed = &w->c[ENTITY_REMOVED];
+	if (removed->n == 0)	// no removed entity
+		return 0;
+	int cid = check_cid(L, w, 2);
+	struct component_pool *reference = &w->c[cid];
+	if (reference == 0)
+		return 0;	// no reference
+	if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+		return luaL_error(L, "Invalid reference component %d", cid);
+	}
+	int i;
+	int removed_index = 0;
+	unsigned int removed_eid = removed->id[removed_index];
+	int index = find_boundary(0, reference->n, reference->id, removed_eid);
+	int reference_index = index + 1;
+	for (i=index; i< reference->n; i++) {
+		if (lua_geti(L, -1, i+1) != LUA_TTABLE) {
+			return luaL_error(L, "Invalid reference object");
+		}
+		if (removed_eid == reference->id[i]) {
+			// removed reference, clear reference id
+			lua_pushnil(L);
+			for (;;) {
+				++removed_index;
+				if (removed_index >= removed->n) {
+					removed_eid = 0;
+					break;
+				}
+				unsigned int last_eid = removed_eid;
+				removed_eid = removed->id[removed_index];
+				if (removed_eid != last_eid)
+					break;
+			}
+		} else {
+			// update reference id
+			lua_pushinteger(L, reference_index);
+			++reference_index;
+		}
+		lua_seti(L, -2, 1);
+		lua_pop(L, 1);
+	}
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -1852,7 +1915,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_newtype",lnew_type },
 			{ "_newentity", lnew_entity },
 			{ "_addcomponent", ladd_component },
-			{ "update", lupdate },
+			{ "_update", lupdate },
 			{ "_clear", lclear_type },
 			{ "_context", lcontext },
 			{ "_groupiter", lgroupiter },
@@ -1865,6 +1928,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_bsearch", lbsearch },
 			{ "_reuse", lreuse },
 			{ "_fetch", lfetch },
+			{ "_update_reference", lupdate_reference },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

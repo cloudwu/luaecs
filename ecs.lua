@@ -1,5 +1,7 @@
 local ecs = require "ecs.core"
 
+local REFERENCE_ID <const> = 1
+
 local function get_attrib(opt, inout)
 	if opt == nil then
 		return { exist = true }
@@ -275,6 +277,11 @@ function M:new(obj)
 --	dump(obj)
 	local eid = self:_newentity()
 	local typenames = context[self].typenames
+	local reference = obj.reference
+	if reference then
+		reference = {}
+		obj.reference = nil
+	end
 	for k,v in pairs(obj) do
 		local tc = typenames[k]
 		if not tc then
@@ -282,6 +289,13 @@ function M:new(obj)
 		end
 		local id = self:_addcomponent(eid, tc.id)
 		self:object(k, id, v)
+	end
+	if reference then
+		local id = self:_addcomponent(eid, REFERENCE_ID)
+		reference[1] = id
+		reference[2] = REFERENCE_ID
+		self:object("reference", id, reference)
+		return reference
 	end
 end
 
@@ -410,6 +424,11 @@ function M:fetch(idtype, id)
 	return ret
 end
 
+function M:update()
+	self:_update_reference(REFERENCE_ID)
+	self:_update()
+end
+
 do
 	local _object = M._object
 	function M:object(name, refid, v)
@@ -431,6 +450,11 @@ function ecs.world()
 		size = 0,
 		tag = true,
 	}
+	w:register {
+		name = "reference",
+		type = "lua",
+	}
+	assert(context[w].typenames.reference.id == REFERENCE_ID)
 	return w
 end
 

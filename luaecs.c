@@ -1874,7 +1874,7 @@ lupdate_reference(lua_State *L) {
 		return 0;
 	int cid = check_cid(L, w, 2);
 	struct component_pool *reference = &w->c[cid];
-	if (reference == 0)
+	if (reference->n == 0)
 		return 0;	// no reference
 	if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
 		return luaL_error(L, "Invalid reference component %d", cid);

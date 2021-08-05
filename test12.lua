@@ -11,9 +11,10 @@ w:register {
 local r = {}
 
 for i=1, 42 do
-	r[i] = w:new {
+	r[i] = {}
+	w:new {
 		value = i,
-		reference = true,
+		reference = r[i],
 	}
 	w:new {
 		value = -i,

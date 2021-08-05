@@ -279,7 +279,6 @@ function M:new(obj)
 	local typenames = context[self].typenames
 	local reference = obj.reference
 	if reference then
-		reference = {}
 		obj.reference = nil
 	end
 	for k,v in pairs(obj) do

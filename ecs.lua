@@ -294,6 +294,7 @@ function M:new(obj)
 		reference[1] = id
 		reference[2] = REFERENCE_ID
 		self:object("reference", id, reference)
+		obj.reference = reference
 		return reference
 	end
 end

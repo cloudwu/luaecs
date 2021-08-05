@@ -61,17 +61,20 @@ local function cache_world(obj, k)
 	local function gen_all_pat()
 		local desc = {}
 		local i = 1
+		local _ORDERKEY = ecs._ORDERKEY
 		for name,t in pairs(c.typenames) do
-			local a = {
-				name = t.name,
-				id = t.id,
-				type = t.type,
-				opt = true,
-				r = true,
-			}
-			table.move(t, 1, #t, 1, a)
-			desc[i] = a
-			i = i + 1
+			if t.size ~= _ORDERKEY then
+				local a = {
+					name = t.name,
+					id = t.id,
+					type = t.type,
+					opt = true,
+					r = true,
+				}
+				table.move(t, 1, #t, 1, a)
+				desc[i] = a
+				i = i + 1
+			end
 		end
 		return desc
 	end

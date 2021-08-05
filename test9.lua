@@ -17,11 +17,19 @@ w:register {
 	name = "mark"
 }
 
+w:register {
+	name = "index",
+	type = "int",
+}
+
 w:new {
 	vector = { x = 1, y = 2 },
 	text = "Hello World",
 	mark = true,
+	index = 1,
 }
+
+w:sort("sort", "index")
 
 for v in w:select "mark" do
 	w:readall(v)

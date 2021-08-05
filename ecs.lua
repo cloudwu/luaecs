@@ -35,7 +35,6 @@ local function cache_world(obj, k)
 		id = 0,
 		select = {},
 		ref = {},
-		fetch = setmetatable({},  { __mode = "kv" }),
 	}
 
 	local function gen_ref_pat(key)
@@ -393,12 +392,17 @@ function M:bsearch(sorted, name, value)
 end
 
 function M:fetch(idtype, id)
-	local c = context[self]
-	local cid = c.typenames[idtype].id
-	local iter = c.fetch[id]
+	local c = context[self].typenames[idtype]
+	local f = c.fetch
+	if not f then
+		f = setmetatable({}, { __mode = "kv" })
+		c.fetch = f
+	end
+	local cid = c.id
+	local iter = f[id]
 	local ret = self:_fetch(cid, id, iter)
 	if not iter then
-		c.fetch[id] = ret
+		f[id] = ret
 	end
 	return ret
 end

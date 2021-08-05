@@ -12,7 +12,7 @@ local function get_attrib(opt, inout)
 	end
 	if inout == "in" then
 		desc.r = true
-	elseif inout == "out" or inout == "new" then
+	elseif inout == "out" then
 		desc.w = true
 	elseif inout == "update" then
 		desc.r = true
@@ -35,6 +35,7 @@ local function cache_world(obj, k)
 		id = 0,
 		select = {},
 		ref = {},
+		fetch = setmetatable({},  { __mode = "kv" }),
 	}
 
 	local function gen_ref_pat(key)
@@ -389,6 +390,17 @@ function M:bsearch(sorted, name, value)
 	local sorted_id = typenames[sorted].id
 	local value_id = typenames[name].id
 	return self:_bsearch(sorted_id, value_id, value)
+end
+
+function M:fetch(idtype, id)
+	local c = context[self]
+	local cid = c.typenames[idtype].id
+	local iter = c.fetch[id]
+	local ret = self:_fetch(cid, id, iter)
+	if not iter then
+		c.fetch[id] = ret
+	end
+	return ret
 end
 
 do

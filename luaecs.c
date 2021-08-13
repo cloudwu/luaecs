@@ -40,6 +40,7 @@ init_component_pool(struct entity_world *w, int index, int stride, int opt_size)
 	c->n = 0;
 	c->stride = stride;
 	c->id = NULL;
+	c->last_lookup = 0;
 	if (stride > 0) {
 		c->buffer = NULL;
 	} else {
@@ -282,18 +283,23 @@ lookup_component(struct component_pool *pool, unsigned int eid, int guess_index)
 	int n = pool->n;
 	if (n == 0)
 		return -1;
-	if (guess_index + GUESS_RANGE >= n)
+	if (guess_index < 0 || guess_index >= pool->n)
 		return binary_search(pool->id, 0, pool->n, eid);
 	unsigned int *a = pool->id;
+	int lower = a[guess_index];
+	if (eid <= lower) {
+		if (eid == lower)
+			return guess_index;
+		return binary_search(a, 0, guess_index, eid);
+	}
+	if (guess_index + GUESS_RANGE*2 >= pool->n) {
+		return binary_search(a, guess_index + 1, pool->n, eid);
+	}
 	int higher = a[guess_index + GUESS_RANGE];
 	if (eid > higher) {
 		return binary_search(a, guess_index + GUESS_RANGE + 1, pool->n, eid);
 	}
-	int lower = a[guess_index];
-	if (eid < lower) {
-		return binary_search(a, 0, guess_index, eid);
-	}
-	return binary_search(a, guess_index, guess_index + GUESS_RANGE, eid);
+	return binary_search(a, guess_index + 1, guess_index + GUESS_RANGE + 1, eid);
 }
 
 static inline void

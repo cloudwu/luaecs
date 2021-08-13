@@ -26,6 +26,12 @@ w:new {
 	vector = { x = 1, y = 2 },
 	text = "Hello World",
 	mark = true,
+	index = 2,
+}
+
+w:new {
+	text = "Hello World 2",
+	mark = true,
 	index = 1,
 }
 
@@ -38,6 +44,11 @@ for v in w:select "mark" do
 	end
 end
 
+local ids = w:dumpid "sort"
+
+for idx, id in ipairs(ids) do
+	print(idx, id)
+end
 
 
 

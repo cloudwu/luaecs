@@ -1908,6 +1908,20 @@ lupdate_reference(lua_State *L) {
 	return 0;
 }
 
+static int
+ldumpid(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = check_cid(L, w, 2);
+	struct component_pool *c = &w->c[cid];
+	lua_createtable(L, c->n, 0);
+	int i;
+	for (i=0;i<c->n;i++) {
+		lua_pushinteger(L, c->id[i]);
+		lua_rawseti(L, -2, i+1);
+	}
+	return 1;
+}
+
 LUAMOD_API int
 luaopen_ecs_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -1940,6 +1954,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_reuse", lreuse },
 			{ "_fetch", lfetch },
 			{ "_update_reference", lupdate_reference },
+			{ "_dumpid", ldumpid },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L,l,0);

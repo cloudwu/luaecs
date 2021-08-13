@@ -424,6 +424,11 @@ function M:fetch(idtype, id)
 	return ret
 end
 
+function M:dumpid(name)
+	local typenames = context[self].typenames
+	return self:_dumpid(typenames[name].id)
+end
+
 function M:update()
 	self:_update_reference(REFERENCE_ID)
 	self:_update()

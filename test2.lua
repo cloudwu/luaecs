@@ -35,10 +35,6 @@ for v in w:select "sort data:in index:in" do
 	print(v.data, v.index)
 end
 
-local iter = w:bsearch("sort", "index", 5)
-w:sync("data:in", iter)
-print("Found", iter.data)
-
 w:register {
 	name = "sorted_index",
 	type = "int",
@@ -52,7 +48,4 @@ for v in w:select "sorted_index:in data?in" do
 	print(v.sorted_index, "=>", v.data)
 end
 
-local iter = w:bsearch("sorted_index", "sorted_index", 4)
-w:sync("data:in", iter)
-print("Found", iter.data)
 --w:remove(iter)

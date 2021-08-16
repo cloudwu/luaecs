@@ -401,29 +401,6 @@ function M:order(sorted, refname, order_array)
 	self:_orderkey(sid, rid, order_array)
 end
 
-function M:bsearch(sorted, name, value)
-	local typenames = context[self].typenames
-	local sorted_id = typenames[sorted].id
-	local value_id = typenames[name].id
-	return self:_bsearch(sorted_id, value_id, value)
-end
-
-function M:fetch(idtype, id)
-	local c = context[self].typenames[idtype]
-	local f = c.fetch
-	if not f then
-		f = setmetatable({}, { __mode = "kv" })
-		c.fetch = f
-	end
-	local cid = c.id
-	local iter = f[id]
-	local ret = self:_fetch(cid, id, iter)
-	if not iter then
-		f[id] = ret
-	end
-	return ret
-end
-
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)

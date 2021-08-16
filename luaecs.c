@@ -1636,122 +1636,6 @@ lorderkey(lua_State *L) {
 }
 
 static int
-search_id(lua_State *L, int begin, int end, struct entity_world *w, int cid, int64_t value) {
-	while (begin < end) {
-		int mid = (begin + end)/2;
-		int64_t * v = entity_iter_(w, cid, mid);
-		if (*v == value) {
-			// found
-			lua_pushinteger(L, mid + 1);
-			lua_seti(L, -2, 1);
-			return 1;
-		}
-		if (*v < value) {
-			begin = mid + 1;
-		} else {
-			end = mid;
-		}
-	}
-	return 0;
-}
-
-static int
-lfetch(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int cid = check_cid(L, w, 2);
-	lua_Integer value = luaL_checkinteger(L, 3);
-	struct component_pool *c = &w->c[cid];
-	if (c->stride != sizeof(int64_t)) {
-		return luaL_error(L, "Id component is not int64");
-	}
-	if (lua_istable(L, 4)) {
-		// cache iter
-		lua_settop(L, 4);
-		lua_geti(L, 4, 1);
-		int mid = lua_tointeger(L, -1) - 1;
-		lua_pop(L, 1);
-		if (mid >=0 && mid < c->n) {
-			int64_t * v = entity_iter_(w, cid, mid);
-			if (*v == value)
-				return 1;
-			if (*v < value) {
-				return search_id(L, mid+1, c->n, w, cid, value);
-			} else {
-				if (mid > GUESS_RANGE) {
-					return search_id(L, mid - GUESS_RANGE, mid, w, cid, value) ||
-						search_id(L, 0, mid - GUESS_RANGE, w, cid, value);
-				}
-				return search_id(L, 0, mid, w, cid, value);
-			}
-		}
-		return 0;
-	} else {
-		// new iter
-		lua_createtable(L, 2, 0);
-		lua_pushinteger(L, cid);
-		lua_seti(L, -2, 2);
-		return search_id(L, 0, c->n, w, cid, value);
-	}
-}
-
-static int
-lbsearch(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int sorted_id = check_cid(L, w, 2);
-	int value_id = check_cid(L, w, 3);
-	int value = luaL_checkinteger(L, 4);
-
-	struct component_pool *c = &w->c[sorted_id];
-
-	int begin = 0, end = c->n;
-
-	if (sorted_id == value_id) {
-		while (begin < end) {
-			int mid = (begin + end)/2;
-			int * v = entity_iter_(w, value_id, mid);
-			if (*v == value) {
-				// found
-				lua_createtable(L, 2, 0);
-				lua_pushinteger(L, mid + 1);
-				lua_seti(L, -2, 1);
-				lua_pushinteger(L, sorted_id);
-				lua_seti(L, -2, 2);
-				return 1;
-			}
-			if (*v < value) {
-				begin = mid + 1;
-			} else {
-				end = mid;
-			}
-		}
-	} else {
-		while (begin < end) {
-			int mid = (begin + end)/2;
-			int index = entity_sibling_index_(w, sorted_id, mid, value_id);
-			if (index == 0) {
-				return luaL_error(L, "Invalid value component");
-			}
-			int * v = entity_iter_(w, value_id, index - 1);
-			if (*v == value) {
-				// found
-				lua_createtable(L, 2, 0);
-				lua_pushinteger(L, index);
-				lua_seti(L, -2, 1);
-				lua_pushinteger(L, sorted_id);
-				lua_seti(L, -2, 2);
-				return 1;
-			}
-			if (*v < value) {
-				begin = mid + 1;
-			} else {
-				end = mid;
-			}
-		}
-	}
-	return 0;
-}
-
-static int
 lobject(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
 	int index = luaL_checkinteger(L, 3) - 1;
@@ -1992,9 +1876,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_release", lrelease },
-			{ "_bsearch", lbsearch },
 			{ "_reuse", lreuse },
-			{ "_fetch", lfetch },
 			{ "_update_reference", lupdate_reference },
 			{ "_dumpid", ldumpid },
 			{ NULL, NULL },

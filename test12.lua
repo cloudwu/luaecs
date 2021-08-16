@@ -40,14 +40,7 @@ w:remove(r[10])
 w:remove(r[20])
 w:remove(r[30])
 
-local function remove_reference(n)
-	r[n].reference = false
-	w:sync("reference:out" , r[n])
-	r[n][1] = nil
-	r[n] = nil
-end
-
-remove_reference(40)
+w:remove_reference(r[40])
 
 w:update()
 

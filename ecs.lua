@@ -434,6 +434,12 @@ function M:update()
 	self:_update()
 end
 
+function M:remove_reference(ref)
+	ref.reference = false
+	self:sync("reference:out", ref)
+	ref[1] = nil
+end
+
 do
 	local _object = M._object
 	function M:object(name, refid, v)

@@ -1872,6 +1872,26 @@ next_removed_index(int removed_index, struct component_pool *removed, unsigned i
 	return removed_index;
 }
 
+// remove reference object where id == 0
+static void
+remove_unused_reference(lua_State *L, struct component_pool *c, int from) {
+	int i;
+	int to = from;
+	for (i=from; i < c->n; i++) {
+		if (c->id[i]) {
+			c->id[to] = c->id[i];
+			lua_geti(L, -1, i+1);
+			lua_seti(L, -2, to+1);
+			++to;
+		}
+	}
+	for (i=to;i<=c->n;i++) {
+		lua_pushnil(L);
+		lua_seti(L, -2, i+1);
+	}
+	c->n = to;
+}
+
 static int
 lupdate_reference(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -1890,8 +1910,11 @@ lupdate_reference(lua_State *L) {
 	unsigned int removed_eid = removed->id[removed_index];
 	int index = find_boundary(0, reference->n, reference->id, removed_eid);
 	int reference_index = index + 1;
+	int removed_reference = 0;
 	for (i=index; i< reference->n; i++) {
-		if (lua_geti(L, -1, i+1) != LUA_TTABLE) {
+		int rtype = lua_geti(L, -1, i+1);
+		if (rtype != LUA_TBOOLEAN && rtype != LUA_TTABLE) {
+			// false means removed reference
 			return luaL_error(L, "Invalid reference object");
 		}
 		if (removed_eid) {
@@ -1908,8 +1931,21 @@ lupdate_reference(lua_State *L) {
 			lua_pushinteger(L, reference_index);
 			++reference_index;
 		}
-		lua_seti(L, -2, 1);
-		lua_pop(L, 1);
+		if (rtype == LUA_TBOOLEAN) {
+			// set id = 0, so removed_reference() can remove them
+			--reference_index;
+			reference->id[i] = 0;
+			if (removed_reference == 0) {
+				removed_reference = i + 1;
+			}
+			lua_pop(L, 2);
+		} else {
+			lua_seti(L, -2, 1);
+			lua_pop(L, 1);
+		}
+	}
+	if (removed_reference) {
+		remove_unused_reference(L, reference, removed_reference - 1);
 	}
 	return 0;
 }

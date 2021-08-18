@@ -1587,8 +1587,8 @@ lgroupiter(lua_State *L) {
 		} else if (c->stride == STRIDE_ORDER) {
 			if (i != 0) {
 				return luaL_error(L, ".%s is an order key, must be main key", iter->k[i].name);
-			} else if (iter->k[0].attrib & COMPONENT_OUT) {
-				return luaL_error(L, ".%s is an order key, it should be readonly", iter->k[0].name);
+			} else if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
+				return luaL_error(L, ".%s is an order key, it can be exist", iter->k[0].name);
 			}
 		}
 		int attrib = iter->k[i].attrib;
@@ -1603,12 +1603,6 @@ lgroupiter(lua_State *L) {
 	int mainkey_attrib = iter->k[0].attrib;
 	if (mainkey_attrib & COMPONENT_ABSENT) {
 		return luaL_error(L, "The main key can't be absent");
-	}
-	for (i=1;i < nkey; i++) {
-		struct component_pool *c = &w->c[iter->k[i].id];
-		if (c->stride == STRIDE_ORDER) {
-			return luaL_error(L, "%s is an order key, it must be the mainkey", iter->k[i].name);
-		}
 	}
 	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
 		lua_pushcfunction(L, lpairs_group);

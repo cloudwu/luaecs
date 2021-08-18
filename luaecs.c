@@ -132,7 +132,6 @@ add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid
 	struct component_pool *pool = &w->c[cid];
 	int cap = pool->cap;
 	int index = pool->n;
-	assert(pool->stride != STRIDE_ORDER);
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
 			pool->id = (unsigned int *)lua_newuserdatauv(L, cap * sizeof(unsigned int), 0);
@@ -163,7 +162,7 @@ add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid
 	}
 	++pool->n;
 	pool->id[index] = eid;
-	if (index > 0 && eid < pool->id[index-1]) {
+	if (pool->stride != STRIDE_ORDER && index > 0 && eid < pool->id[index-1]) {
 		luaL_error(L, "Add component %d fail", cid);
 	}
 	return index;
@@ -1636,6 +1635,48 @@ lorderkey(lua_State *L) {
 }
 
 static int
+lorder_iterate(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = check_cid(L, w, 2);
+	luaL_checktype(L, 3, LUA_TFUNCTION);
+	struct component_pool *c = &w->c[cid];
+	if (c->stride == STRIDE_TAG)
+		c->stride = STRIDE_ORDER;
+	else if (c->stride != STRIDE_ORDER) {
+		return luaL_error(L, "Component should be tag or orderkey");
+	}
+	int n = c->n;
+	lua_createtable(L, 2, 0);	// iter
+	lua_pushinteger(L, cid);
+	lua_rawseti(L, -2, 2);
+	int i=0;
+	while (i<n) {
+		lua_pushinteger(L, i+1);
+		lua_rawseti(L, -2, 1);
+		lua_pushvalue(L, 3);
+		lua_pushvalue(L, 1);	// world
+		lua_pushvalue(L, -3);	// iter
+		lua_call(L, 2, 1);
+		if (c->n != n) {
+			return luaL_error(L, "Can't enable/disable tag during reorder");
+		}
+		int yield = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+		if (yield) {
+			if (i == n-1) {
+				return luaL_error(L, "Can't yield the last one");
+			}
+			unsigned int tmp = c->id[i];
+			memmove(&c->id[i], &c->id[i+1], (n-i-1) * sizeof(c->id[0]));
+			c->id[n-1] = tmp;
+		} else {
+			++i;
+		}
+	}
+	return 0;
+}
+
+static int
 lobject(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
 	int index = luaL_checkinteger(L, 3) - 1;
@@ -1873,6 +1914,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
 			{ "_orderkey", lorderkey },
+			{ "_order_iterate", lorder_iterate },
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_release", lrelease },

@@ -401,6 +401,13 @@ function M:order(sorted, refname, order_array)
 	self:_orderkey(sid, rid, order_array)
 end
 
+function M:order_iterate(name, func)
+	local typenames = context[self].typenames
+	local t = assert(typenames[name])
+	self:_order_iterate(t.id, func)
+	t.size = ecs._ORDERKEY
+end
+
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)

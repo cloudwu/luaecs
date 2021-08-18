@@ -373,24 +373,6 @@ function M:clear(name)
 	self:_clear(id)
 end
 
-local function check_sorted_id(self, sorted, name)
-	local ctx = context[self]
-	local typenames = ctx.typenames
-	local t = assert(typenames[name])
-	local stype = typenames[sorted]
-	assert(stype.tag == "ORDER")
-	return stype.id, t.id
-end
-
-function M:sort(sorted, name)
-	self:_sortkey(check_sorted_id(self, sorted, name))
-end
-
-function M:order(sorted, refname, order_array)
-	local sid, rid = check_sorted_id(self, sorted, refname)
-	self:_orderkey(sid, rid, order_array)
-end
-
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)

@@ -35,8 +35,6 @@ w:new {
 	index = 1,
 }
 
-w:sort("sort", "index")
-
 for v in w:select "mark" do
 	w:readall(v)
 	for k,v in pairs(v) do
@@ -44,7 +42,7 @@ for v in w:select "mark" do
 	end
 end
 
-local ids = w:dumpid "sort"
+local ids = w:dumpid "index"
 
 for idx, id in ipairs(ids) do
 	print(idx, id)

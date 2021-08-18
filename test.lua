@@ -143,7 +143,7 @@ for v in w:select "vector:update" do
 end
 
 print "vector:in id?out"
-for v in w:select "vector:in id?temp" do
+for v in w:select "vector:in id?out" do
 	print(v.vector.x, v.vector.y, v.id)
 	if v.id then
 		v.id = 200

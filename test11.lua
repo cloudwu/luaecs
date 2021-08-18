@@ -4,6 +4,7 @@ local w = ecs.world()
 
 w:register {
 	name = "order",
+	order = true,
 }
 
 w:register {
@@ -24,15 +25,14 @@ w:new {
 
 local cache = {}
 
-w:order_iterate("order", function(self, v)
-	self:sync("node:in", v)
+for v in w:select "order node:update" do
 	local node = v.node
 	if node.parent < 0 or cache[node.parent] then
 		cache[node.id] = true
 		print(node.id, node.parent)
-		return
+	else
+		v.order = false
 	end
-	return true	-- yield
-end)
+end
 
-
+assert(pcall(w.select, w, "node order") == false)

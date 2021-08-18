@@ -1307,6 +1307,20 @@ lsync(lua_State *L) {
 }
 
 static int
+postpone(lua_State *L, struct group_iter *iter, struct component_pool *c) {
+	int ret = 0;
+	if (c->stride == STRIDE_ORDER) {
+		if (lua_getfield(L, 2, iter->k[0].name) == LUA_TBOOLEAN) {
+			ret = (lua_toboolean(L, -1) == 0);
+			lua_pushnil(L);
+			lua_setfield(L, 2, iter->k[0].name);
+		}
+		lua_pop(L, 1);
+	}
+	return ret;
+}
+
+static int
 leach_group(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 1); 
 	if (lua_rawgeti(L, 2, 1) != LUA_TNUMBER) {
@@ -1323,11 +1337,20 @@ leach_group(lua_State *L) {
 
 	int world_index = lua_gettop(L);
 
-	if (i > 0 && !iter->readonly) {
-		update_last_index(L, world_index, 2, iter, i-1);
-	}
-	int mainkey = iter->k[0].id;
 	unsigned int index[MAX_COMPONENT];
+	int mainkey = iter->k[0].id;
+
+	struct component_pool *c = &iter->world->c[mainkey];
+	if (i>0) {
+		if (postpone(L, iter, c)) {
+			--i;
+			unsigned int tmp = c->id[i];
+			memmove(&c->id[i], &c->id[i+1], (c->n-i-1) * sizeof(c->id[0]));
+			c->id[c->n-1] = tmp;
+		} else if (!iter->readonly) {
+			update_last_index(L, world_index, 2, iter, i-1);
+		}
+	}
 	for (;;) {
 		int idx = i++;
 		index[0] = idx + 1;
@@ -1581,6 +1604,12 @@ lgroupiter(lua_State *L) {
 	if (mainkey_attrib & COMPONENT_ABSENT) {
 		return luaL_error(L, "The main key can't be absent");
 	}
+	for (i=1;i < nkey; i++) {
+		struct component_pool *c = &w->c[iter->k[i].id];
+		if (c->stride == STRIDE_ORDER) {
+			return luaL_error(L, "%s is an order key, it must be the mainkey", iter->k[i].name);
+		}
+	}
 	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
 		lua_pushcfunction(L, lpairs_group);
 		lua_setfield(L, -2, "__call");
@@ -1631,51 +1660,6 @@ lorderkey(lua_State *L) {
 		c->id[i] = ref->id[refid - 1];
 	}
 	c->n = n;
-	return 0;
-}
-
-static int
-lorder_iterate(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int cid = check_cid(L, w, 2);
-	luaL_checktype(L, 3, LUA_TFUNCTION);
-	struct component_pool *c = &w->c[cid];
-	if (c->stride == STRIDE_TAG)
-		c->stride = STRIDE_ORDER;
-	else if (c->stride != STRIDE_ORDER) {
-		return luaL_error(L, "Component should be tag or orderkey");
-	}
-	int n = c->n;
-	lua_createtable(L, 2, 0);	// iter
-	lua_pushinteger(L, cid);
-	lua_rawseti(L, -2, 2);
-	int i=0;
-	int yield_n = 0;
-	while (i<n) {
-		lua_pushinteger(L, i+1);
-		lua_rawseti(L, -2, 1);
-		lua_pushvalue(L, 3);
-		lua_pushvalue(L, 1);	// world
-		lua_pushvalue(L, -3);	// iter
-		lua_call(L, 2, 1);
-		if (c->n != n) {
-			return luaL_error(L, "Can't enable/disable tag during reorder");
-		}
-		int yield = lua_toboolean(L, -1);
-		lua_pop(L, 1);
-		if (yield) {
-			++yield_n;
-			if (yield_n >= n) {
-				return luaL_error(L, "Endless order iteration");
-			}
-			unsigned int tmp = c->id[i];
-			memmove(&c->id[i], &c->id[i+1], (n-i-1) * sizeof(c->id[0]));
-			c->id[n-1] = tmp;
-		} else {
-			yield_n = 0;
-			++i;
-		}
-	}
 	return 0;
 }
 
@@ -1917,7 +1901,6 @@ luaopen_ecs_core(lua_State *L) {
 			{ "remove", lremove },
 			{ "_sortkey", lsortkey },
 			{ "_orderkey", lorderkey },
-			{ "_order_iterate", lorder_iterate },
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_release", lrelease },

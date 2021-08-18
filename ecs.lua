@@ -63,9 +63,8 @@ local function cache_world(obj, k)
 	local function gen_all_pat()
 		local desc = {}
 		local i = 1
-		local _ORDERKEY = ecs._ORDERKEY
 		for name,t in pairs(c.typenames) do
-			if t.size ~= _ORDERKEY then
+			if t.tag ~= "ORDER" then
 				local a = {
 					name = t.name,
 					id = t.id,
@@ -248,6 +247,9 @@ do	-- newtype
 				c.type = t
 				c.size = typesize[t]
 				c[1] = { t, "v", 0 }
+			elseif typeclass.order then
+				c.size = ecs._ORDERKEY
+				c.tag = "ORDER"
 			else
 				c.tag = true
 			end
@@ -287,7 +289,9 @@ function M:new(obj)
 			error ("Invalid key : ".. k)
 		end
 		local id = self:_addcomponent(eid, tc.id)
-		self:object(k, id, v)
+		if tc.tag ~= "ORDER" then
+			self:object(k, id, v)
+		end
 	end
 	if reference then
 		local id = self:_addcomponent(eid, REFERENCE_ID)
@@ -369,43 +373,22 @@ function M:clear(name)
 	self:_clear(id)
 end
 
-local function gen_sorted_id(self, sorted, name)
+local function check_sorted_id(self, sorted, name)
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local t = assert(typenames[name])
 	local stype = typenames[sorted]
-	if stype == nil then
-		local id = ctx.id + 1
-		assert(id <= ecs._MAXTYPE)
-		ctx.id = id
-		stype = {
-			id = id,
-			name = sorted,
-			size = ecs._ORDERKEY,
-			tag = true
-		}
-		self:_newtype(id, stype.size)
-		typenames[sorted] = stype
-	else
-		assert(stype.size == ecs._ORDERKEY)
-	end
+	assert(stype.tag == "ORDER")
 	return stype.id, t.id
 end
 
 function M:sort(sorted, name)
-	self:_sortkey(gen_sorted_id(self, sorted, name))
+	self:_sortkey(check_sorted_id(self, sorted, name))
 end
 
 function M:order(sorted, refname, order_array)
-	local sid, rid = gen_sorted_id(self, sorted, refname)
+	local sid, rid = check_sorted_id(self, sorted, refname)
 	self:_orderkey(sid, rid, order_array)
-end
-
-function M:order_iterate(name, func)
-	local typenames = context[self].typenames
-	local t = assert(typenames[name])
-	self:_order_iterate(t.id, func)
-	t.size = ecs._ORDERKEY
 end
 
 function M:dumpid(name)

@@ -1650,6 +1650,7 @@ lorder_iterate(lua_State *L) {
 	lua_pushinteger(L, cid);
 	lua_rawseti(L, -2, 2);
 	int i=0;
+	int yield_n = 0;
 	while (i<n) {
 		lua_pushinteger(L, i+1);
 		lua_rawseti(L, -2, 1);
@@ -1663,13 +1664,15 @@ lorder_iterate(lua_State *L) {
 		int yield = lua_toboolean(L, -1);
 		lua_pop(L, 1);
 		if (yield) {
-			if (i == n-1) {
-				return luaL_error(L, "Can't yield the last one");
+			++yield_n;
+			if (yield_n >= n) {
+				return luaL_error(L, "Endless order iteration");
 			}
 			unsigned int tmp = c->id[i];
 			memmove(&c->id[i], &c->id[i+1], (n-i-1) * sizeof(c->id[0]));
 			c->id[n-1] = tmp;
 		} else {
+			yield_n = 0;
 			++i;
 		}
 	}

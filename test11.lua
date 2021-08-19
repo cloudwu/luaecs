@@ -19,9 +19,20 @@ w:new {
 }
 
 w:new {
-	node = { id = 0, parent = -1 },
+	node = { id = 2, parent = 0 },
 	order = true,
 }
+
+w:new {
+	node = { id = 0, parent = -1 },
+}
+
+for v in w:select "node:in order?temp" do
+	if v.node.parent < 0 then
+		-- add order
+		v.order = true
+	end
+end
 
 local cache = {}
 

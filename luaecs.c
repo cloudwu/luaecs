@@ -180,10 +180,11 @@ static void *
 add_component_(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid, const void *buffer) {
 	int index = add_component_id_(L, world_index, w, cid, eid);
 	struct component_pool *pool = &w->c[cid];
-	assert(pool->stride >= 0);
 	void *ret = get_ptr(pool, index);
-	if (buffer)
+	if (buffer) {
+		assert(pool->stride >= 0);
 		memcpy(ret, buffer, pool->stride);
+	}
 	return ret;
 }
 
@@ -1020,6 +1021,14 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 					}
 					lua_pop(L, 1);
 				}
+			} else if (c->stride == STRIDE_ORDER) {
+				assert(is_temporary(k->attrib));
+				if (lua_getfield(L, lua_index, k->name) != LUA_TNIL) {
+					if (!lua_isboolean(L, -1) || lua_toboolean(L, -1) == 0)
+						luaL_error(L, "Only support true for order key .%s", k->name);
+					lua_pop(L, 1);
+					entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
+				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
 				int index;
@@ -1536,9 +1545,11 @@ lgroupiter(lua_State *L) {
 			iter->k[i].attrib |= COMPONENT_OBJECT;
 		} else if (c->stride == STRIDE_ORDER) {
 			if (i != 0) {
-				return luaL_error(L, ".%s is an order key, must be main key", iter->k[i].name);
+				if (!is_temporary(iter->k[i].attrib)) {
+					return luaL_error(L, ".%s is an order key, must be main key or temporary", iter->k[i].name);
+				}
 			} else if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
-				return luaL_error(L, ".%s is an order key, it can be exist", iter->k[0].name);
+				return luaL_error(L, ".%s is an order key, it can only be exist", iter->k[0].name);
 			}
 		}
 		int attrib = iter->k[i].attrib;

@@ -239,7 +239,7 @@ do	-- newtype
 			c.size = ecs._LUAOBJECT
 			assert(c[1] == nil)
 		elseif c.size > 0 then
-			align_struct(c, typeclass[1][1])
+			align_struct(c, c[1][1])
 		else
 			-- size == 0, one value
 			if ttype then

@@ -27,7 +27,13 @@ w:new {
 	node = { id = 0, parent = -1 },
 }
 
+w:new {
+	node = { id = 3, parent = 0 },
+	order = true,
+}
+
 for v in w:select "node:in order?new" do
+	assert(v.order == nil)
 	if v.node.parent < 0 then
 		-- add order
 		v.order = true

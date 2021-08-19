@@ -1028,6 +1028,8 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						luaL_error(L, "Only support true for order key .%s", k->name);
 					lua_pop(L, 1);
 					entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
+					lua_pushnil(L);
+					lua_setfield(L, lua_index, k->name);
 				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {

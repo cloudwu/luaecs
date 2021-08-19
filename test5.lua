@@ -20,7 +20,7 @@ for v in w:select "a:in" do
 	if v.a %2 == 0 then
 		v.a = -v.a
 		v.temp = 42
-		w:sync("a:out temp:temp", v)
+		w:sync("a:out temp:new", v)
 	end
 end
 

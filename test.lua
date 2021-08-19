@@ -218,7 +218,7 @@ w:register {
 	type = "float",
 }
 
-for v in w:select "vector:in sum:temp" do
+for v in w:select "vector:in sum:new" do
 	print(v.vector.x, "+", v.vector.y)
 	v.sum = v.vector.x + v.vector.y
 end

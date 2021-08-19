@@ -73,7 +73,7 @@ for v in w:select "index:in" do
 end
 
 
-for v in w:select "name refobject(index):temp" do
+for v in w:select "name refobject(index):new" do
 	v.refobject = 42
 end
 

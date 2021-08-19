@@ -26,7 +26,7 @@ local function get_attrib(opt, inout)
 		desc.absent = true
 		assert(not desc.opt)
 	else
-		assert(inout == "temp")
+		assert(inout == "new")
 	end
 	return desc
 end
@@ -109,7 +109,7 @@ local function cache_world(obj, k)
 				if indexc == nil then
 					error("Unknown index type "..index)
 				end
-				local a = get_attrib(opt, inout == "temp" and "temp" or "in")
+				local a = get_attrib(opt, inout == "new" and "new" or "in")
 				a.name = index
 				a.id = indexc.id
 				a.type = indexc.type

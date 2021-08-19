@@ -17,7 +17,7 @@ for i = 1, 10 do
 end
 
 local function add_temp(i)
-	for v in w:select "key:in temp?temp" do
+	for v in w:select "key:in temp?new" do
 		if v.key == i then
 			v.temp = "Temp"
 		end

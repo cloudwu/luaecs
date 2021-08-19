@@ -27,7 +27,7 @@ w:new {
 	node = { id = 0, parent = -1 },
 }
 
-for v in w:select "node:in order?temp" do
+for v in w:select "node:in order?new" do
 	if v.node.parent < 0 then
 		-- add order
 		v.order = true

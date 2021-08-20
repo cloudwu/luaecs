@@ -2,6 +2,31 @@ local ecs = require "ecs.core"
 
 local REFERENCE_ID <const> = 1
 
+local rawerror = error
+local selfsource <const> = debug.getinfo(1, "S").source
+local function error(errmsg)
+	local level = 2
+	while true do
+		local info = debug.getinfo(level, "S")
+		if not info then
+			rawerror(errmsg, 2)
+			return
+		end
+		if selfsource ~= info.source then
+			rawerror(errmsg, level)
+			return
+		end
+		level = level + 1
+	end
+end
+
+local function assert(cond, errmsg)
+	if not cond then
+		error(errmsg or "assertion failed!")
+	end
+	return cond
+end
+
 local function get_attrib(opt, inout)
 	if opt == nil then
 		return { exist = true }

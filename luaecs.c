@@ -1197,6 +1197,25 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned in
 }
 
 static void
+check_index(lua_State *L, struct group_iter *iter, int mainkey, int idx) {
+	int i;
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		if (k->attrib & COMPONENT_ABSENT) {
+			if (entity_sibling_index_(iter->world, mainkey, idx, k->id)) {
+				luaL_error(L, ".%s should be absent", k->name);
+			}
+		} else if (!is_temporary(k->attrib)) {
+			if (entity_sibling_index_(iter->world, mainkey, idx, k->id) == 0) {
+				if (!(k->attrib & COMPONENT_OPTIONAL)) {
+					luaL_error(L, ".%s not found", k->name);
+				}
+			}
+		}
+	}
+}
+
+static void
 read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter, unsigned int index[MAX_COMPONENT]) {
 	struct field *f = iter->f;
 	int i;
@@ -1256,8 +1275,14 @@ lsync(lua_State *L) {
 	int idx = get_integer(L, 3, 1, "index") - 1;
 	int mainkey = get_integer(L, 3, 2, "mainkey");
 	unsigned int index[MAX_COMPONENT];
-	if (query_index(iter, 0, mainkey, idx, index) <=0) {
-		return luaL_error(L, "Read pattern fail");
+	int r = query_index(iter, 0, mainkey, idx, index);
+	if (r <= 0) {
+		if (r < 0) {
+			return luaL_error(L, "Invalid iterator of mainkey (%d)", mainkey);
+		} else {
+			check_index(L, iter, mainkey, idx);	// raise error
+			return 0;
+		}
 	}
 
 	if (!iter->readonly) {

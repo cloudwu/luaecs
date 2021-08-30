@@ -118,7 +118,7 @@ local function cache_world(obj, k)
 		local desc = {}
 		local idx = 1
 		for token in pat:gmatch "[^ ]+" do
-			local key, index, padding = token:match "^([_%w]+)%(?([_%w]*)%)?(.*)"
+			local key, padding = token:match "^([_%w]+)(.*)"
 			assert(key, "Invalid pattern")
 			local opt, inout
 			if padding ~= "" then
@@ -128,19 +128,6 @@ local function cache_world(obj, k)
 			local tc = typenames[key]
 			if tc == nil then
 				error("Unknown type " .. key)
-			end
-			if index ~= "" then
-				local indexc = typenames[index]
-				if indexc == nil then
-					error("Unknown index type "..index)
-				end
-				local a = get_attrib(opt, inout == "new" and "new" or "in")
-				a.name = index
-				a.id = indexc.id
-				a.type = indexc.type
-				a.ref = true
-				desc[idx] = a
-				idx = idx + 1
 			end
 			local a = get_attrib(opt, inout)
 			a.name = tc.name
@@ -152,7 +139,7 @@ local function cache_world(obj, k)
 			end
 			desc[idx] = a
 			idx = idx + 1
-			if tc.ref and index == "" then
+			if tc.ref then
 				local dead = typenames[key .. "_dead"]
 				local a = {
 					absent = true,

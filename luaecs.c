@@ -907,8 +907,6 @@ get_len(lua_State *L, int index) {
 #define COMPONENT_EXIST 0x10
 #define COMPONENT_ABSENT 0x20
 #define COMPONENT_FILTER (COMPONENT_EXIST | COMPONENT_ABSENT)
-#define COMPONENT_REFINDEX 0x40
-#define COMPONENT_REFOBJECT 0x80
 
 struct group_key {
 	const char *name;
@@ -996,7 +994,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 	}
 	for (i=skip;i<iter->nkey;i++) {
 		struct group_key *k = &iter->k[i];
-		if (!(k->attrib & (COMPONENT_FILTER | COMPONENT_REFINDEX))) {
+		if (!(k->attrib & COMPONENT_FILTER)) {
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_TAG) {
 				// It's a tag
@@ -1033,17 +1031,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				int index;
-				if (k->attrib & COMPONENT_REFOBJECT) {
-					struct group_key *index_k = &iter->k[i-1];
-					index = entity_sibling_index_(iter->world, mainkey, idx, index_k->id);
-					if (index) {
-						int *ref = entity_iter_(iter->world, index_k->id, index-1);
-						index = *ref;
-					}
-				} else {
-					index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-				}
+				int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
 				if (index == 0) {
 					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
@@ -1059,31 +1047,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 				}
 			} else if (is_temporary(k->attrib)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				if (k->attrib & COMPONENT_REFOBJECT) {
-					// new ref object
-					struct group_key *index_k = &iter->k[i-1];
-					int dead_tag = k->id + 1;
-					int id;
-					if (entity_iter_(iter->world, dead_tag, 0)) {
-						// reuse
-						id = entity_sibling_index_(iter->world, dead_tag, 0, k->id);
-						entity_disable_tag_(iter->world, dead_tag, 0, dead_tag);
-					} else {
-						id = entity_new_(iter->world, k->id, NULL, L, world_index) + 1;
-					}
-					if (c->stride == STRIDE_LUA) {
-						if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
-							luaL_error(L, "Missing lua table for %d", k->id);
-						}
-						lua_insert(L, -2);
-						lua_rawseti(L, -2, id);
-					} else {
-						void *buffer = entity_iter_(iter->world, k->id, id - 1);
-						write_component_object(L, k->field_n, f, buffer);
-					}
-					// write ref id
-					entity_add_sibling_(iter->world, mainkey, idx, index_k->id, &id, L, world_index);
-				} else if (c->stride == STRIDE_LUA) {
+				if (c->stride == STRIDE_LUA) {
 					int index = entity_add_sibling_index_(L, world_index, iter->world, mainkey, idx, k->id);
 					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
@@ -1174,13 +1138,6 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned in
 				return 0;
 			}
 			index[j] = 0;
-		} else if (k->attrib & COMPONENT_REFOBJECT) {
-			if (index[j-1]) {
-				struct group_key *index_k = &iter->k[j-1];
-				int *ref = entity_iter_(iter->world, index_k->id, index[j-1]-1);
-				index[j] = *ref;
-				index[j-1] = 0;
-			}
 		} else if (!is_temporary(k->attrib)) {
 			index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
 			if (index[j] == 0) {
@@ -1490,9 +1447,6 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct fiel
 	if (check_boolean(L, "absent")) {
 		attrib |= COMPONENT_ABSENT;
 	}
-	if (check_boolean(L, "ref")) {
-		attrib |= COMPONENT_REFINDEX;
-	}
 	key->attrib = attrib;
 	if (is_value(L, f)) {
 		key->field_n = 1;
@@ -1557,9 +1511,6 @@ lgroupiter(lua_State *L) {
 	for (i=0; i< nkey; i++) {
 		lua_geti(L, 2, i+1);
 		int n = get_key(w, L, &iter->k[i], f);
-		if (i>0 && (iter->k[i-1].attrib & COMPONENT_REFINDEX)) {
-			iter->k[i].attrib |= COMPONENT_REFOBJECT;
-		}
 		struct component_pool *c = &w->c[iter->k[i].id];
 		if (c->stride == STRIDE_TAG && is_temporary(iter->k[i].attrib)) {
 			return luaL_error(L, "%s is a tag, use %s?out instead", iter->k[i].name, iter->k[i].name);

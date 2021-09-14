@@ -414,9 +414,10 @@ do
 			iter = { 1, typenames[name].id }
 			if pattern then
 				local p = context[self].select[pattern]
-				self:_sync(p, iter)
+				return self:_read(p, iter)
+			else
+				return iter
 			end
-			return iter
 		else
 			iter[1] = 1
 			iter[2] = typenames[name].id

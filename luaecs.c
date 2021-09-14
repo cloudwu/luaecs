@@ -1250,6 +1250,25 @@ lsync(lua_State *L) {
 }
 
 static int
+lread(lua_State *L) {
+	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
+	luaL_checktype(L, 3, LUA_TTABLE);
+	int idx = get_integer(L, 3, 1, "index") - 1;
+	int mainkey = get_integer(L, 3, 2, "mainkey");
+	unsigned int index[MAX_COMPONENT];
+	int r = query_index(iter, 0, mainkey, idx, index);
+	if (r <= 0) {
+		return 0;
+	}
+
+	if (!iter->readonly) {
+		return luaL_error(L, "Pattern is not readonly");
+	}
+	read_iter(L, 1, 3, iter, index);
+	return 1;
+}
+
+static int
 postpone(lua_State *L, struct group_iter *iter, struct component_pool *c) {
 	int ret = 0;
 	if (c->stride == STRIDE_ORDER) {
@@ -1531,13 +1550,11 @@ lgroupiter(lua_State *L) {
 			}
 		}
 		int attrib = iter->k[i].attrib;
-		int readonly;
-		if (attrib & COMPONENT_FILTER)
-			readonly = 0;
-		else
-			readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
-		if (!readonly)
-			iter->readonly = 0;
+		if (!(attrib & COMPONENT_FILTER)) {
+			if (!(attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT)) {
+				iter->readonly = 0;
+			}
+		}
 	}
 	int mainkey_attrib = iter->k[0].attrib;
 	if (mainkey_attrib & COMPONENT_ABSENT) {
@@ -1799,6 +1816,7 @@ luaopen_ecs_core(lua_State *L) {
 			{ "remove", lremove },
 			{ "_object", lobject },
 			{ "_sync", lsync },
+			{ "_read", lread },
 			{ "_release", lrelease },
 			{ "_reuse", lreuse },
 			{ "_update_reference", lupdate_reference },

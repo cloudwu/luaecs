@@ -8,6 +8,10 @@ w:register {
 	"b:userdata",
 }
 
+w:register {
+	name = "flag",
+}
+
 w:new {
 	t = {
 		a = false,
@@ -36,3 +40,23 @@ print_v()
 test.testuserdata(ctx)
 
 print_v()
+
+local v = w:singleton("t", "flag t:in")
+assert(v == nil)
+
+-- remove singleton of t
+local v = w:singleton "t"
+w:remove(v)
+w:update()
+
+
+w:new {
+	t = {
+		a = true,
+		b = ecs.NULL,
+	},
+	flag = true,
+}
+
+local v = w:singleton("t", "flag t:in")
+assert(v.t.a == true)

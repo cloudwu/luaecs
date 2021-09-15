@@ -1551,9 +1551,9 @@ lgroupiter(lua_State *L) {
 		}
 		int attrib = iter->k[i].attrib;
 		if (!(attrib & COMPONENT_FILTER)) {
-			if (!(attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT)) {
+			int readonly = (attrib & COMPONENT_IN) && !(attrib & COMPONENT_OUT);
+			if (!readonly)
 				iter->readonly = 0;
-			}
 		}
 	}
 	int mainkey_attrib = iter->k[0].attrib;

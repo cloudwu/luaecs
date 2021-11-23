@@ -110,32 +110,4 @@ entity_assign_lua(struct ecs_context *ctx, int cid, int index) {
 	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index-1, ctx->L, 1);
 }
 
-static inline int
-entity_new_ref(struct ecs_context *ctx, int cid) {
-	check_id_(ctx, cid);
-	int object_id = ctx->cid[cid];
-	int dead_tag = object_id + 1;
-	int id;
-	if (ctx->api->iter(ctx->world, dead_tag, 0)) {
-		// reuse
-		id = ctx->api->sibling_id(ctx->world, dead_tag, 0, object_id);
-		assert(id > 0);
-		--id;
-		ctx->api->disable_tag(ctx->world, dead_tag, 0, dead_tag);
-	} else {
-		id = ctx->api->new_entity(ctx->world, object_id, NULL, ctx->L, 1);
-	}
-	return id + 1;
-}
-
-static inline void
-entity_release_ref(struct ecs_context *ctx, int cid, int id) {
-	if (id == 0)
-		return;
-	check_id_(ctx, cid);
-	int object_id = ctx->cid[cid];
-	int dead_tag = object_id + 1;
-	ctx->api->enable_tag(ctx->world, object_id, id-1, dead_tag, ctx->L, 1);
-}
-
 #endif

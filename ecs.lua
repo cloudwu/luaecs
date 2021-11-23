@@ -139,16 +139,6 @@ local function cache_world(obj, k)
 			end
 			desc[idx] = a
 			idx = idx + 1
-			if tc.ref then
-				local dead = typenames[key .. "_dead"]
-				local a = {
-					absent = true,
-					name = dead.name,
-					id = dead.id,
-				}
-				desc[idx] = a
-				idx = idx + 1
-			end
 		end
 		return desc
 	end
@@ -268,10 +258,6 @@ do	-- newtype
 		end
 		typenames[name] = c
 		self:_newtype(id, c.size)
-		if typeclass.ref then
-			c.ref = true
-			self:register { name = name .. "_dead" }
-		end
 	end
 end
 
@@ -313,42 +299,6 @@ function M:new(obj)
 		obj.reference = reference
 		return reference
 	end
-end
-
-function M:ref(name, refobj)
-	local obj = assert(refobj[name])
-	local ctx = context[self]
-	local typenames = ctx.typenames
-	local tc = assert(typenames[name])
-	local refid = self:_reuse(tc.id)
-	refobj[2] = tc.id
-	if refid then
-		local p = context[self].select[name .. ":out"]
-		refobj[1] = refid
-		self:_sync(p, refobj)
-	else
-		local eid = self:_newentity()
-		refid = self:_addcomponent(eid, tc.id)
-		refobj[1] = refid
-		self:object(name, refid, obj)
-	end
-	for k,v in pairs(refobj) do
-		if (v == true or v == false) and name ~= k then
-			local p = context[self].select[k .. "?out"]
-			self:_sync(p, refobj)
-		end
-	end
-	return refid
-end
-
-function M:object_ref(name, refid)
-	local typenames = context[self].typenames
-	return { refid, typenames[name].id }
-end
-
-function M:release(name, refid)
-	local id = assert(context[self].typenames[name].id)
-	self:_release(id, refid)
 end
 
 function M:context(t)

@@ -104,8 +104,6 @@ w:update()
 
 local test = require "ecs.ctest"
 
-print(test.get(context))
-
 local function csum()
 	return test.sum(context)
 end

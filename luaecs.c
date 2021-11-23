@@ -1639,35 +1639,6 @@ lobject(lua_State *L) {
 }
 
 static int
-lrelease(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int cid = check_cid(L, w, 2);
-	int refid = luaL_checkinteger(L, 3) - 1;
-	int dead_tag = cid + 1;
-	entity_enable_tag_(w, cid, refid, dead_tag, L, 1);
-	return 0;
-}
-
-static int
-lreuse(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int cid = check_cid(L, w, 2);
-	int dead_tagid = cid + 1;
-	struct component_pool *c = &w->c[dead_tagid];
-	if (c->stride != STRIDE_TAG) {
-		return luaL_error(L, "%d is not a tag", dead_tagid);
-	}
-	if (c->n == 0)
-		return 0;
-	int id = entity_sibling_index_(w, dead_tagid, 0, cid);
-	if (id == 0)
-		return luaL_error(L, "Invalid ref component %d", cid);
-	entity_disable_tag_(w, dead_tagid, 0, dead_tagid);
-	lua_pushinteger(L, id);
-	return 1;
-}
-
-static int
 find_boundary(int from, int to, unsigned int *a, unsigned int eid) {
 	while(from < to) {
 		int mid = (from + to)/2;
@@ -1817,8 +1788,6 @@ luaopen_ecs_core(lua_State *L) {
 			{ "_object", lobject },
 			{ "_sync", lsync },
 			{ "_read", lread },
-			{ "_release", lrelease },
-			{ "_reuse", lreuse },
 			{ "_update_reference", lupdate_reference },
 			{ "_dumpid", ldumpid },
 			{ NULL, NULL },
@@ -1911,16 +1880,6 @@ lsum(lua_State *L) {
 	return 1;
 }
 
-static int
-lget(lua_State *L) {
-	struct ecs_context *ctx = lua_touserdata(L, 1);
-	const char *ret = (const char *)entity_ref_object(ctx, SINGLETON_STRING, 1);
-	if (ret) {
-		lua_pushfstring(L, "[string:%s]", ret);
-	}
-	return 1;
-}
-
 struct userdata_t {
 	unsigned char a;
 	void *b;
@@ -1941,7 +1900,6 @@ luaopen_ecs_ctest(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "test", ltest },
 		{ "sum", lsum },
-		{ "get", lget },
 		{ "testuserdata", ltestuserdata },
 		{ NULL, NULL },
 	};

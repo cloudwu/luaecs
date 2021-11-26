@@ -37,14 +37,6 @@ entity_iter(struct ecs_context *ctx, int cid, int index) {
 	return ctx->api->iter(ctx->world, ctx->cid[cid], index);
 }
 
-static inline void *
-entity_ref_object(struct ecs_context *ctx, int cid, int index) {
-	if (index <= 0)
-		return NULL;
-	check_id_(ctx, cid);
-	return ctx->api->iter_lua(ctx->world, ctx->cid[cid], index - 1, ctx->L, 1);
-}
-
 static inline void
 entity_clear_type(struct ecs_context *ctx, int cid) {
 	check_id_(ctx, cid);

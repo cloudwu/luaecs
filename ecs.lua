@@ -335,6 +335,12 @@ function M:clear(name)
 	self:_clear(id)
 end
 
+function M:clearall()
+	for _, tc in pairs(context[self].typenames) do
+		self:_clear(assert(tc.id))
+	end
+end
+
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)

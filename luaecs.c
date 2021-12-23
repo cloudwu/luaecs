@@ -1715,10 +1715,8 @@ lupdate_reference(lua_State *L) {
 			// false means removed reference
 			return luaL_error(L, "Invalid reference object");
 		}
-		if (removed_eid) {
-			while (removed_eid < reference->id[i]) {
-				removed_index = next_removed_index(removed_index, removed, &removed_eid);
-			}
+		while (removed_eid != 0 && removed_eid < reference->id[i]) {
+			removed_index = next_removed_index(removed_index, removed, &removed_eid);
 		}
 		if (removed_eid == reference->id[i]) {
 			// removed reference, clear reference id
@@ -1730,7 +1728,7 @@ lupdate_reference(lua_State *L) {
 			++reference_index;
 		}
 		if (rtype == LUA_TBOOLEAN) {
-			// set id = 0, so removed_reference() can remove them
+			// set id = 0, so remove_unused_reference() can remove them
 			--reference_index;
 			reference->id[i] = 0;
 			if (removed_reference == 0) {

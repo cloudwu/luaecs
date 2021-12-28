@@ -96,6 +96,7 @@ local context = w:context {
 	"mark",
 	"id",
 	"singleton",
+	"object",
 }
 
 w:new { singleton = "Hello World" }
@@ -160,15 +161,21 @@ w:new { object = "World" , mark = true }
 
 w:update()
 
+-- test c object
+
+
 print "mark:update object:in"
 
 for v in w:select "mark:update object:in" do
 	print(v.object)
-	if v.object == "World" then
-		print "Disable mark where object == World"
+	if v.object == "Hello" then
+		print "Disable mark where object == Hello"
 		v.mark = false
 	end
 end
+
+print("GETLUA",test.getlua(context, 1))
+print("SIBLINGLUA",test.siblinglua(context, 1))
 
 print "mark:exist object:in"
 

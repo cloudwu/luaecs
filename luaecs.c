@@ -539,50 +539,25 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	return get_ptr(c, index);
 }
 
-static void *
-entity_iter_lua_(struct entity_world *w, int cid, int index, void *L, int world_index) {
-	void * ret = entity_iter_(w, cid, index);
-	if (ret != DUMMY_PTR)
-		return ret;
-	if (lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE) {
-		lua_pop(L, 1);
-		return NULL;
-	}
-	int t = lua_rawgeti(L, -1, index+1);
-	switch(t) {
-	case LUA_TSTRING:
-		ret = (void *)lua_tostring(L, -1);
-		break;
-	case LUA_TUSERDATA:
-	case LUA_TLIGHTUSERDATA:
-		ret = (void *)lua_touserdata(L, -1);
-		break;
-	default:
-		ret = NULL;
-		break;
-	}
-	lua_pop(L, 2);
-	return ret;
-}
-
 static int
-entity_assign_lua_(struct entity_world *w, int cid, int index, void *L, int world_index) {
+entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L) {
 	struct component_pool *c = &w->c[cid];
 	++index;
-	assert(lua_gettop(L) > 1);
 	if (c->stride != STRIDE_LUA || index <=0 || index > c->n) {
-		lua_pop(L, 1);
-		return 0;
+		return LUA_TNIL;
 	}
-	if (lua_getiuservalue(L, world_index, cid * 2 + 2) != LUA_TTABLE) {
-		lua_pop(L, 2);
-		return 0;
+	if (lua_getiuservalue(wL, world_index, cid * 2 + 2) != LUA_TTABLE) {
+		lua_pop(wL, 1);
+		return LUA_TNIL;
 	}
-	lua_insert(L, -2);
-	// table value
-	lua_rawseti(L, -2, index);
-	lua_pop(L, 1);
-	return 1;
+	int t = lua_rawgeti(wL, -1, index);
+	if (t == LUA_TNIL) {
+		lua_pop(wL, 2);
+		return LUA_TNIL;
+	}
+	lua_xmove(wL, L, 1);
+	lua_pop(wL, 1);
+	return t;
 }
 
 static void
@@ -678,8 +653,7 @@ lcontext(lua_State *L) {
 		entity_remove_,
 		entity_enable_tag_,
 		entity_disable_tag_,
-		entity_iter_lua_,
-		entity_assign_lua_,
+		entity_get_lua_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;
@@ -1835,6 +1809,7 @@ luaopen_ecs_core(lua_State *L) {
 #define TAG_MARK 2
 #define COMPONENT_ID 3
 #define SINGLETON_STRING 4
+#define COMPONENT_LUA 5
 
 struct vector2 {
 	float x;
@@ -1892,6 +1867,28 @@ ltestuserdata(lua_State *L) {
 	return 0;
 }
 
+static int
+lgetlua(lua_State *L) {
+	struct ecs_context *ctx = lua_touserdata(L, 1);
+	int index = luaL_checkinteger(L, 2);
+	int t = entity_get_lua(ctx, COMPONENT_LUA , index, L);
+	if (t) {
+		return 1;
+	}
+	return 0;
+}
+
+static int
+lsiblinglua(lua_State *L) {
+	struct ecs_context *ctx = lua_touserdata(L, 1);
+	int index = luaL_checkinteger(L, 2);
+	int t = entity_sibling_lua(ctx, TAG_MARK , index, COMPONENT_LUA, L);
+	if (t) {
+		return 1;
+	}
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_ecs_ctest(lua_State *L) {
 	luaL_checkversion(L);
@@ -1899,6 +1896,8 @@ luaopen_ecs_ctest(lua_State *L) {
 		{ "test", ltest },
 		{ "sum", lsum },
 		{ "testuserdata", ltestuserdata },
+		{ "getlua", lgetlua },
+		{ "siblinglua", lsiblinglua },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

@@ -14,8 +14,7 @@ struct ecs_capi {
 	void (*remove)(struct entity_world *w, int cid, int index, void *L, int world_index);
 	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id, void *L, int world_index);
 	void (*disable_tag)(struct entity_world *w, int cid, int index, int tag_id);
-	void * (*iter_lua)(struct entity_world *w, int cid, int index, void *L, int world_index);
-	int (*assign_lua)(struct entity_world *w, int cid, int index, void *L, int world_index);
+	int (*get_lua)(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
 };
 
 struct ecs_context {
@@ -96,10 +95,22 @@ entity_disable_tag(struct ecs_context *ctx, int cid, int index, int tag_id) {
 }
 
 static inline int
-entity_assign_lua(struct ecs_context *ctx, int cid, int index) {
+entity_get_lua(struct ecs_context *ctx, int cid, int index, lua_State *L) {
 	check_id_(ctx, cid);
 	assert(index > 0);
-	return ctx->api->assign_lua(ctx->world, ctx->cid[cid], index-1, ctx->L, 1);
+	return ctx->api->get_lua(ctx->world, ctx->cid[cid], index-1, ctx->L, 1, L);
+}
+
+static inline int
+entity_sibling_lua(struct ecs_context *ctx, int cid, int index, int sibling_id, lua_State *L) {
+	check_id_(ctx, cid);
+	check_id_(ctx, sibling_id);
+	int id = ctx->api->sibling_id(ctx->world,  ctx->cid[cid], index, ctx->cid[sibling_id]);
+	if (id == 0) {
+		return 0;
+	} else {
+		return ctx->api->get_lua(ctx->world, ctx->cid[sibling_id], id - 1, ctx->L, 1, L);
+	}
 }
 
 #endif

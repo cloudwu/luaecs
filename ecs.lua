@@ -212,10 +212,17 @@ do	-- newtype
 		return field
 	end
 
-	local function align_struct(c, t)
-		if t then
-			local s = typesize[t] - 1
-			c.size = ((c.size + s) & ~s)
+	local function align_struct(c)
+		local max_align = 0
+		for k,v in ipairs(c) do
+			local s = typesize[v[1]]
+			if s > max_align then
+				max_align = s
+			end
+		end
+		if max_align > 1 then
+			max_align = max_align - 1
+			c.size = ((c.size + max_align) & ~max_align)
 		end
 	end
 

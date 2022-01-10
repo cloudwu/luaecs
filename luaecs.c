@@ -787,7 +787,7 @@ write_value(lua_State *L, struct field *f, char *buffer) {
 				if (v < 0 || v > 255) {
 					luaL_error(L, "Invalid BYTE %d", v);
 				}
-				*(uint16_t *)ptr = v;
+				*(uint8_t *)ptr = v;
 			}
 			break;
 		case TYPE_DOUBLE:

@@ -1735,16 +1735,8 @@ ldumpid(lua_State *L) {
 	return 1;
 }
 
-LUAMOD_API int
-luaopen_ecs_core(lua_State *L) {
-	luaL_checkversion(L);
-	luaL_Reg l[] = {
-		{ "_world", lnew_world },
-		{ NULL, NULL },
-	};
-	luaL_newlib(L,l);
-	lua_pushinteger(L, MAX_COMPONENT-1);
-	lua_setfield(L, -2, "_MAXTYPE");
+static int
+lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
 		{ "collect", lcollect_memory },
@@ -1764,7 +1756,20 @@ luaopen_ecs_core(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
-	lua_setfield(L, -2, "_METHODS");
+	return 1;
+}
+
+LUAMOD_API int
+luaopen_ecs_core(lua_State *L) {
+	luaL_checkversion(L);
+	luaL_Reg l[] = {
+		{ "_world", lnew_world },
+		{ "_methods", lmethods },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L,l);
+	lua_pushinteger(L, MAX_COMPONENT-1);
+	lua_setfield(L, -2, "_MAXTYPE");
 	lua_pushinteger(L, TYPE_INT);
 	lua_setfield(L, -2, "_TYPEINT");
 	lua_pushinteger(L, TYPE_FLOAT);

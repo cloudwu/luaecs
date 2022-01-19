@@ -195,7 +195,7 @@ local typesize = {
 
 -- make metatable
 local M = {} ; M.__index = M
-for k, v in pairs(ecs._METHODS) do
+for k, v in pairs(ecs._methods()) do
 	M[k] = v
 end
 

@@ -194,10 +194,8 @@ local typesize = {
 }
 
 -- make metatable
-local M = {} ; M.__index = M
-for k, v in pairs(ecs._methods()) do
-	M[k] = v
-end
+local M = ecs._methods()
+M.__index = M
 
 do	-- newtype
 	local function parse(s)

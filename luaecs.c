@@ -61,7 +61,7 @@ entity_new_type(lua_State *L, struct entity_world *w, int cid, int stride, int o
 
 static inline struct entity_world *
 getW(lua_State *L) {
-	return (struct entity_world *)luaL_checkudata(L, 1, "ENTITY_WORLD");
+	return (struct entity_world *)lua_touserdata(L, 1);
 }
 
 static int
@@ -678,7 +678,8 @@ lnew_world(lua_State *L) {
 	memset(w, 0, sz);
 	// removed set
 	entity_new_type(L, w, ENTITY_REMOVED, 0, 0);
-	luaL_getmetatable(L, "ENTITY_WORLD");
+	luaL_checktype(L, 1, LUA_TTABLE);
+	lua_pushvalue(L, 1);
 	lua_setmetatable(L, -2);
 	return 1;
 }
@@ -1744,32 +1745,25 @@ luaopen_ecs_core(lua_State *L) {
 	luaL_newlib(L,l);
 	lua_pushinteger(L, MAX_COMPONENT-1);
 	lua_setfield(L, -2, "_MAXTYPE");
-	if (luaL_newmetatable(L, "ENTITY_WORLD")) {
-		luaL_Reg l[] = {
-			{ "__index", NULL },
-			{ "memory", lcount_memory },
-			{ "collect", lcollect_memory },
-			{ "_newtype",lnew_type },
-			{ "_newentity", lnew_entity },
-			{ "_addcomponent", ladd_component },
-			{ "_update", lupdate },
-			{ "_clear", lclear_type },
-			{ "_context", lcontext },
-			{ "_groupiter", lgroupiter },
-			{ "remove", lremove },
-			{ "_object", lobject },
-			{ "_sync", lsync },
-			{ "_read", lread },
-			{ "_update_reference", lupdate_reference },
-			{ "_dumpid", ldumpid },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L,l,0);
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	} else {
-		return luaL_error(L, "ENTITY_WORLD exist");
-	}
+	luaL_Reg m[] = {
+		{ "memory", lcount_memory },
+		{ "collect", lcollect_memory },
+		{ "_newtype",lnew_type },
+		{ "_newentity", lnew_entity },
+		{ "_addcomponent", ladd_component },
+		{ "_update", lupdate },
+		{ "_clear", lclear_type },
+		{ "_context", lcontext },
+		{ "_groupiter", lgroupiter },
+		{ "remove", lremove },
+		{ "_object", lobject },
+		{ "_sync", lsync },
+		{ "_read", lread },
+		{ "_update_reference", lupdate_reference },
+		{ "_dumpid", ldumpid },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, m);
 	lua_setfield(L, -2, "_METHODS");
 	lua_pushinteger(L, TYPE_INT);
 	lua_setfield(L, -2, "_TYPEINT");

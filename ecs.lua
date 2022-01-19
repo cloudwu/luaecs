@@ -193,7 +193,11 @@ local typesize = {
 	[typeid.userdata] = 8,
 }
 
-local M = ecs._METHODS
+-- make metatable
+local M = {} ; M.__index = M
+for k, v in pairs(ecs._METHODS) do
+	M[k] = v
+end
 
 do	-- newtype
 	local function parse(s)
@@ -392,7 +396,7 @@ do
 end
 
 function ecs.world()
-	local w = ecs._world()
+	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {
 		name = "REMOVED",
 		id = ecs._REMOVED,

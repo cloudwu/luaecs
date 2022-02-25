@@ -1735,6 +1735,167 @@ ldumpid(lua_State *L) {
 	return 1;
 }
 
+// https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
+static inline unsigned int
+hash64(int64_t x) {
+	static int64_t a = 6525041574978960637ull;
+	static int64_t b = 4440846264005121539ull;
+	static int64_t c = 3850123055445736813ull;
+	int low = (unsigned int)x;
+	int high = (unsigned int)(x >> 32);
+	return (unsigned int)((a * low + b * high + c) >> 32);
+}
+
+struct index_cache {
+	struct entity_world *world;
+	int type;
+	int id;
+	int size;
+	int64_t key[1];
+};
+
+static inline unsigned int *
+index_value(struct index_cache *c) {
+	return (unsigned int *)(&c->key[c->size]);
+}
+
+#define INVALID_INDEX (~0)
+#define WORLD_INDEX 0
+#define OBJECT_INDEX 1
+#define MAX_INDEX 2
+
+static unsigned int
+find_key_from(struct index_cache *c, int64_t key_, int n) {
+	int i;
+	void *buffer_ = c->world->c[c->id].buffer;
+	switch (c->type) {
+	case TYPE_INT: {
+		int *buffer = (int *)buffer_;
+		int key = (int)key_;
+		for (i=n;i>=0;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
+		break; }
+	case TYPE_DWORD: {
+		unsigned int *buffer = (unsigned int *)buffer_;
+		int key = (unsigned int)key_;
+		for (i=n;i>=0;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
+		break; }
+	case TYPE_INT64: {
+		int64_t *buffer = (int64_t *)buffer_;
+		int64_t key = (int64_t)key_;
+		for (i=n;i>=0;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
+		break; }
+	}
+	return INVALID_INDEX;
+}
+
+static inline unsigned int
+find_key(struct index_cache *c, int64_t key) {
+	return find_key_from(c, key, c->world->c[c->id].n-1);
+}
+
+static inline unsigned int
+check_key(struct index_cache *c, unsigned int index, int64_t key) {
+	return find_key_from(c, key, index);
+}
+
+static int
+lcache_index(lua_State *L) {
+	struct index_cache *c = (struct index_cache *)lua_touserdata(L, 1);
+	lua_Integer key = luaL_checkinteger(L, 2);
+	unsigned int slot = hash64(key) % c->size;
+	if (c->key[slot] == key) {
+		unsigned int index = index_value(c)[slot];
+		if (index != INVALID_INDEX) {
+			// get iterator
+			lua_getiuservalue(L, 1, OBJECT_INDEX);
+			if (lua_rawgeti(L, -1, slot+1) != LUA_TTABLE) {
+				return luaL_error(L, "Invalid iterator");
+			}
+			unsigned int real_index = check_key(c, index, key);
+			if (real_index != index) {
+				index_value(c)[slot] = real_index;
+				if (real_index == INVALID_INDEX) {
+					// clear iterator
+					lua_pushnil(L);
+					lua_rawseti(L, -2, 1);
+					lua_pushnil(L);
+					lua_rawseti(L, -2, slot+1);
+					return 0;
+				}
+				// fix iterator
+				lua_pushinteger(L, real_index+1);
+				lua_rawseti(L, -2, slot+1);
+			}
+			return 1;
+		}
+	}
+	unsigned int index = find_key(c, key);
+	if (index != INVALID_INDEX) {
+		// UV(OBJECT_INDEX)[slot+1] = iterator { index+1, c->id }
+		lua_createtable(L, 2, 0);
+		lua_pushinteger(L, index+1);
+		lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, c->id);
+		lua_rawseti(L, -2, 2);
+		lua_getiuservalue(L, 1, OBJECT_INDEX);
+		lua_pushvalue(L, -2);
+		lua_rawseti(L, -2, slot+1);
+		lua_pop(L, 1);
+		c->key[slot] = key;
+		index_value(c)[slot] = index;
+		return 1;
+	}
+	return 0;
+}
+
+static int
+lmake_index(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int id = check_cid(L, w, 2);
+	int type = luaL_checkinteger(L, 3);
+	int size = luaL_checkinteger(L, 4);
+	if (size < 1)
+		return luaL_error(L, "Invalid index size %d", size);
+	switch (type) {
+	case TYPE_INT:
+	case TYPE_DWORD:
+	case TYPE_INT64:
+		break;
+	default:
+		return luaL_error(L, "Invalid index component type");
+	}
+	struct index_cache *index = (struct index_cache *)lua_newuserdatauv(L,
+		sizeof(struct index_cache) + (size - 1) * sizeof(index->key[0]) + size * sizeof(unsigned int)
+		, MAX_INDEX);
+	index->world = w;
+	index->id = id;
+	index->type = type;
+	index->size = size;
+
+	int i;
+	unsigned int *value = index_value(index);
+	for (i=0;i<size;i++) {
+		value[i] = INVALID_INDEX;
+	}
+
+	lua_pushvalue(L, 1);
+	lua_setiuservalue(L, -2, WORLD_INDEX);
+	lua_createtable(L, size, 0);
+	lua_setiuservalue(L, -2, OBJECT_INDEX);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
 static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
@@ -1753,9 +1914,16 @@ lmethods(lua_State *L) {
 		{ "_read", lread },
 		{ "_update_reference", lupdate_reference },
 		{ "_dumpid", ldumpid },
+		{ "_make_index", NULL },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
+	lua_createtable(L, 0, 1);
+	lua_pushcfunction(L, lcache_index);
+	lua_setfield(L, -2, "__index");
+	lua_pushcclosure(L, lmake_index, 1);
+	lua_setfield(L, -2, "_make_index");
+
 	return 1;
 }
 

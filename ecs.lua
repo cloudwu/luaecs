@@ -366,6 +366,13 @@ function M:remove_reference(ref)
 	ref[1] = nil
 end
 
+function M:make_index(name, size)
+	local t = assert(context[self].typenames[name])
+	local id = t.id
+	local type = t[1][1]
+	return self:_make_index(id, type, size or 1024)
+end
+
 do
 	local _object = M._object
 	function M:object(name, refid, v)

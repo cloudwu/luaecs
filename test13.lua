@@ -24,6 +24,8 @@ w:new {
 	value = 100,
 }
 
+local v = w:sync("value:in", index[2])
+assert(v.value == 100)
 local v = w:sync("value:in", index[1])
 assert(v.value == 42)
 w:remove(v)

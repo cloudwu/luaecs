@@ -1768,6 +1768,10 @@ static unsigned int
 find_key_from(struct index_cache *c, int64_t key_, int n) {
 	int i;
 	void *buffer_ = c->world->c[c->id].buffer;
+	int len = c->world->c[c->id].n;
+	if (n >= len) {
+		n = len - 1;
+	}
 	switch (c->type) {
 	case TYPE_INT: {
 		int *buffer = (int *)buffer_;

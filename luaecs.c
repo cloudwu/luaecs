@@ -1614,114 +1614,6 @@ lobject(lua_State *L) {
 }
 
 static int
-find_boundary(int from, int to, unsigned int *a, unsigned int eid) {
-	while(from < to) {
-		int mid = (from + to)/2;
-		unsigned int aa = a[mid];
-		if (aa == eid)
-			return mid;
-		else if (aa < eid) {
-			from = mid + 1;
-		} else {
-			to = mid;
-		}
-	}
-	return to;
-}
-
-static inline int
-next_removed_index(int removed_index, struct component_pool *removed, unsigned int *removed_eid) {
-	for (;;) {
-		++removed_index;
-		if (removed_index >= removed->n) {
-			*removed_eid = 0;
-			break;
-		}
-		unsigned int last_eid = *removed_eid;
-		*removed_eid = removed->id[removed_index];
-		if (*removed_eid != last_eid)
-			break;
-	}
-	return removed_index;
-}
-
-// remove reference object where id == 0
-static void
-remove_unused_reference(lua_State *L, struct component_pool *c, int from) {
-	int i;
-	int to = from;
-	for (i=from; i < c->n; i++) {
-		if (c->id[i]) {
-			c->id[to] = c->id[i];
-			lua_geti(L, -1, i+1);
-			lua_seti(L, -2, to+1);
-			++to;
-		}
-	}
-	for (i=to;i<=c->n;i++) {
-		lua_pushnil(L);
-		lua_seti(L, -2, i+1);
-	}
-	c->n = to;
-}
-
-static int
-lupdate_reference(lua_State *L) {
-	struct entity_world *w = getW(L);
-	struct component_pool *removed = &w->c[ENTITY_REMOVED];
-	if (removed->n == 0)	// no removed entity
-		return 0;
-	int cid = check_cid(L, w, 2);
-	struct component_pool *reference = &w->c[cid];
-	if (reference->n == 0)
-		return 0;	// no reference
-	if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
-		return luaL_error(L, "Invalid reference component %d", cid);
-	}
-	int i;
-	int removed_index = 0;
-	unsigned int removed_eid = removed->id[removed_index];
-	int index = find_boundary(0, reference->n, reference->id, removed_eid);
-	int reference_index = index + 1;
-	int removed_reference = 0;
-	for (i=index; i< reference->n; i++) {
-		int rtype = lua_geti(L, -1, i+1);
-		if (rtype != LUA_TBOOLEAN && rtype != LUA_TTABLE) {
-			// false means removed reference
-			return luaL_error(L, "Invalid reference object");
-		}
-		while (removed_eid != 0 && removed_eid < reference->id[i]) {
-			removed_index = next_removed_index(removed_index, removed, &removed_eid);
-		}
-		if (removed_eid == reference->id[i]) {
-			// removed reference, clear reference id
-			lua_pushnil(L);
-			removed_index = next_removed_index(removed_index, removed, &removed_eid);
-		} else {
-			// update reference id
-			lua_pushinteger(L, reference_index);
-			++reference_index;
-		}
-		if (rtype == LUA_TBOOLEAN) {
-			// set id = 0, so remove_unused_reference() can remove them
-			--reference_index;
-			reference->id[i] = 0;
-			if (removed_reference == 0) {
-				removed_reference = i + 1;
-			}
-			lua_pop(L, 2);
-		} else {
-			lua_seti(L, -2, 1);
-			lua_pop(L, 1);
-		}
-	}
-	if (removed_reference) {
-		remove_unused_reference(L, reference, removed_reference - 1);
-	}
-	return 0;
-}
-
-static int
 ldumpid(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int cid = check_cid(L, w, 2);
@@ -1908,7 +1800,7 @@ lmethods(lua_State *L) {
 		{ "_newtype",lnew_type },
 		{ "_newentity", lnew_entity },
 		{ "_addcomponent", ladd_component },
-		{ "_update", lupdate },
+		{ "update", lupdate },
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
@@ -1916,7 +1808,6 @@ lmethods(lua_State *L) {
 		{ "_object", lobject },
 		{ "_sync", lsync },
 		{ "_read", lread },
-		{ "_update_reference", lupdate_reference },
 		{ "_dumpid", ldumpid },
 		{ "_make_index", NULL },
 		{ NULL, NULL },

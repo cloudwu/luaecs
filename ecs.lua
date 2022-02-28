@@ -1,7 +1,5 @@
 local ecs = require "ecs.core"
 
-local REFERENCE_ID <const> = 1
-
 local rawerror = error
 local selfsource <const> = debug.getinfo(1, "S").source
 local function error(errmsg)
@@ -286,10 +284,6 @@ function M:new(obj)
 --	dump(obj)
 	local eid = self:_newentity()
 	local typenames = context[self].typenames
-	local reference = obj.reference
-	if reference then
-		obj.reference = nil
-	end
 	for k,v in pairs(obj) do
 		local tc = typenames[k]
 		if not tc then
@@ -299,14 +293,6 @@ function M:new(obj)
 		if tc.tag ~= "ORDER" then
 			self:object(k, id, v)
 		end
-	end
-	if reference then
-		local id = self:_addcomponent(eid, REFERENCE_ID)
-		reference[1] = id
-		reference[2] = REFERENCE_ID
-		self:object("reference", id, reference)
-		obj.reference = reference
-		return reference
 	end
 end
 
@@ -355,17 +341,6 @@ function M:dumpid(name)
 	return self:_dumpid(typenames[name].id)
 end
 
-function M:update()
-	self:_update_reference(REFERENCE_ID)
-	self:_update()
-end
-
-function M:remove_reference(ref)
-	ref.reference = false
-	self:sync("reference:out", ref)
-	ref[1] = nil
-end
-
 function M:make_index(name, size)
 	local t = assert(context[self].typenames[name])
 	local id = t.id
@@ -408,11 +383,6 @@ function ecs.world()
 		size = 0,
 		tag = true,
 	}
-	w:register {
-		name = "reference",
-		type = "lua",
-	}
-	assert(context[w].typenames.reference.id == REFERENCE_ID)
 	return w
 end
 

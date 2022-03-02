@@ -348,6 +348,16 @@ function M:make_index(name, size)
 	return self:_make_index(id, type, size or 1024)
 end
 
+function M:component_id(name)
+	local t = assert(context[self].typenames[name])
+	return t.id
+end
+
+function M:read_component(reader, name, offset, stride, n)
+	local t = assert(context[self].typenames[name])
+	return self:_readcomponent(reader, t.id, offset, stride, n)
+end
+
 do
 	local _object = M._object
 	function M:object(name, refid, v)

@@ -1822,7 +1822,10 @@ laccess_index(lua_State *L) {
 
 	unsigned int index = entity_sibling_index_(cache->world, mainkey, idx, k->id);
 	if (index == 0) {
-		return luaL_error(L, "No component .%s", k->name);
+		if (output)
+			return luaL_error(L, "No component .%s", k->name);
+		else
+			return 0;
 	}
 	if (c->stride == STRIDE_LUA) {
 		// It is lua component

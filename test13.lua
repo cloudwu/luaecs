@@ -43,6 +43,7 @@ assert(index(2, "value") == 100)
 index(2, "value", 101)
 assert(index(1, "object") == "Hello")
 index(1, "object", "Hello World")
+assert(index(1, "point") == nil)
 
 local v = w:sync("value:in", index[2])
 assert(v.value == 101)

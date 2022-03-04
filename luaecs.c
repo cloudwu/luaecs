@@ -960,9 +960,10 @@ remove_tag(lua_State *L, int lua_index, const char *name) {
 	return r;
 }
 
-static void
+static int
 update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx, int mainkey, int skip) {
 	struct field *f = iter->f;
+	int disable_mainkey = 0;
 
 	int i;
 	for (i=0;i<skip;i++) {
@@ -982,7 +983,10 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						if (lua_toboolean(L, -1)) {
 							entity_enable_tag_(iter->world, mainkey, idx, k->id, L, world_index);
 						} else {
-							entity_disable_tag_(iter->world, mainkey, idx, k->id);
+							if (k->id == mainkey)
+								disable_mainkey = 1;
+							else
+								entity_disable_tag_(iter->world, mainkey, idx, k->id);
 						}
 						if (!(k->attrib & COMPONENT_IN)) {
 							// reset tag
@@ -1038,6 +1042,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 		}
 		f += k->field_n;
 	}
+	return disable_mainkey;
 }
 
 static void
@@ -1219,7 +1224,9 @@ lsync(lua_State *L) {
 	}
 
 	if (!iter->readonly) {
-		update_iter(L, 1, 3, iter, idx, mainkey, 0);
+		if (update_iter(L, 1, 3, iter, idx, mainkey, 0)) {
+			entity_disable_tag_(iter->world, mainkey, idx, mainkey);
+		}
 	}
 	read_iter(L, 1, 3, iter, index);
 	return 0;

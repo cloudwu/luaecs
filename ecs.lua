@@ -60,7 +60,17 @@ local function cache_world(obj, k)
 		id = 0,
 		select = {},
 		ref = {},
+		index_meta = {},
 	}
+
+	do
+		local c_select = c.select
+		local access_index = ecs._access_index
+		c.index_meta.__index = ecs._cache_index
+		c.index_meta.__call = function (self, id, pat_string, ...)
+			return access_index(self, id, c_select[pat_string], ...)
+		end
+	end
 
 	local function gen_ref_pat(key)
 		local typenames = c.typenames
@@ -342,10 +352,11 @@ function M:dumpid(name)
 end
 
 function M:make_index(name, size)
-	local t = assert(context[self].typenames[name])
+	local c = context[self]
+	local t = assert(c.typenames[name])
 	local id = t.id
 	local type = t[1][1]
-	return self:_make_index(id, type, size or 1024)
+	return self:_make_index(id, type, size or 1024, c.index_meta)
 end
 
 function M:component_id(name)

@@ -1554,6 +1554,19 @@ lremove(lua_State *L) {
 	return 0;
 }
 
+static void
+read_object(lua_State *L, struct group_iter *iter, void *buffer) {
+	struct field *f = iter->f;
+	if (f->key == NULL) {
+		// value type
+		read_value(L, f, buffer);
+	} else {
+		lua_createtable(L, 0, iter->k[0].field_n);
+		int lua_index = lua_gettop(L);
+		read_component(L, iter->k[0].field_n, f, lua_index, buffer);
+	}
+}
+
 static int
 lobject(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
@@ -1594,22 +1607,13 @@ lobject(lua_State *L) {
 	} else if (c->stride < 0) {
 		return luaL_error(L, "Invalid object %d", cid);
 	}
-	struct field *f = iter->f;
 	void * buffer = get_ptr(c, index);
 	if (lua_isnoneornil(L, 2)) {
-		// read object
-		if (f->key == NULL) {
-			// value type
-			read_value(L, f, buffer);
-		} else {
-			lua_createtable(L, 0, iter->k[0].field_n);
-			int lua_index = lua_gettop(L);
-			read_component(L, iter->k[0].field_n, f, lua_index, buffer);
-		}
+		read_object(L, iter, buffer);
 	} else {
 		// write object
 		lua_pushvalue(L, 2);
-		write_component_object(L, iter->k[0].field_n, f, buffer);
+		write_component_object(L, iter->k[0].field_n, iter->f, buffer);
 	}
 	return 1;
 }
@@ -1653,8 +1657,8 @@ index_value(struct index_cache *c) {
 }
 
 #define INVALID_INDEX (~0)
-#define WORLD_INDEX 0
-#define OBJECT_INDEX 1
+#define WORLD_INDEX 1
+#define OBJECT_INDEX 2
 #define MAX_INDEX 2
 
 static unsigned int
@@ -1704,6 +1708,18 @@ check_key(struct index_cache *c, unsigned int index, int64_t key) {
 	return find_key_from(c, key, index);
 }
 
+static void
+make_iterator(lua_State *L, struct index_cache *c, int slot, unsigned int index) {
+	lua_createtable(L, 2, 0);
+	lua_pushinteger(L, index+1);
+	lua_rawseti(L, -2, 1);
+	lua_pushinteger(L, c->id);
+	lua_rawseti(L, -2, 2);
+	// stack : OBJECT_INDEX iterator
+	lua_pushvalue(L, -1);
+	lua_rawseti(L, -3, slot + 1);
+}
+
 static int
 lcache_index(lua_State *L) {
 	struct index_cache *c = (struct index_cache *)lua_touserdata(L, 1);
@@ -1715,7 +1731,8 @@ lcache_index(lua_State *L) {
 			// get iterator
 			lua_getiuservalue(L, 1, OBJECT_INDEX);
 			if (lua_rawgeti(L, -1, slot+1) != LUA_TTABLE) {
-				return luaL_error(L, "Invalid iterator");
+				lua_pop(L, 1);
+				make_iterator(L, c, slot, index);
 			}
 			unsigned int real_index = check_key(c, index, key);
 			if (real_index != index) {
@@ -1738,20 +1755,97 @@ lcache_index(lua_State *L) {
 	unsigned int index = find_key(c, key);
 	if (index != INVALID_INDEX) {
 		// UV(OBJECT_INDEX)[slot+1] = iterator { index+1, c->id }
-		lua_createtable(L, 2, 0);
-		lua_pushinteger(L, index+1);
-		lua_rawseti(L, -2, 1);
-		lua_pushinteger(L, c->id);
-		lua_rawseti(L, -2, 2);
 		lua_getiuservalue(L, 1, OBJECT_INDEX);
-		lua_pushvalue(L, -2);
-		lua_rawseti(L, -2, slot+1);
-		lua_pop(L, 1);
+		make_iterator(L, c, slot, index);
 		c->key[slot] = key;
 		index_value(c)[slot] = index;
 		return 1;
 	}
 	return 0;
+}
+
+static int
+laccess_index(lua_State *L) {
+	struct index_cache *cache = (struct index_cache *)lua_touserdata(L, 1);
+	lua_Integer key = luaL_checkinteger(L, 2);
+	struct group_iter *iter = lua_touserdata(L, 3);
+	int value_index = 4;
+	unsigned int slot = hash64(key) % cache->size;
+	unsigned int cached_index = INVALID_INDEX;
+	unsigned int idx;
+	if (cache->key[slot] == key) {
+		cached_index = index_value(cache)[slot];
+		idx = check_key(cache, cached_index, key);
+	} else {
+		idx = find_key(cache, key);
+	}
+	if (idx == INVALID_INDEX)
+		return luaL_error(L, "Invalid key %p", (void *)key);
+	if (idx != cached_index) {
+		cache->key[slot] = key;
+		index_value(cache)[slot] = idx;
+	}
+
+	if (iter->nkey > 1)
+		return luaL_error(L, "More than one key in pattern");
+	if (iter->world != cache->world)
+		return luaL_error(L, "World mismatch");
+
+	int output = (lua_gettop(L) >= value_index);
+	int mainkey = cache->id;
+	struct group_key *k = &iter->k[0];
+
+	struct component_pool *c = &cache->world->c[k->id];
+	if (c->stride == STRIDE_TAG) {
+		// It is a tag
+		if (output) {
+			if (lua_toboolean(L, value_index)) {
+				lua_settop(L, value_index);
+				lua_getiuservalue(L, 1, WORLD_INDEX);
+				int world_index = value_index + 1;
+				entity_enable_tag_(cache->world, mainkey, idx, k->id, L, world_index);
+			} else {
+				entity_disable_tag_(cache->world, mainkey, idx, k->id);
+			}
+		} else {
+			lua_pushboolean(L, entity_sibling_index_(cache->world, mainkey, idx, k->id) != 0);
+			return 1;
+		}
+	}
+
+	unsigned int index = entity_sibling_index_(cache->world, mainkey, idx, k->id);
+	if (index == 0) {
+		return luaL_error(L, "No component .%s", k->name);
+	}
+	if (c->stride == STRIDE_LUA) {
+		// It is lua component
+		lua_settop(L, value_index);
+		if (lua_getiuservalue(L, 1, WORLD_INDEX) != LUA_TUSERDATA) {
+			luaL_error(L, "Invalid index cache");
+		}
+		int world_index = value_index + 1;
+		if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+			luaL_error(L, "Missing lua table for .%s", k->name);
+		}
+		if (output) {
+			lua_pushvalue(L, value_index);
+			lua_rawseti(L, -2, index);
+			return 0;
+		} else {
+			lua_rawgeti(L, -1, index);
+			return 1;
+		}
+	}
+
+	// It is C component
+	void *buffer = get_ptr(c, index - 1);
+	if (output) {
+		write_component_object(L, k->field_n, iter->f, buffer);
+		return 0;
+	} else {
+		read_object(L, iter, buffer);
+		return 1;
+	}
 }
 
 static int
@@ -1762,6 +1856,7 @@ lmake_index(lua_State *L) {
 	int size = luaL_checkinteger(L, 4);
 	if (size < 1)
 		return luaL_error(L, "Invalid index size %d", size);
+	luaL_checktype(L, 5, LUA_TTABLE);
 	switch (type) {
 	case TYPE_INT:
 	case TYPE_DWORD:
@@ -1788,7 +1883,7 @@ lmake_index(lua_State *L) {
 	lua_setiuservalue(L, -2, WORLD_INDEX);
 	lua_createtable(L, size, 0);
 	lua_setiuservalue(L, -2, OBJECT_INDEX);
-	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_pushvalue(L, 5);
 	lua_setmetatable(L, -2);
 	return 1;
 }
@@ -1878,16 +1973,11 @@ lmethods(lua_State *L) {
 		{ "_sync", lsync },
 		{ "_read", lread },
 		{ "_dumpid", ldumpid },
-		{ "_make_index", NULL },
+		{ "_make_index", lmake_index },
 		{ "_readcomponent", lreadcomponent },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
-	lua_createtable(L, 0, 1);
-	lua_pushcfunction(L, lcache_index);
-	lua_setfield(L, -2, "__index");
-	lua_pushcclosure(L, lmake_index, 1);
-	lua_setfield(L, -2, "_make_index");
 
 	return 1;
 }
@@ -2073,6 +2163,8 @@ luaopen_ecs_core(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "_world", lnew_world },
 		{ "_methods", lmethods },
+		{ "_cache_index", lcache_index },
+		{ "_access_index", laccess_index },
 		{ "writer", lnew_writer },
 		{ "reader", lnew_reader },
 		{ NULL, NULL },

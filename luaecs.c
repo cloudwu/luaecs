@@ -1814,6 +1814,7 @@ laccess_index(lua_State *L) {
 			} else {
 				entity_disable_tag_(cache->world, mainkey, idx, k->id);
 			}
+			return 0;
 		} else {
 			lua_pushboolean(L, entity_sibling_index_(cache->world, mainkey, idx, k->id) != 0);
 			return 1;

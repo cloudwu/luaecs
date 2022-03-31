@@ -1789,6 +1789,14 @@ laccess_index(lua_State *L) {
 	if (idx == INVALID_INDEX)
 		return luaL_error(L, "Invalid key %p", (void *)key);
 	if (idx != cached_index) {
+		if (index_value(cache)[slot] != INVALID_INDEX) {
+			lua_getiuservalue(L, 1, OBJECT_INDEX);
+			if (lua_rawgeti(L, -1, slot+1) == LUA_TTABLE) {
+				lua_pushinteger(L, idx+1);
+				lua_rawseti(L, -2, 1);
+			}
+			lua_pop(L, 2);
+		}
 		cache->key[slot] = key;
 		index_value(cache)[slot] = idx;
 	}

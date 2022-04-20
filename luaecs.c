@@ -1672,15 +1672,19 @@ static unsigned int
 find_key_from(struct index_cache *c, int64_t key_, int n) {
 	int i;
 	void *buffer_ = c->world->c[c->id].buffer;
-	int len = c->world->c[c->id].n;
-	if (n >= len) {
-		n = len - 1;
+	int len = c->world->c[c->id].n - 1;
+	if (n > len) {
+		n = len;
 	}
 	switch (c->type) {
 	case TYPE_INT: {
 		int *buffer = (int *)buffer_;
 		int key = (int)key_;
 		for (i=n;i>=0;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
+		for (i=len;i>n;i--) {
 			if (buffer[i] == key)
 				return i;
 		}
@@ -1692,11 +1696,19 @@ find_key_from(struct index_cache *c, int64_t key_, int n) {
 			if (buffer[i] == key)
 				return i;
 		}
+		for (i=len;i>n;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
 		break; }
 	case TYPE_INT64: {
 		int64_t *buffer = (int64_t *)buffer_;
 		int64_t key = (int64_t)key_;
 		for (i=n;i>=0;i--) {
+			if (buffer[i] == key)
+				return i;
+		}
+		for (i=len;i>n;i--) {
 			if (buffer[i] == key)
 				return i;
 		}

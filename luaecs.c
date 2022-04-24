@@ -2131,15 +2131,29 @@ lclose_writer(lua_State *L) {
 	return 1;
 }
 
+static FILE *
+fileopen(lua_State *L, int idx, const char *mode) {
+	if (lua_type(L, idx) == LUA_TSTRING) {
+		const char * filename = lua_tostring(L, idx);
+		FILE *f = fopen(filename, mode);
+		if (f == NULL) {
+			luaL_error(L, "Can't open %s (%s)", filename, mode);
+		}
+		return f;
+	}
+	int fd = luaL_checkinteger(L, idx);
+	FILE *f = fdopen(fd, mode);
+	if (f == NULL)
+		luaL_error(L, "Can't open %d (%s)", fd, mode);
+	return f;
+}
+
 static int
 lnew_writer(lua_State *L) {
-	const char * filename = luaL_checkstring(L, 1);
 	struct file_writer *w = (struct file_writer *)lua_newuserdatauv(L, sizeof(*w), 0);
 	w->f = NULL;
 	w->n = 0;
-	w->f = fopen(filename, "wb");
-	if (w->f == NULL)
-		return luaL_error(L, "Can't open %s", filename);
+	w->f = fileopen(L, 1, "wb");
 	if (luaL_newmetatable(L, "LUAECS_WRITER")) {
 		luaL_Reg l[] = {
 			{ "write", lwrite_section },
@@ -2168,11 +2182,8 @@ lclose_reader(lua_State *L) {
 
 static int
 lnew_reader(lua_State *L) {
-	const char * filename = luaL_checkstring(L, 1);
 	struct file_reader *r = (struct file_reader *)lua_newuserdatauv(L, sizeof(*r), 0);
-	r->f = fopen(filename, "rb");
-	if (r->f == NULL)
-		return luaL_error(L, "Can't open %s", filename);
+	r->f = fileopen(L, 1, "rb");
 	if (luaL_newmetatable(L, "LUAECS_READER")) {
 		luaL_Reg l[] = {
 			{ "close", lclose_reader },

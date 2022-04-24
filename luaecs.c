@@ -1923,7 +1923,7 @@ struct file_reader {
 	FILE *f;
 };
 
-static void
+static unsigned int
 read_id(lua_State *L, FILE *f, unsigned int *id, int n, int inc) {
 	size_t r = fread(id, sizeof(unsigned int), n, f);
 	if (r != n)
@@ -1934,6 +1934,7 @@ read_id(lua_State *L, FILE *f, unsigned int *id, int n, int inc) {
 		id[i] += last_id + inc;
 		last_id = id[i];
 	}
+	return last_id;
 }
 
 static void
@@ -1943,19 +1944,21 @@ read_data(lua_State *L, FILE *f, void *buffer, int stride, int n) {
 		luaL_error(L, "Read data error");
 }
 
-static void
+static unsigned int
 read_section(lua_State *L, struct file_reader *reader, struct component_pool *c, size_t offset, int stride, int n) {
 	if (reader->f == NULL)
 		luaL_error(L, "Invalid reader");
 	if (fseek(reader->f, offset, SEEK_SET) != 0) {
 		luaL_error(L, "Reader seek error");
 	}
+	unsigned int maxid;
 	if (stride > 0) {
-		read_id(L, reader->f, c->id, n, 1);
+		maxid = read_id(L, reader->f, c->id, n, 1);
 		read_data(L, reader->f, c->buffer, stride, n);
 	} else {
-		read_id(L, reader->f, c->id, n, 0);
+		maxid = read_id(L, reader->f, c->id, n, 0);
 	}
+	return maxid;
 }
 
 static int
@@ -1981,10 +1984,19 @@ lreadcomponent(lua_State *L) {
 		c->buffer = (unsigned int *)lua_newuserdatauv(L, c->cap * stride, 0);
 		lua_setiuservalue(L, 1, cid * 2 + 2);
 	}
-	read_section(L, reader, c, offset, stride, n);
+	unsigned int maxid = read_section(L, reader, c, offset, stride, n);
+	if (maxid > w->max_id)
+		w->max_id = maxid;
 	c->n = n;
 	lua_pushinteger(L, n);
 	return 1;
+}
+
+static int
+lresetmaxid(lua_State *L) {
+	struct entity_world *w = getW(L);
+	w->max_id = 0;
+	return 0;
 }
 
 static int
@@ -2006,6 +2018,7 @@ lmethods(lua_State *L) {
 		{ "_dumpid", ldumpid },
 		{ "_make_index", lmake_index },
 		{ "_readcomponent", lreadcomponent },
+		{ "_resetmaxid", lresetmaxid },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

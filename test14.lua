@@ -40,12 +40,18 @@ print_section(meta[1])
 print_section(meta[2])
 
 
-local w = new_world()
+w:clearall()
 local reader = ecs.reader "temp.bin"
 w:read_component(reader, "value", meta[1].offset, meta[1].stride, meta[1].n)
 w:read_component(reader, "tag", meta[2].offset, meta[2].stride, meta[2].n)
 reader:close()
 
+w:new {
+  value = 3,
+  tag = true,
+}
+
 for v in w:select "value:in tag" do
 	print(v.value)
 end
+

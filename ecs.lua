@@ -344,6 +344,7 @@ function M:clearall()
 	for _, tc in pairs(context[self].typenames) do
 		self:_clear(assert(tc.id))
 	end
+	self:_resetmaxid()
 end
 
 function M:dumpid(name)

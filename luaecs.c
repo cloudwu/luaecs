@@ -1762,6 +1762,10 @@ lcache_index(lua_State *L) {
 					lua_rawseti(L, -2, 1);
 					lua_pushnil(L);
 					lua_rawseti(L, -2, 2);
+
+					// remove iterator in OBJECT_INDEX
+					lua_pushnil(L);
+					lua_rawseti(L, -3, slot + 1);
 					return 0;
 				}
 				// fix iterator

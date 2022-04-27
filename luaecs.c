@@ -1761,7 +1761,7 @@ lcache_index(lua_State *L) {
 					lua_pushnil(L);
 					lua_rawseti(L, -2, 1);
 					lua_pushnil(L);
-					lua_rawseti(L, -2, slot+1);
+					lua_rawseti(L, -2, 2);
 					return 0;
 				}
 				// fix iterator

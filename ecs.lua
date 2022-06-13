@@ -397,6 +397,46 @@ do
 	end
 end
 
+function M:group_init(groupname)
+	self:register {
+		name = groupname,
+		type = "int",
+	}
+	local gsname = groupname .. "_"
+	self:register {
+		name = gsname,
+		"uid:int64",
+		"lastid:int64",
+		"group:int",
+		"next:int",
+	}
+	local ctx = context[self]
+	ctx.group_id = ctx.typenames[groupname].id
+	ctx.group_struct = ctx.typenames[gsname].id
+	ctx.uid = 0
+	ctx.group = {}
+end
+
+-- debug use
+function M:group_fetch(groupid)
+	local ctx = context[self]
+	return self:_group_fetch(ctx.group, ctx.group_struct, groupid)
+end
+
+function M:group_update()
+	local ctx = context[self]
+	local uid_n = ctx.uid
+	local n = self:_group_update(ctx.group, ctx.group_id, ctx.group_struct, uid_n)
+	ctx.uid = uid_n + n
+	self:_clear(ctx.group_id)
+end
+
+function M:group_enable(tagname, ...)
+	local ctx = context[self]
+	local tagid = ctx.typenames[tagname].id
+	self:_group_enable(ctx.group, ctx.group_struct,tagid,...)
+end
+
 function ecs.world()
 	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {

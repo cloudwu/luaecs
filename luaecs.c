@@ -2064,7 +2064,7 @@ lgroup_update(lua_State *L) {
 
 	struct component_pool *c = &w->c[gid];
 	if (c->n == 0) {
-		lua_pushinteger(L, 0);
+		lua_settop(L, 5);	// returns uid
 		return 1;	// no new group id
 	}
 	if (c->stride != sizeof(uint32_t)) {
@@ -2100,7 +2100,10 @@ lgroup_update(lua_State *L) {
 		write_group(L, 2, group[i], n);
 	}
 
-	lua_pushinteger(L, c->n);
+	// clear groupid component
+	c->n = 0;
+
+	lua_pushinteger(L, uid + c->n);
 
 	return 1;
 }

@@ -425,10 +425,7 @@ end
 
 function M:group_update()
 	local ctx = context[self]
-	local uid_n = ctx.uid
-	local n = self:_group_update(ctx.group, ctx.group_id, ctx.group_struct, uid_n)
-	ctx.uid = uid_n + n
-	self:_clear(ctx.group_id)
+	ctx.uid = self:_group_update(ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)
 end
 
 function M:group_enable(tagname, ...)

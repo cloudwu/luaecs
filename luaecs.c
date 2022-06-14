@@ -2063,8 +2063,10 @@ lgroup_update(lua_State *L) {
 	int gid = check_cid(L, w, 3);
 
 	struct component_pool *c = &w->c[gid];
-	if (c->n == 0)
-		return 0;	// no new group id
+	if (c->n == 0) {
+		lua_pushinteger(L, 0);
+		return 1;	// no new group id
+	}
 	if (c->stride != sizeof(uint32_t)) {
 		return luaL_error(L, "Invalid group id componet");
 	}

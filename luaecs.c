@@ -2231,8 +2231,10 @@ lgroup_enable(lua_State *L) {
 	for (i=0;i<groupn;i++) {
 		int groupid = luaL_checkinteger(L, groupid_index + i);
 		int index = read_group(L, g, 2, groupid);
-		group_enable_insert(array, n, groupid, index);
-		++n;
+		if (index >= 0) {
+			group_enable_insert(array, n, groupid, index);
+			++n;
+		}
 	}
 	int tagid = check_cid(L, w, 4);
 	struct component_pool *tag = &w->c[tagid];

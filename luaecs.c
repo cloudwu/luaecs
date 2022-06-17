@@ -189,13 +189,17 @@ add_component_(lua_State *L, int world_index, struct entity_world *w, int cid, u
 	return ret;
 }
 
+static inline void
+check_cid_valid(lua_State *L, struct entity_world *w, int cid) {
+	if (cid < 0 || cid >=MAX_COMPONENT || w->c[cid].cap == 0) {
+		luaL_error(L, "Invalid type %d", cid);
+	}
+}
+
 static inline int
 check_cid(lua_State *L, struct entity_world *w, int index) {
 	int cid = luaL_checkinteger(L, index);
-	struct component_pool *c = &w->c[cid];
-	if (cid < 0 || 	cid >=MAX_COMPONENT || c->cap == 0) {
-		luaL_error(L, "Invalid type %d", cid);
-	}
+	check_cid_valid(L, w, cid);
 	return cid;
 }
 
@@ -1625,6 +1629,81 @@ lobject(lua_State *L) {
 	return 1;
 }
 
+#define SMALL_OBJECT 64
+
+static int
+lserialize_object(lua_State *L) {
+	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
+	int cid = iter->k[0].id;
+	struct entity_world * w = iter->world;
+	if (cid < 0 || cid >=MAX_COMPONENT) {
+		return luaL_error(L, "Invalid object %d", cid);
+	}
+	lua_settop(L, 2);
+	struct component_pool *c = &w->c[cid];
+	if (c->stride <= 0) {
+		if (c->stride == STRIDE_LUA)
+			return luaL_error(L, "Can't serialize lua object");
+		return luaL_error(L, "Can't serialize tag");
+	}
+	lua_pushvalue(L, 2);
+	if (c->stride <= SMALL_OBJECT) {
+		char buffer[SMALL_OBJECT];
+		write_component_object(L, iter->k[0].field_n, iter->f, (void *)buffer);
+		lua_pushlstring(L, buffer, c->stride);
+	} else {
+		void *buffer = lua_newuserdatauv(L, c->stride, 0);
+		write_component_object(L, iter->k[0].field_n, iter->f, buffer);
+	}
+	return 1;
+}
+
+static int
+ltemplate_create(lua_State *L) {
+	struct entity_world *w = getW(L);
+	union {
+		int id;
+		char buf[sizeof(int)];
+	} cid;
+	luaL_checktype(L, 2, LUA_TTABLE);
+	int i = 1;
+	luaL_Buffer b;
+	luaL_buffinit(L, &b);
+	for (;;) {
+		if (lua_geti(L, 2, i++) == LUA_TNIL) {
+			lua_pop(L, 1);
+			break;
+		}
+		cid.id = luaL_checkinteger(L, -1);
+		check_cid_valid(L, w, cid.id);
+		luaL_addlstring(&b, cid.buf, sizeof(cid));
+		int t = lua_geti(L, 2, i++);
+		if (w->c[cid.id].stride == STRIDE_LUA) {
+			size_t sz;
+			lua_tolstring(L, -1, &sz);
+			if (sz > 0x7fffffff)
+				return luaL_error(L, "Too big lua object");
+			cid.id = (int)sz;
+			luaL_addlstring(&b, cid.buf, sizeof(cid));
+		}
+		switch (t) {
+		case LUA_TSTRING:
+			luaL_addvalue(&b);
+			break;
+		case LUA_TUSERDATA: {
+			size_t sz = lua_rawlen(L, -1);
+			void * buf = lua_touserdata(L, -1);
+			luaL_addlstring(&b, (const char *)buf, sz);
+			lua_pop(L, 1);
+			break; }
+		default:
+			return luaL_error(L, "Invalid valid with cid = %d", cid.id);
+		}
+	}
+	luaL_pushresult(&b);
+	return 1;
+}
+
 static int
 ldumpid(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -2265,6 +2344,77 @@ lgroup_enable(lua_State *L) {
 	return 0;
 }
 
+static size_t
+add_component_from_template(lua_State *L, struct entity_world *w, unsigned int eid, const char *buffer, size_t sz, int deserifunc_index) {
+	union {
+		int id;
+		char buf[sizeof(int)];
+	} cid;
+	if (sz < sizeof(cid))
+		return luaL_error(L, "Invalid template");
+	memcpy(cid.buf, buffer, sizeof(cid));
+	sz += sizeof(cid);
+	buffer += sizeof(cid);
+	check_cid_valid(L, w, cid.id);
+	struct component_pool *c = &w->c[cid.id];
+	int index = add_component_id_(L, 1, w, cid.id, eid);
+	if (c->stride <= 0) {
+		if (c->stride == STRIDE_LUA) {
+			int id = cid.id;
+			// deseri
+			if (sz < sizeof(cid)) {
+				return luaL_error(L, "Invalid template");
+			}
+			memcpy(cid.buf, buffer, sizeof(cid));
+			sz += sizeof(cid);
+			buffer += sizeof(cid);
+			if (cid.id < 0 || cid.id > sz) {
+				return luaL_error(L, "Invalid template");
+			}
+			// set lua object
+
+			if (lua_getiuservalue(L, 1, id * 2 + 2) != LUA_TTABLE) {
+				return luaL_error(L, "Missing lua table for %d", id);
+			}
+			lua_pushvalue(L, deserifunc_index);
+			lua_pushlstring(L, buffer, cid.id);
+			lua_call(L, 1, 1);
+
+			lua_rawseti(L, -2, index + 1);
+			lua_pop(L, 1);
+			return sizeof(cid) + sizeof(cid) + cid.id;
+		} else {
+			entity_enable_tag_(w, cid.id , index, cid.id, L, 1);
+			return sizeof(cid);
+		}
+	} else {
+		if (c->stride > sz) {
+			return luaL_error(L, "Invalid template");
+		}
+		void *cbuffer = get_ptr(c, index);
+		memcpy(cbuffer, buffer, c->stride);
+		return c->stride + sizeof(cid);
+	}
+}
+
+static int
+ltemplate_instance(lua_State *L) {
+	struct entity_world *w = getW(L);
+	size_t sz;
+	const char *buffer = luaL_checklstring(L, 2, &sz);
+	luaL_checktype(L, 3, LUA_TFUNCTION);
+	unsigned int eid = ++w->max_id;
+	assert(eid != 0);
+
+	while (sz > 0) {
+		size_t s = add_component_from_template(L, w, eid, buffer, sz, 3);
+		sz -= s;
+		buffer += s;
+	}
+	lua_pushinteger(L, eid);
+	return 1;
+}
+
 static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
@@ -2288,6 +2438,9 @@ lmethods(lua_State *L) {
 		{ "_group_update", lgroup_update },
 		{ "_group_fetch", lgroup_fetch },
 		{ "_group_enable", lgroup_enable },
+		{ "_serialize", lserialize_object },
+		{ "_template_create", ltemplate_create },
+		{ "_template_instance", ltemplate_instance },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

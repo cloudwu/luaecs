@@ -290,9 +290,7 @@ local function dump(obj)
 	end
 end
 
-function M:new(obj)
---	dump(obj)
-	local eid = self:_newentity()
+local function _new_entity(self, eid, obj)
 	local typenames = context[self].typenames
 	for k,v in pairs(obj) do
 		local tc = typenames[k]
@@ -303,6 +301,19 @@ function M:new(obj)
 		if tc.tag ~= "ORDER" then
 			self:object(k, id, v)
 		end
+	end
+end
+
+function M:new(obj)
+--	dump(obj)
+	local eid = self:_newentity()
+	_new_entity(self, eid, obj)
+end
+
+function M:template_instance(temp, dfunc, obj)
+	local eid = self:_template_instance(temp, dfunc)
+	if obj then
+		_new_entity(self, eid, obj)
 	end
 end
 
@@ -394,6 +405,33 @@ do
 			self:_sync(p, iter)
 		end
 		return iter
+	end
+end
+
+do
+	local _serialize = M._serialize
+
+	function M:template(obj, serifunc)
+		local buf = {}
+		local i = 1
+		local typenames = context[self].typenames
+		for k,v in pairs(obj) do
+			local tc = typenames[k]
+			if not tc then
+				error ("Invalid key : ".. k)
+			end
+			buf[i] = tc.id
+			if tc.size == ecs._LUAOBJECT then
+				buf[i+1] = serifunc(v)
+			elseif tc.tag and v then
+				buf[i+1] = ""
+			else
+				local pat = context[self].ref[k]
+				buf[i+1] = _serialize(pat, v)
+			end
+			i = i + 2
+		end
+		return self:_template_create(buf)
 	end
 end
 

@@ -1702,13 +1702,7 @@ ltemplate_create(lua_State *L) {
 		}
 		int cid = check_cid(L, w, -1);
 		varint_encode(&b, cid);
-		int t = lua_geti(L, 2, i++);
-		if (w->c[cid].stride == STRIDE_LUA) {
-			size_t sz;
-			lua_tolstring(L, -1, &sz);
-			varint_encode(&b, sz);
-		}
-		switch (t) {
+		switch (lua_geti(L, 2, i++)) {
 		case LUA_TSTRING:
 			luaL_addvalue(&b);
 			break;
@@ -2377,22 +2371,35 @@ add_component_from_template(lua_State *L, struct entity_world *w, unsigned int e
 	int index = add_component_id_(L, 1, w, cid, eid);
 	if (c->stride <= 0) {
 		if (c->stride == STRIDE_LUA) {
-			// deseri
-			size_t slen;
-			size_t r2 = varint_decode(L, (uint8_t*)buffer, sz, &slen);
-			sz -= r2;
-			buffer += r2;
-			if (slen > sz) {
-				return luaL_error(L, "Invalid template");
-			}
-			// set lua object
-
+			// deseri lua object
 			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
 				return luaL_error(L, "Missing lua table for %d", cid);
 			}
 			lua_pushvalue(L, deserifunc_index);
-			lua_pushlstring(L, buffer, slen);
-			lua_call(L, 1, 1);
+
+			size_t slen;
+			size_t r2 = varint_decode(L, (uint8_t*)buffer, sz, &slen);
+			if (slen == 0 && r2 == 2) {		// magic number 0x80 0x00
+				// deseri by string
+				r2 += varint_decode(L, (uint8_t*)buffer+2, sz-2, &slen);
+				sz -= r2;
+				buffer += r2;
+				if (slen > sz) {
+					return luaL_error(L, "Invalid template");
+				}
+				lua_pushlstring(L, buffer, slen);
+				lua_call(L, 1, 1);
+			} else {
+				// deseri by userdata
+				sz -= r2;
+				buffer += r2;
+				if (slen > sz) {
+					return luaL_error(L, "Invalid template");
+				}
+				lua_pushlightuserdata(L, (void *)buffer);
+				lua_pushinteger(L, slen);
+				lua_call(L, 2, 1);
+			}
 
 			lua_rawseti(L, -2, index + 1);
 			lua_pop(L, 1);
@@ -2430,6 +2437,31 @@ ltemplate_instance(lua_State *L) {
 }
 
 static int
+lserialize_lua(lua_State *L) {
+	luaL_Buffer b;
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		size_t sz;
+		const char *s = lua_tolstring(L, 1, &sz);
+		luaL_buffinitsize(L, &b, sz + 8);
+		luaL_addchar(&b, 0x80);
+		luaL_addchar(&b, 0);	// 0x80 0x00 : magic number, it's string
+		varint_encode(&b, sz);
+		luaL_addlstring(&b, s, sz);
+	} else {
+		// Support seri function in ltask : https://github.com/cloudwu/ltask/blob/master/src/lua-seri.c
+		luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+		const char * buf = (const char *)lua_touserdata(L, 1);
+		size_t sz = luaL_checkinteger(L, 2);
+		luaL_buffinitsize(L, &b, sz + 8);
+		varint_encode(&b, sz);
+		luaL_addlstring(&b, buf, sz);
+		free((void *)buf);	// lightuserdata, free
+	}
+	luaL_pushresult(&b);
+	return 1;
+}
+
+static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
@@ -2453,6 +2485,7 @@ lmethods(lua_State *L) {
 		{ "_group_fetch", lgroup_fetch },
 		{ "_group_enable", lgroup_enable },
 		{ "_serialize", lserialize_object },
+		{ "_serialize_lua", lserialize_lua },
 		{ "_template_create", ltemplate_create },
 		{ "_template_instance", ltemplate_instance },
 		{ NULL, NULL },

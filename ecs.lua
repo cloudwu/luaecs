@@ -410,6 +410,7 @@ end
 
 do
 	local _serialize = M._serialize
+	local _serialize_lua = M._serialize_lua
 
 	function M:template(obj, serifunc)
 		local buf = {}
@@ -422,7 +423,7 @@ do
 			end
 			buf[i] = tc.id
 			if tc.size == ecs._LUAOBJECT then
-				buf[i+1] = serifunc(v)
+				buf[i+1] = _serialize_lua(serifunc(v))
 			elseif tc.tag and v then
 				buf[i+1] = ""
 			else

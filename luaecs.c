@@ -1658,13 +1658,39 @@ lserialize_object(lua_State *L) {
 	return 1;
 }
 
+// varint :
+//	[0,0x7f]  one byte
+//	[0x80, 0x3fff] two bytes : v >> 7,  0x80 | (v & 0x7f)
+//	[0x4000, 0x1fffff] three bytes
+static inline void
+varint_encode(luaL_Buffer *b, size_t v) {
+	while (v > 0x7f) {
+		luaL_addchar(b, (char)((v & 0x7f) | 0x80));
+		v >>= 7;
+	}
+	luaL_addchar(b, (char)v);
+}
+
+static size_t
+varint_decode(lua_State *L, uint8_t *buffer, size_t sz, size_t *r) {
+	*r = 0;
+	int shift = 0;
+	size_t rsize = 0;
+	while (sz > rsize) {
+		int s = buffer[rsize] & 0x7f;
+		*r |= (size_t)s << shift;
+		if (s == buffer[rsize]) {
+			return rsize+1;
+		}
+		++rsize;
+		shift += 7; 
+	}
+	return luaL_error(L, "Invalid varint");
+} 
+
 static int
 ltemplate_create(lua_State *L) {
 	struct entity_world *w = getW(L);
-	union {
-		int id;
-		char buf[sizeof(int)];
-	} cid;
 	luaL_checktype(L, 2, LUA_TTABLE);
 	int i = 1;
 	luaL_Buffer b;
@@ -1674,17 +1700,13 @@ ltemplate_create(lua_State *L) {
 			lua_pop(L, 1);
 			break;
 		}
-		cid.id = luaL_checkinteger(L, -1);
-		check_cid_valid(L, w, cid.id);
-		luaL_addlstring(&b, cid.buf, sizeof(cid));
+		int cid = check_cid(L, w, -1);
+		varint_encode(&b, cid);
 		int t = lua_geti(L, 2, i++);
-		if (w->c[cid.id].stride == STRIDE_LUA) {
+		if (w->c[cid].stride == STRIDE_LUA) {
 			size_t sz;
 			lua_tolstring(L, -1, &sz);
-			if (sz > 0x7fffffff)
-				return luaL_error(L, "Too big lua object");
-			cid.id = (int)sz;
-			luaL_addlstring(&b, cid.buf, sizeof(cid));
+			varint_encode(&b, sz);
 		}
 		switch (t) {
 		case LUA_TSTRING:
@@ -1697,7 +1719,7 @@ ltemplate_create(lua_State *L) {
 			lua_pop(L, 1);
 			break; }
 		default:
-			return luaL_error(L, "Invalid valid with cid = %d", cid.id);
+			return luaL_error(L, "Invalid valid with cid = %d", (int)cid);
 		}
 	}
 	luaL_pushresult(&b);
@@ -2346,46 +2368,38 @@ lgroup_enable(lua_State *L) {
 
 static size_t
 add_component_from_template(lua_State *L, struct entity_world *w, unsigned int eid, const char *buffer, size_t sz, int deserifunc_index) {
-	union {
-		int id;
-		char buf[sizeof(int)];
-	} cid;
-	if (sz < sizeof(cid))
-		return luaL_error(L, "Invalid template");
-	memcpy(cid.buf, buffer, sizeof(cid));
-	sz += sizeof(cid);
-	buffer += sizeof(cid);
-	check_cid_valid(L, w, cid.id);
-	struct component_pool *c = &w->c[cid.id];
-	int index = add_component_id_(L, 1, w, cid.id, eid);
+	size_t cid;
+	size_t r = varint_decode(L, (uint8_t*)buffer, sz, &cid);
+	sz -= r;
+	buffer += r;
+	check_cid_valid(L, w, cid);
+	struct component_pool *c = &w->c[cid];
+	int index = add_component_id_(L, 1, w, cid, eid);
 	if (c->stride <= 0) {
 		if (c->stride == STRIDE_LUA) {
-			int id = cid.id;
 			// deseri
-			if (sz < sizeof(cid)) {
-				return luaL_error(L, "Invalid template");
-			}
-			memcpy(cid.buf, buffer, sizeof(cid));
-			sz += sizeof(cid);
-			buffer += sizeof(cid);
-			if (cid.id < 0 || cid.id > sz) {
+			size_t slen;
+			size_t r2 = varint_decode(L, (uint8_t*)buffer, sz, &slen);
+			sz -= r2;
+			buffer += r2;
+			if (slen > sz) {
 				return luaL_error(L, "Invalid template");
 			}
 			// set lua object
 
-			if (lua_getiuservalue(L, 1, id * 2 + 2) != LUA_TTABLE) {
-				return luaL_error(L, "Missing lua table for %d", id);
+			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+				return luaL_error(L, "Missing lua table for %d", cid);
 			}
 			lua_pushvalue(L, deserifunc_index);
-			lua_pushlstring(L, buffer, cid.id);
+			lua_pushlstring(L, buffer, slen);
 			lua_call(L, 1, 1);
 
 			lua_rawseti(L, -2, index + 1);
 			lua_pop(L, 1);
-			return sizeof(cid) + sizeof(cid) + cid.id;
+			return r + r2 + slen;
 		} else {
-			entity_enable_tag_(w, cid.id , index, cid.id, L, 1);
-			return sizeof(cid);
+			entity_enable_tag_(w, cid , index, cid, L, 1);
+			return r;
 		}
 	} else {
 		if (c->stride > sz) {
@@ -2393,7 +2407,7 @@ add_component_from_template(lua_State *L, struct entity_world *w, unsigned int e
 		}
 		void *cbuffer = get_ptr(c, index);
 		memcpy(cbuffer, buffer, c->stride);
-		return c->stride + sizeof(cid);
+		return c->stride + r;
 	}
 }
 

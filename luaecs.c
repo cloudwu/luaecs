@@ -1701,6 +1701,8 @@ ltemplate_create(lua_State *L) {
 			break;
 		}
 		int cid = check_cid(L, w, -1);
+		lua_pop(L, 1);
+
 		varint_encode(&b, cid);
 		switch (lua_geti(L, 2, i++)) {
 		case LUA_TSTRING:

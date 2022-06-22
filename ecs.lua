@@ -334,6 +334,13 @@ function M:select(pat)
 	return context[self].select[pat]()
 end
 
+do
+	local _count = M._count
+	function M:count(pat)
+		return _count(context[self].select[pat])
+	end
+end
+
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
 	self:_sync(p, iter)

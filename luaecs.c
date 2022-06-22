@@ -1319,6 +1319,24 @@ leach_group(lua_State *L) {
 	return 1;
 }
 
+static int
+lcount(lua_State *L) {
+	struct group_iter *iter = lua_touserdata(L, 1);
+	unsigned int index[MAX_COMPONENT];
+	int mainkey = iter->k[0].id;
+	int count = 0;
+	int i;
+	for (i=0;;++i) {
+		int ret = query_index(iter, 1, mainkey, i, index);
+		if (ret < 0)
+			break;
+		if (ret > 0)
+			++count;
+	}
+	lua_pushinteger(L, count);
+	return 1;
+}
+
 static void
 create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 	if (k->field_n == 0 // is tag or object?
@@ -2490,6 +2508,7 @@ lmethods(lua_State *L) {
 		{ "_serialize_lua", lserialize_lua },
 		{ "_template_create", ltemplate_create },
 		{ "_template_instance", ltemplate_instance },
+		{ "_count", lcount },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

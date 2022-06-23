@@ -2255,6 +2255,8 @@ lgroup_update(lua_State *L) {
 
 static inline int
 next_groupid(struct group *group, int index) {
+	if (group[index].next == 0)
+		return -1;
 	int nextindex = index - group[index].next;
 	if (nextindex < 0)
 		nextindex = 0;
@@ -2306,6 +2308,8 @@ next_groupid(struct group *group, int index) {
 		group[index].lastid = group[possible_index].uid;
 		group[index].next = index - possible_index;
 		return possible_index;
+	} else {
+		group[index].next = 0;
 	}
 	return -1;
 }

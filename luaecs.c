@@ -2319,6 +2319,7 @@ next_groupid(struct group *group, int index) {
 // 2: group table
 // 3: groupstruct component id
 // 4: group id
+// 5: check
 static int
 lgroup_fetch(lua_State *L) {
 	struct entity_world *w = getW(L);
@@ -2329,11 +2330,21 @@ lgroup_fetch(lua_State *L) {
 	int groupid = luaL_checkinteger(L, 4);
 	lua_newtable(L);
 	int n = 1;
-	int index = read_group(L, g, 2, groupid);
-	while (index >= 0) {
-		lua_pushinteger(L, group[index].uid);
-		lua_rawseti(L, -2, n++);
-		index = next_groupid(group, index);
+	if (lua_toboolean(L, 5)) {
+		int i;
+		for (i=0;i<g->n;i++) {
+			if (group[i].group == groupid) {
+				lua_pushinteger(L, group[i].uid);
+				lua_rawseti(L, -2, n++);
+			}
+		}
+	} else {
+		int index = read_group(L, g, 2, groupid);
+		while (index >= 0) {
+			lua_pushinteger(L, group[index].uid);
+			lua_rawseti(L, -2, n++);
+			index = next_groupid(group, index);
+		}
 	}
 	return 1;
 }

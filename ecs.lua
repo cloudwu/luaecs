@@ -474,6 +474,14 @@ function M:group_fetch(groupid)
 	return self:_group_fetch(ctx.group, ctx.group_struct, groupid)
 end
 
+function M:group_check()
+	local ctx = context[self]
+	for k in pairs(ctx.group) do
+		assert(	#self:_group_fetch(ctx.group, ctx.group_struct, k, true) ==
+			#self:_group_fetch(ctx.group, ctx.group_struct, k, false) )
+	end
+end
+
 function M:group_update()
 	local ctx = context[self]
 	ctx.uid = self:_group_update(ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)

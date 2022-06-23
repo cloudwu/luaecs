@@ -34,6 +34,7 @@ end
 
 w:update()
 
+w:group_check()
 local g = w:group_fetch(0)
 for _,uid in ipairs(g) do
 	print("GROUP0", uid)

@@ -1,3 +1,4 @@
+-- readall for debug
 local ecs = require "ecs"
 
 local w = ecs.world()
@@ -36,7 +37,8 @@ w:new {
 }
 
 for v in w:select "mark" do
-	w:readall(v)
+	local id = w:readall(v)
+	print("Id = ", id)
 	for k,v in pairs(v) do
 		print(k,v)
 	end

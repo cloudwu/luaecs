@@ -350,7 +350,7 @@ end
 function M:readall(iter)
 	local p = context[self].all
 	self:_sync(p, iter)
-	return iter
+	return self:_readid(p, iter)
 end
 
 function M:clear(name)

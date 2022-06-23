@@ -1237,6 +1237,20 @@ lsync(lua_State *L) {
 }
 
 static int
+lreadid(lua_State *L) {
+	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
+	luaL_checktype(L, 3, LUA_TTABLE);
+	int idx = get_integer(L, 3, 1, "index") - 1;
+	int mainkey = get_integer(L, 3, 2, "mainkey");
+	if (entity_iter_(iter->world, mainkey, idx) == NULL) {
+		return 0;
+	}
+	struct entity_world *w = getW(L);
+	lua_pushinteger(L, w->c[mainkey].id[idx]);
+	return 1;
+}
+
+static int
 lread(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
 	luaL_checktype(L, 3, LUA_TTABLE);
@@ -2498,6 +2512,7 @@ lmethods(lua_State *L) {
 		{ "_sync", lsync },
 		{ "_read", lread },
 		{ "_dumpid", ldumpid },
+		{ "_readid", lreadid },
 		{ "_make_index", lmake_index },
 		{ "_readcomponent", lreadcomponent },
 		{ "_resetmaxid", lresetmaxid },

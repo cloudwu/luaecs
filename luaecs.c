@@ -284,6 +284,19 @@ binary_search(unsigned int *a, int from, int to, unsigned int v) {
 #define GUESS_RANGE 64
 
 static inline int
+search_after(struct component_pool *pool, unsigned int eid, int from_index) {
+	unsigned int *a = pool->id;
+	if (from_index + GUESS_RANGE*2 >= pool->n) {
+		return binary_search(a, from_index + 1, pool->n, eid);
+	}
+	int higher = a[from_index + GUESS_RANGE];
+	if (eid > higher) {
+		return binary_search(a, from_index + GUESS_RANGE + 1, pool->n, eid);
+	}
+	return binary_search(a, from_index + 1, from_index + GUESS_RANGE + 1, eid);
+}
+
+static inline int
 lookup_component(struct component_pool *pool, unsigned int eid, int guess_index) {
 	int n = pool->n;
 	if (n == 0)
@@ -297,14 +310,22 @@ lookup_component(struct component_pool *pool, unsigned int eid, int guess_index)
 			return guess_index;
 		return binary_search(a, 0, guess_index, eid);
 	}
-	if (guess_index + GUESS_RANGE*2 >= pool->n) {
-		return binary_search(a, guess_index + 1, pool->n, eid);
+	return search_after(pool, eid, guess_index);
+}
+
+static inline int
+lookup_component_from(struct component_pool *pool, unsigned int eid, int from_index) {
+	int n = pool->n;
+	if (from_index >= n)
+		return -1;
+	unsigned int *a = pool->id;
+	int from_id = a[from_index];
+	if (eid <= from_id) {
+		if (eid == from_id)
+			return from_index;
+		return -1;
 	}
-	int higher = a[guess_index + GUESS_RANGE];
-	if (eid > higher) {
-		return binary_search(a, guess_index + GUESS_RANGE + 1, pool->n, eid);
-	}
-	return binary_search(a, guess_index + 1, guess_index + GUESS_RANGE + 1, eid);
+	return search_after(pool, eid, from_index);
 }
 
 static inline void
@@ -400,27 +421,21 @@ rearrange(struct entity_world *w) {
 
 static inline void
 move_tag(struct component_pool *pool, int from, int to) {
-	if (from != to) {
-		pool->id[to] = pool->id[from];
-	}
+	pool->id[to] = pool->id[from];
 }
 
 static inline void
 move_item(struct component_pool *pool, int from, int to) {
-	if (from != to) {
-		pool->id[to] = pool->id[from];
-		int stride = pool->stride;
-		memcpy((char *)pool->buffer + to * stride, (char *)pool->buffer + from * stride, stride);
-	}
+	pool->id[to] = pool->id[from];
+	int stride = pool->stride;
+	memcpy((char *)pool->buffer + to * stride, (char *)pool->buffer + from * stride, stride);
 }
 
 static void
 move_object(lua_State *L, struct component_pool *pool, int from, int to) {
-	if (from != to) {
-		pool->id[to] = pool->id[from];
-		lua_rawgeti(L, -1, from+1);
-		lua_rawseti(L, -2, to+1);
-	}
+	pool->id[to] = pool->id[from];
+	lua_rawgeti(L, -1, from+1);
+	lua_rawseti(L, -2, to+1);
 }
 
 static void
@@ -428,18 +443,17 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 	int index = 0;
 	int count = 0;
 	int i;
+	int first_removed = 0;
 	if (pool->stride != STRIDE_ORDER) {
-		unsigned int *id = removed->id;
-		unsigned int last_id = 0;
+		unsigned int *removed_id = removed->id;
 		for (i=0;i<removed->n;i++) {
-			if (id[i] != last_id) {
-				// todo : order
-				int r = lookup_component(pool, id[i], index);
-				if (r >= 0) {
-					index = r;
-					pool->id[r] = 0;
-					++count;
-				}
+			int r = lookup_component_from(pool, removed_id[i], index);
+			if (r >= 0) {
+				index = r + 1;
+				pool->id[r] = 0;
+				if (count == 0)
+					first_removed = r;
+				++count;
 			}
 		}
 	} else {
@@ -448,18 +462,20 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			int r = lookup_component(removed, id[i], 0);
 			if (r >= 0) {
 				id[i] = 0;
+				if (count == 0)
+					first_removed = i;
 				++count;
 			}
 		}
 	}
 	if (count > 0) {
-		index = 0;
+		index = first_removed;
 		switch (pool->stride) {
 		case STRIDE_LUA:
 			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
 				luaL_error(L, "Missing lua object table for type %d", cid);
 			}
-			for (i=0;i<pool->n;i++) {
+			for (i=first_removed;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_object(L, pool, i, index);
 					++index;
@@ -469,7 +485,7 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			break;
 		case STRIDE_TAG:
 		case STRIDE_ORDER:
-			for (i=0;i<pool->n;i++) {
+			for (i=first_removed;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_tag(pool, i, index);
 					++index;
@@ -477,7 +493,7 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			}
 			break;
 		default:
-			for (i=0;i<pool->n;i++) {
+			for (i=first_removed;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_item(pool, i, index);
 					++index;

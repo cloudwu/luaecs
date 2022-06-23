@@ -2263,12 +2263,15 @@ next_groupid(struct group *group, int index) {
 	struct group *n = &group[nextindex];
 	if (lastid == n->uid)
 		return nextindex;
+	// case 1: lastid is removed (entity with the same group is removed)
+	// case 2: lastid is exist, but position is changed (entity between lastid and current id is removed)
 	int i;
 	if (lastid > n->uid) {
 		int possible_index = -1;
-		// lookup forward
+		// lookup forward for lastid
 		for (i=nextindex+1;i<index;i++) {
 			if (group[i].uid == lastid) {
+				// case 2, found lastid
 				group[index].next = index - i;
 				return i;
 			}
@@ -2279,6 +2282,7 @@ next_groupid(struct group *group, int index) {
 				break;
 		}
 		if (possible_index >= 0) {
+			// case 1: fix the linklist
 			group[index].lastid = group[possible_index].uid;
 			group[index].next = index - possible_index;
 			return possible_index;
@@ -2286,7 +2290,7 @@ next_groupid(struct group *group, int index) {
 	}
 	// lookup backward
 	int possible_index = -1;
-	for (i=nextindex-1;i>=0;i--) {
+	for (i=nextindex;i>=0;i--) {
 		if (group[i].uid == lastid) {
 			group[index].next = index - i;
 			return i;

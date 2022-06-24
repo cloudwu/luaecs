@@ -2264,6 +2264,27 @@ lgroup_update(lua_State *L) {
 	return 1;
 }
 
+// 1: world
+// 2: iterator
+// 2: groupstruct component id
+static int
+lgroup_id(lua_State *L) {
+	struct entity_world *w = getW(L);
+	luaL_checktype(L, 2, LUA_TTABLE);
+	int idx = get_integer(L, 2, 1, "index") - 1;
+	int mainkey = get_integer(L, 2, 2, "mainkey");
+	int cid = luaL_checkinteger(L, 3);
+	int index = entity_sibling_index_(w, mainkey, idx, cid);
+	if (index <= 0) {
+		return luaL_error(L, "Invalid iterator");
+	}
+	struct component_pool *c = &w->c[cid];
+	struct group * g = (struct group *)get_ptr(c, index - 1);
+	lua_pushinteger(L, g->group);
+	lua_pushinteger(L, g->uid);
+	return 2;
+}
+
 static inline int
 next_groupid(struct group *group, int index) {
 	if (group[index].next == 0)
@@ -2609,6 +2630,7 @@ lmethods(lua_State *L) {
 		{ "_group_update", lgroup_update },
 		{ "_group_fetch", lgroup_fetch },
 		{ "_group_enable", lgroup_enable },
+		{ "_group_id", lgroup_id },
 		{ "_serialize", lserialize_object },
 		{ "_serialize_lua", lserialize_lua },
 		{ "_template_create", ltemplate_create },

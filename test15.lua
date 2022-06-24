@@ -44,6 +44,7 @@ end
 w:group_enable("visible", 0,1)
 
 for v in w:select "visible id:in" do
+	local gid = w:group_id(v)
+	assert(gid == 0 or gid == 1)
 	print(v.id)
 end
-

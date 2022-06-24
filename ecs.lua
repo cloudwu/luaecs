@@ -475,6 +475,11 @@ function M:group_init(groupname)
 	ctx.group = {}
 end
 
+function M:group_id(iter)
+	local ctx = context[self]
+	return self:_group_id(iter,ctx.group_struct)
+end
+
 -- debug use
 function M:group_fetch(groupid)
 	local ctx = context[self]

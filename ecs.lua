@@ -317,6 +317,13 @@ function M:template_instance(temp, dfunc, obj)
 	end
 end
 
+function M:clone(iter, obj)
+	local eid = self:_clone(iter)
+	if obj then
+		_new_entity(self, eid, obj)
+	end
+end
+
 function M:context(t)
 	local typenames = context[self].typenames
 	local id = {}

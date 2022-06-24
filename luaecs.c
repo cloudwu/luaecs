@@ -204,16 +204,6 @@ check_cid(lua_State *L, struct entity_world *w, int index) {
 }
 
 static int
-ladd_component(lua_State *L) {
-	struct entity_world *w = getW(L);
-	unsigned int eid = luaL_checkinteger(L, 2);
-	int cid = check_cid(L, w, 3);
-	int index = add_component_id_(L, 1, w, cid, eid);
-	lua_pushinteger(L, index + 1);
-	return 1;
-}
-
-static int
 lnew_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
 	unsigned int eid = ++w->max_id;
@@ -346,6 +336,7 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 		index = lookup_component(c, eid, c->last_lookup);
 		if (index < 0)
 			return;
+		c->last_lookup = index;
 	}
 	int from,to;
 	// find next tag. You may disable subsquent tags in iteration.
@@ -503,6 +494,19 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 		}
 		pool->n -= count;
 	}
+}
+
+static int
+ladd_component(lua_State *L) {
+	struct entity_world *w = getW(L);
+	unsigned int eid = luaL_checkinteger(L, 2);
+	int cid = check_cid(L, w, 3);
+	struct component_pool *c = &w->c[cid];
+	int index = lookup_component(c, eid, c->n - 1);
+	if (index < 0)
+		index = add_component_id_(L, 1, w, cid, eid);
+	lua_pushinteger(L, index + 1);
+	return 1;
 }
 
 static int
@@ -1221,7 +1225,7 @@ get_integer(lua_State *L, int index, int i, const char *key) {
 	}
 	int r = lua_tointeger(L, -1);
 	lua_pop(L, 1);
-	if (r <= 0)
+	if (r < 0)
 		return luaL_error(L, "Invalid %s (%d)", key, r);
 	return r;
 }
@@ -2229,7 +2233,14 @@ lgroup_update(lua_State *L) {
 	for (i=0;i<c->n;i++) {
 		// insert group
 		int index = read_group(L, g, 2, group[i]);
-		int n = add_component_id_(L, 1, w, sid, c->id[i]);
+//		printf("Group %d group = %d index = %d\n", i, group[i], index);
+		// entity may reborn, already has groupstruct component
+		int n = entity_sibling_index_(w, gid, i, sid);
+		if (n <= 0) {
+			n = add_component_id_(L, 1, w, sid, c->id[i]);
+		} else {
+			--n;
+		}
 		struct group * gs = (struct group *)get_ptr(g, n);
 		gs->uid = ++uid;
 		gs->group = group[i];
@@ -2531,6 +2542,50 @@ lserialize_lua(lua_State *L) {
 }
 
 static int
+lclone(lua_State *L) {
+	struct entity_world *w = getW(L);
+	luaL_checktype(L, 2, LUA_TTABLE);
+	int idx = get_integer(L, 2, 1, "index") - 1;
+	int mainkey = get_integer(L, 2, 2, "mainkey");
+	check_cid_valid(L, w, mainkey);
+	struct component_pool *c = &w->c[mainkey];
+	if (idx < 0 || idx >= c->n)
+		return luaL_error(L, "Invalid iterator");
+	unsigned int eid = c->id[idx];
+	unsigned int newid = ++w->max_id;
+	assert(newid != 0);
+
+	int i;
+	for (i=ENTITY_REMOVED+1;i<MAX_COMPONENT;i++) {
+		struct component_pool * cp = &w->c[i];
+		int index = lookup_component(cp, eid, c->last_lookup);
+		if (index >= 0) {
+			c->last_lookup = index;
+			int	new_index = add_component_id_(L, 1, w, i, newid);
+			switch (cp->stride) {
+			case STRIDE_LUA:
+				if (lua_getiuservalue(L, 1, i * 2 + 2) != LUA_TTABLE) {
+					luaL_error(L, "Missing lua object table for type %d", i);
+				}
+				move_object(L, cp, index, new_index);
+				lua_pop(L, 1);	// pop lua object table
+				break;
+			case STRIDE_TAG:
+			case STRIDE_ORDER:
+				move_tag(cp, index, new_index);
+				break;
+			default:
+				move_item(cp, index, new_index);
+				break;
+			}
+			cp->id[new_index] = newid;
+		}
+	}
+	lua_pushinteger(L, newid);
+	return 1;
+}
+
+static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
@@ -2559,6 +2614,7 @@ lmethods(lua_State *L) {
 		{ "_template_create", ltemplate_create },
 		{ "_template_instance", ltemplate_instance },
 		{ "_count", lcount },
+		{ "_clone", lclone },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

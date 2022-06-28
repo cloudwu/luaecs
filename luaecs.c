@@ -512,14 +512,14 @@ ladd_component(lua_State *L) {
 static int
 lupdate(lua_State *L) {
 	struct entity_world *w = getW(L);
-	struct component_pool *removed = &w->c[ENTITY_REMOVED];
+	int removed_id = luaL_optinteger(L, 2, ENTITY_REMOVED);
+	struct component_pool *removed = &w->c[removed_id];
 	int i;
 	if (removed->n > 0) {
 		// mark removed
-		assert(ENTITY_REMOVED == 0);
-		for (i=1;i<MAX_COMPONENT;i++) {
+		for (i=0;i<MAX_COMPONENT;i++) {
 			struct component_pool *pool = &w->c[i];
-			if (pool->n > 0)
+			if (i != removed_id && pool->n > 0)
 				remove_all(L, pool, removed, i);
 		}
 		removed->n = 0;

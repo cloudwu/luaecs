@@ -505,6 +505,11 @@ function M:group_enable(tagname, ...)
 	self:_group_enable(ctx.group, ctx.group_struct,tagid,...)
 end
 
+function M:remove_update(tagname)
+	local t = assert(context[self].typenames[tagname])
+	self:update(t.id)
+end
+
 function ecs.world()
 	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {

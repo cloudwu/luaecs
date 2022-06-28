@@ -2562,8 +2562,16 @@ static int
 lclone_blacklist(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	assert(MAX_COMPONENT < 0x10000);
+	lua_settop(L, 2);
 	component_id_t * blacklist = (component_id_t *)lua_newuserdatauv(L, MAX_COMPONENT * sizeof(component_id_t), 0);
-	memset(blacklist, 0, MAX_COMPONENT * sizeof(component_id_t));
+	if (lua_type(L, 2) == LUA_TUSERDATA) {
+		if (lua_rawlen(L, 2) != MAX_COMPONENT * sizeof(component_id_t))
+			return luaL_error(L, "Invalid blacklist userdata");
+		void *old_blacklist = lua_touserdata(L, 2);
+		memcpy(blacklist, old_blacklist, MAX_COMPONENT * sizeof(component_id_t));
+	} else {
+		memset(blacklist, 0, MAX_COMPONENT * sizeof(component_id_t));
+	}
 	int i;
 	for (i=1;lua_geti(L, 1, i) != LUA_TNIL;i++) {
 		int id = luaL_checkinteger(L, -1);

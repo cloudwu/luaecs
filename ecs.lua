@@ -478,7 +478,8 @@ function M:group_init(groupname)
 	ctx.group_struct = ctx.typenames[gsname].id
 	ctx.uid = 0
 	ctx.group = {}
-	ctx.blacklist = self._clone_blacklist { ecs._REMOVED, ctx.group_struct }
+	-- Add group_struct to blacklist
+	ctx.blacklist = self._clone_blacklist ( { ctx.group_struct } , ctx.blacklist )
 end
 
 function M:group_id(iter)

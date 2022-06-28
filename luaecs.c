@@ -20,6 +20,8 @@
 #define DUMMY_PTR (void *)(uintptr_t)(~0)
 #define REARRANGE_THRESHOLD 0x80000000
 
+typedef unsigned short component_id_t;
+
 struct component_pool {
 	int cap;
 	int n;
@@ -2234,13 +2236,7 @@ lgroup_update(lua_State *L) {
 		// insert group
 		int index = read_group(L, g, 2, group[i]);
 //		printf("Group %d group = %d index = %d\n", i, group[i], index);
-		// entity may reborn, already has groupstruct component
-		int n = entity_sibling_index_(w, gid, i, sid);
-		if (n <= 0) {
-			n = add_component_id_(L, 1, w, sid, c->id[i]);
-		} else {
-			--n;
-		}
+		int n = add_component_id_(L, 1, w, sid, c->id[i]);
 		struct group * gs = (struct group *)get_ptr(g, n);
 		gs->uid = ++uid;
 		gs->group = group[i];
@@ -2563,11 +2559,34 @@ lserialize_lua(lua_State *L) {
 }
 
 static int
+lclone_blacklist(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	assert(MAX_COMPONENT < 0x10000);
+	component_id_t * blacklist = (component_id_t *)lua_newuserdatauv(L, MAX_COMPONENT * sizeof(component_id_t), 0);
+	memset(blacklist, 0, MAX_COMPONENT * sizeof(component_id_t));
+	int i;
+	for (i=1;lua_geti(L, 1, i) != LUA_TNIL;i++) {
+		int id = luaL_checkinteger(L, -1);
+		lua_pop(L, 1);
+		if (id < 0 || id >= MAX_COMPONENT)
+			return luaL_error(L, "Invalid component id %d", id);
+		blacklist[id] = 1;
+	}
+	lua_pop(L, 1);
+	return 1;
+}
+
+static int
 lclone(lua_State *L) {
 	struct entity_world *w = getW(L);
 	luaL_checktype(L, 2, LUA_TTABLE);
+	luaL_checktype(L, 3, LUA_TUSERDATA);
 	int idx = get_integer(L, 2, 1, "index") - 1;
 	int mainkey = get_integer(L, 2, 2, "mainkey");
+	component_id_t * blacklist = (component_id_t *)lua_touserdata(L, 3);
+	if (lua_rawlen(L, 3) != MAX_COMPONENT * sizeof(component_id_t)) {
+		return luaL_error(L, "Invalid clone blacklist");
+	}
 	check_cid_valid(L, w, mainkey);
 	struct component_pool *c = &w->c[mainkey];
 	if (idx < 0 || idx >= c->n)
@@ -2577,29 +2596,31 @@ lclone(lua_State *L) {
 	assert(newid != 0);
 
 	int i;
-	for (i=ENTITY_REMOVED+1;i<MAX_COMPONENT;i++) {
-		struct component_pool * cp = &w->c[i];
-		int index = lookup_component(cp, eid, c->last_lookup);
-		if (index >= 0) {
-			c->last_lookup = index;
-			int	new_index = add_component_id_(L, 1, w, i, newid);
-			switch (cp->stride) {
-			case STRIDE_LUA:
-				if (lua_getiuservalue(L, 1, i * 2 + 2) != LUA_TTABLE) {
-					luaL_error(L, "Missing lua object table for type %d", i);
+	for (i=0;i<MAX_COMPONENT;i++) {
+		if (!blacklist[i]) {
+			struct component_pool * cp = &w->c[i];
+			int index = lookup_component(cp, eid, c->last_lookup);
+			if (index >= 0) {
+				c->last_lookup = index;
+				int	new_index = add_component_id_(L, 1, w, i, newid);
+				switch (cp->stride) {
+				case STRIDE_LUA:
+					if (lua_getiuservalue(L, 1, i * 2 + 2) != LUA_TTABLE) {
+						luaL_error(L, "Missing lua object table for type %d", i);
+					}
+					move_object(L, cp, index, new_index);
+					lua_pop(L, 1);	// pop lua object table
+					break;
+				case STRIDE_TAG:
+				case STRIDE_ORDER:
+					move_tag(cp, index, new_index);
+					break;
+				default:
+					move_item(cp, index, new_index);
+					break;
 				}
-				move_object(L, cp, index, new_index);
-				lua_pop(L, 1);	// pop lua object table
-				break;
-			case STRIDE_TAG:
-			case STRIDE_ORDER:
-				move_tag(cp, index, new_index);
-				break;
-			default:
-				move_item(cp, index, new_index);
-				break;
+				cp->id[new_index] = newid;
 			}
-			cp->id[new_index] = newid;
 		}
 	}
 	lua_pushinteger(L, newid);
@@ -2637,6 +2658,7 @@ lmethods(lua_State *L) {
 		{ "_template_instance", ltemplate_instance },
 		{ "_count", lcount },
 		{ "_clone", lclone },
+		{ "_clone_blacklist", lclone_blacklist },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

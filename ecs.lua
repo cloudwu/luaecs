@@ -54,6 +54,8 @@ local function get_attrib(opt, inout)
 	return desc
 end
 
+local DEFAULT_BLACKLIST
+
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
@@ -61,6 +63,7 @@ local function cache_world(obj, k)
 		select = {},
 		ref = {},
 		index_meta = {},
+		blacklist = DEFAULT_BLACKLIST,
 	}
 
 	do
@@ -317,8 +320,10 @@ function M:template_instance(temp, dfunc, obj)
 	end
 end
 
+DEFAULT_BLACKLIST = M._clone_blacklist { ecs._REMOVED }
+
 function M:clone(iter, obj)
-	local eid = self:_clone(iter)
+	local eid = self:_clone(iter, context[self].blacklist)
 	if obj then
 		_new_entity(self, eid, obj)
 	end
@@ -473,6 +478,7 @@ function M:group_init(groupname)
 	ctx.group_struct = ctx.typenames[gsname].id
 	ctx.uid = 0
 	ctx.group = {}
+	ctx.blacklist = self._clone_blacklist { ecs._REMOVED, ctx.group_struct }
 end
 
 function M:group_id(iter)

@@ -192,6 +192,7 @@ local typeid = {
 	double = assert(ecs._TYPEDOUBLE),
 	userdata = assert(ecs._TYPEUSERDATA),
 }
+
 local typesize = {
 	[typeid.int] = 4,
 	[typeid.float] = 4,
@@ -202,6 +203,18 @@ local typesize = {
 	[typeid.byte] = 1,
 	[typeid.double] = 8,
 	[typeid.userdata] = 8,
+}
+
+local TYPENAME = {
+	[typeid.int] = "int",
+	[typeid.float] = "float",
+	[typeid.bool] = "bool",
+	[typeid.int64] = "int64",
+	[typeid.dword] = "dword",
+	[typeid.word] = "word",
+	[typeid.byte] = "byte",
+	[typeid.double] = "double",
+	[typeid.userdata] = "userdata",
 }
 
 -- make metatable
@@ -515,6 +528,19 @@ end
 function M:remove_update(tagname)
 	local t = assert(context[self].typenames[tagname])
 	self:update(t.id)
+end
+
+function M:type(name)
+	local t = context[self].typenames[name]
+	if t.type then
+		return TYPENAME[t.type]
+	elseif t.tag then
+		return "tag"
+	elseif t.size == ecs._LUAOBJECT then
+		return "lua"
+	else
+		return "c"
+	end
 end
 
 function ecs.world()

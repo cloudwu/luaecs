@@ -2,6 +2,7 @@
 #define lua_ecs_cdata_h
 
 #include <assert.h>
+#include <stddef.h>
 
 struct entity_world;
 
@@ -95,14 +96,14 @@ entity_disable_tag(struct ecs_context *ctx, int cid, int index, int tag_id) {
 }
 
 static inline int
-entity_get_lua(struct ecs_context *ctx, int cid, int index, lua_State *L) {
+entity_get_lua(struct ecs_context *ctx, int cid, int index, void *L) {
 	check_id_(ctx, cid);
 	assert(index > 0);
 	return ctx->api->get_lua(ctx->world, ctx->cid[cid], index-1, ctx->L, 1, L);
 }
 
 static inline int
-entity_sibling_lua(struct ecs_context *ctx, int cid, int index, int sibling_id, lua_State *L) {
+entity_sibling_lua(struct ecs_context *ctx, int cid, int index, int sibling_id, void *L) {
 	check_id_(ctx, cid);
 	check_id_(ctx, sibling_id);
 	int id = ctx->api->sibling_id(ctx->world,  ctx->cid[cid], index, ctx->cid[sibling_id]);

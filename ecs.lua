@@ -264,6 +264,7 @@ do	-- newtype
 			id = id,
 			name = name,
 			size = 0,
+			init = typeclass.init,
 		}
 		for i, v in ipairs(typeclass) do
 			c[i] = align(c, parse(v))
@@ -315,6 +316,10 @@ local function _new_entity(self, eid, obj)
 		end
 		local id = self:_addcomponent(eid, tc.id)
 		if tc.tag ~= "ORDER" then
+			local init = tc.init
+			if init then
+				v = init(v)
+			end
 			self:object(k, id, v)
 		end
 	end

@@ -2533,6 +2533,36 @@ ltemplate_instance(lua_State *L) {
 	return 1;
 }
 
+// 1 : world
+// 2 : component id
+// 3 : index
+// 4 : value
+static int
+ltemplate_instance_component(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = check_cid(L, w, 2);
+	int index = luaL_checkinteger(L, 3) - 1;
+	struct component_pool *c = &w->c[cid];
+	if (c->stride == STRIDE_LUA) {
+		if (lua_getiuservalue(L, 1, 1) != LUA_TUSERDATA) {
+			return luaL_error(L, "No world");
+		}
+		if (lua_getiuservalue(L, -1, cid * 2 + 2) != LUA_TTABLE) {
+			return luaL_error(L, "Missing lua table for %d", cid);
+		}
+		lua_pushvalue(L, 4);
+		lua_rawseti(L, -2, index + 1);
+	} else {
+		size_t sz;
+		const char *s = luaL_checklstring(L, 4, &sz);
+		if (sz != c->stride) {
+			return luaL_error(L, "Invalid unmarshal result");
+		}
+		memcpy(get_ptr(c, index), s, sz);
+	}
+	return 0;
+}
+
 // 1 : string data
 // 2 : int offset
 static int
@@ -2710,6 +2740,7 @@ lmethods(lua_State *L) {
 		{ "_template_extract", ltemplate_extract },
 		{ "_template_create", ltemplate_create },
 		{ "_template_instance", ltemplate_instance },
+		{ "_template_instance_component", ltemplate_instance_component },
 		{ "_count", lcount },
 		{ "_clone", lclone },
 		{ "_clone_blacklist", lclone_blacklist },

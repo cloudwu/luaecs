@@ -266,6 +266,8 @@ do	-- newtype
 			name = name,
 			size = 0,
 			init = typeclass.init,
+			marshal = typeclass.marshal,
+			unmarshal = typeclass.unmarshal,
 		}
 		for i, v in ipairs(typeclass) do
 			c[i] = align(c, parse(v))
@@ -346,11 +348,16 @@ function M:template_instance(temp, dfunc, obj)
 			if not cid then
 				break
 			end
+			local id = self:_addcomponent(eid, cid)
 			local tname = ctx.typeidtoname[cid]
 			local tc = ctx.typenames[tname]
-			local v = tc.init(dfunc(arg1, arg2))
-			local id = self:_addcomponent(eid, cid)
-			self:object(tname, id, v)
+			local unmarshal = tc.unmarshal
+			if unmarshal then
+				self:_template_instance_component(cid, id, unmarshal( arg1, arg2 ))
+			else
+				local v = tc.init(dfunc(arg1, arg2))
+				self:object(tname, id, v)
+			end
 		end
 	end
 	if obj then
@@ -485,7 +492,23 @@ do
 			if not tc then
 				error ("Invalid key : ".. k)
 			end
-			if tc.init then
+			if tc.marshal or tc.unmarshal then
+				init[init_i] = tc.id
+				if tc.init then
+					v = tc.init(v)
+				end
+				local data
+				if tc.marshal then
+					-- call marshal if exist
+					data = _serialize_lua(tc.marshal(v))
+				else
+					-- unmarshal only, serialize the value
+					local pat = context[self].ref[k]
+					data = _serialize(pat, v)
+				end
+				init[init_i+1] = data
+				init_i = init_i + 2
+			elseif tc.init then
 				init[init_i] = tc.id
 				init[init_i+1] = _serialize_lua(serifunc(v))
 				init_i = init_i + 2

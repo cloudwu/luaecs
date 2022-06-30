@@ -15,12 +15,14 @@ w:register {
 w:register {
 	name = "id",
 	type = "int",
+	-- for tempalte
 	marshal = function(v)
 		return tostring(v)
 	end,
 	unmarshal = function(s)
 		local v = tonumber(s)
-		return string.pack("i", v)
+		return v
+--		return string.pack("i", v)
 	end
 }
 

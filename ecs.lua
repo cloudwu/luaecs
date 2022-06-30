@@ -349,7 +349,10 @@ function M:template_instance(temp, obj)
 		local tname = ctx.typeidtoname[cid]
 		local tc = ctx.typenames[tname]
 		if tc.unmarshal then
-			self:_template_instance_component(cid, id, tc.unmarshal( arg1, arg2 ))
+			local v = tc.unmarshal( arg1, arg2 )
+			if self:_template_instance_component(cid, id, v) then
+				self:object(tname, id, v)
+			end
 		elseif not tc.tag then
 			assert(tc.size > 0, "Missing unmarshal function for lua object")
 			self:_template_instance_component(cid, id, arg1, arg2)

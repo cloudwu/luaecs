@@ -2475,12 +2475,17 @@ ltemplate_instance_component(lua_State *L) {
 	} else {
 		size_t sz;
 		void *s;
-		if (lua_type(L, 4) == LUA_TSTRING) {
+		switch (lua_type(L, 4)) {
+		case LUA_TSTRING :
 			s = (void *)lua_tolstring(L, 4, &sz);
-		} else {
-			luaL_checktype(L, 4, LUA_TLIGHTUSERDATA);
+			break;
+		case LUA_TLIGHTUSERDATA:
 			s = lua_touserdata(L, 4);
 			sz = luaL_checkinteger(L, 5);
+			break;
+		default:
+			lua_pushboolean(L, 1);
+			return 1;
 		}
 		if (sz != c->stride) {
 			return luaL_error(L, "Invalid unmarshal result");

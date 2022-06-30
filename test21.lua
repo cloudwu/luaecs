@@ -10,7 +10,12 @@ w:register {
 		local x, y = s:match "(%d+)x(%d+)"
 		return { x = tonumber(x), y = tonumber(y) }
 	end,
+	marshal = function (s)
+		local x, y = s:match "(%d+)x(%d+)"
+		return string.pack("ii", x, y)
+	end,
 }
+
 
 w:register {
 	name = "id",

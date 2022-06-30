@@ -488,9 +488,6 @@ do
 			if not tc then
 				error ("Invalid key : ".. k)
 			end
-			if tc.init then
-				v = tc.init(v)
-			end
 			buf[i] = tc.id
 			if tc.marshal then
 				buf[i+1] = _serialize_lua(tc.marshal(v))

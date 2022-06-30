@@ -2533,6 +2533,49 @@ ltemplate_instance(lua_State *L) {
 	return 1;
 }
 
+// 1 : string data
+// 2 : int offset
+static int
+ltemplate_extract(lua_State *L) {
+	size_t sz;
+	const char *buffer = luaL_checklstring(L, 1, &sz);
+	int offset = luaL_optinteger(L, 2, 0);
+	if (offset >= sz) {
+		if (offset > sz)
+			return luaL_error(L, "Invalid offset %d", offset);
+		return 0;
+	}
+	sz -= offset;
+	buffer += offset;
+	size_t cid;
+	size_t r = varint_decode(L, (uint8_t*)buffer, sz, &cid);
+	lua_pushinteger(L, cid);
+	sz -= r;
+	buffer += r;
+	size_t slen;
+	size_t r2 = varint_decode(L, (uint8_t*)buffer, sz, &slen);
+	if (slen == 0 && r2 == 2) {		// magic number 0x80 0x00 , string
+		r2 += varint_decode(L, (uint8_t*)buffer+2, sz-2, &slen);
+		sz -= r2;
+		buffer += r2;
+		if (slen > sz) {
+			return luaL_error(L, "Invalid template");
+		}
+		// return id, offset, string
+		lua_pushinteger(L, offset + r + r2 + slen);
+		lua_pushlstring(L, buffer, slen);
+		return 3;
+	} else {
+		// return id, offset, lightuserdata, sz
+		sz -= r2;
+		buffer += r2;
+		lua_pushinteger(L, offset + r + r2 + slen);
+		lua_pushlightuserdata(L, (void *)buffer);
+		lua_pushinteger(L, slen);
+		return 4;
+	}
+}
+
 static int
 lserialize_lua(lua_State *L) {
 	luaL_Buffer b;
@@ -2557,6 +2600,8 @@ lserialize_lua(lua_State *L) {
 	luaL_pushresult(&b);
 	return 1;
 }
+
+
 
 static int
 lclone_blacklist(lua_State *L) {
@@ -2662,6 +2707,7 @@ lmethods(lua_State *L) {
 		{ "_group_id", lgroup_id },
 		{ "_serialize", lserialize_object },
 		{ "_serialize_lua", lserialize_lua },
+		{ "_template_extract", ltemplate_extract },
 		{ "_template_create", ltemplate_create },
 		{ "_template_instance", ltemplate_instance },
 		{ "_count", lcount },

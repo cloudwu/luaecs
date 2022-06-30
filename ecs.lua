@@ -59,6 +59,7 @@ local DEFAULT_BLACKLIST
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
+		typeidtoname = {},
 		id = 0,
 		select = {},
 		ref = {},
@@ -291,6 +292,7 @@ do	-- newtype
 			end
 		end
 		typenames[name] = c
+		ctx.typeidtoname[id] = name
 		self:_newtype(id, c.size)
 	end
 end
@@ -332,7 +334,25 @@ function M:new(obj)
 end
 
 function M:template_instance(temp, dfunc, obj)
-	local eid = self:_template_instance(temp, dfunc)
+	local data = temp[1]
+	local init_data = temp[2]
+	local eid = self:_template_instance(data, dfunc)
+	if init_data then
+		local ctx = context[self]
+		local offset = 0
+		local cid, arg1, arg2
+		while true do
+			cid, offset, arg1, arg2 = self._template_extract(init_data, offset)
+			if not cid then
+				break
+			end
+			local tname = ctx.typeidtoname[cid]
+			local tc = ctx.typenames[tname]
+			local v = tc.init(dfunc(arg1, arg2))
+			local id = self:_addcomponent(eid, cid)
+			self:object(tname, id, v)
+		end
+	end
 	if obj then
 		_new_entity(self, eid, obj)
 	end
@@ -456,29 +476,37 @@ do
 
 	function M:template(obj, serifunc)
 		local buf = {}
+		local init = {}
 		local i = 1
+		local init_i = 1
 		local typenames = context[self].typenames
 		for k,v in pairs(obj) do
 			local tc = typenames[k]
 			if not tc then
 				error ("Invalid key : ".. k)
 			end
-			local init = tc.init
-			if init then
-				v = init(v)
-			end
-			buf[i] = tc.id
-			if tc.size == ecs._LUAOBJECT then
-				buf[i+1] = _serialize_lua(serifunc(v))
-			elseif tc.tag and v then
-				buf[i+1] = ""
+			if tc.init then
+				init[init_i] = tc.id
+				init[init_i+1] = _serialize_lua(serifunc(v))
+				init_i = init_i + 2
 			else
-				local pat = context[self].ref[k]
-				buf[i+1] = _serialize(pat, v)
+				buf[i] = tc.id
+				if tc.size == ecs._LUAOBJECT then
+					buf[i+1] = _serialize_lua(serifunc(v))
+				elseif tc.tag and v then
+					buf[i+1] = ""
+				else
+					local pat = context[self].ref[k]
+					buf[i+1] = _serialize(pat, v)
+				end
+				i = i + 2
 			end
-			i = i + 2
 		end
-		return self:_template_create(buf)
+		if init_i == 1 then
+			return  { self:_template_create(buf) }
+		else
+			return  { self:_template_create(buf) , self:_template_create(init) }
+		end
 	end
 end
 

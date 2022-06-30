@@ -2,16 +2,6 @@ local ecs = require "ecs"
 
 local w = ecs.world()
 
-local function seri(v)
-	assert(type(v) == "string")
-	return v
-end
-
-local function deseri(v)
-	return v
-end
-
-
 w:register {
 	name = "size",
 	"x:int",
@@ -39,12 +29,12 @@ w:new {
 	id = 100,
 }
 
-local t = w:template( {
+local t = w:template {
 	size = "3x4",
 	id = 42,
-}, seri)
+}
 
-w:template_instance(t, deseri)
+w:template_instance(t)
 
 for v in w:select "size:in id:in" do
 	print(v.size.x, v.size.y, v.id)

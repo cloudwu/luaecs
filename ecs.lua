@@ -335,29 +335,24 @@ function M:new(obj)
 	_new_entity(self, eid, obj)
 end
 
-function M:template_instance(temp, dfunc, obj)
-	local data = temp[1]
-	local init_data = temp[2]
-	local eid = self:_template_instance(data, dfunc)
-	if init_data then
-		local ctx = context[self]
-		local offset = 0
-		local cid, arg1, arg2
-		while true do
-			cid, offset, arg1, arg2 = self._template_extract(init_data, offset)
-			if not cid then
-				break
-			end
-			local id = self:_addcomponent(eid, cid)
-			local tname = ctx.typeidtoname[cid]
-			local tc = ctx.typenames[tname]
-			local unmarshal = tc.unmarshal
-			if unmarshal then
-				self:_template_instance_component(cid, id, unmarshal( arg1, arg2 ))
-			else
-				local v = tc.init(dfunc(arg1, arg2))
-				self:object(tname, id, v)
-			end
+function M:template_instance(temp, obj)
+	local eid = self:_newentity()
+	local ctx = context[self]
+	local offset = 0
+	local cid, arg1, arg2
+	while true do
+		cid, offset, arg1, arg2 = self._template_extract(temp, offset)
+		if not cid then
+			break
+		end
+		local id = self:_addcomponent(eid, cid)
+		local tname = ctx.typeidtoname[cid]
+		local tc = ctx.typenames[tname]
+		if tc.unmarshal then
+			self:_template_instance_component(cid, id, tc.unmarshal( arg1, arg2 ))
+		elseif not tc.tag then
+			assert(tc.size > 0, "Missing unmarshal function for lua object")
+			self:_template_instance_component(cid, id, arg1, arg2)
 		end
 	end
 	if obj then
@@ -483,53 +478,29 @@ do
 
 	function M:template(obj, serifunc)
 		local buf = {}
-		local init = {}
 		local i = 1
-		local init_i = 1
 		local typenames = context[self].typenames
 		for k,v in pairs(obj) do
 			local tc = typenames[k]
 			if not tc then
 				error ("Invalid key : ".. k)
 			end
-			if tc.marshal or tc.unmarshal then
-				init[init_i] = tc.id
-				if tc.init then
-					v = tc.init(v)
-				end
-				local data
-				if tc.marshal then
-					-- call marshal if exist
-					data = _serialize_lua(tc.marshal(v))
-				else
-					-- unmarshal only, serialize the value
-					local pat = context[self].ref[k]
-					data = _serialize(pat, v)
-				end
-				init[init_i+1] = data
-				init_i = init_i + 2
-			elseif tc.init then
-				init[init_i] = tc.id
-				init[init_i+1] = _serialize_lua(serifunc(v))
-				init_i = init_i + 2
-			else
-				buf[i] = tc.id
-				if tc.size == ecs._LUAOBJECT then
-					buf[i+1] = _serialize_lua(serifunc(v))
-				elseif tc.tag and v then
-					buf[i+1] = ""
-				else
-					local pat = context[self].ref[k]
-					buf[i+1] = _serialize(pat, v)
-				end
-				i = i + 2
+			if tc.init then
+				v = tc.init(v)
 			end
+			buf[i] = tc.id
+			if tc.marshal then
+				buf[i+1] = _serialize_lua(tc.marshal(v))
+			elseif tc.tag and v then
+				buf[i+1] = "\0"
+			else
+				assert(tc.size > 0, "Missing marshal function for lua object")
+				local pat = context[self].ref[k]
+				buf[i+1] = _serialize(pat, v)
+			end
+			i = i + 2
 		end
-		if init_i == 1 then
-			return  { self:_template_create(buf) }
-		else
-			return  { self:_template_create(buf) , self:_template_create(init) }
-		end
+		return self:_template_create(buf)
 	end
 end
 

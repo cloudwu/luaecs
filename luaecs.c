@@ -722,6 +722,19 @@ lnew_world(lua_State *L) {
 #define TYPE_USERDATA 8
 #define TYPE_COUNT 9
 
+static const int
+sizeof_type[TYPE_COUNT] = {
+	sizeof(int),
+	sizeof(float),
+	sizeof(char),
+	sizeof(int64_t),
+	sizeof(uint32_t),	// DWORD
+	sizeof(uint16_t),	// WORD
+	sizeof(uint8_t),	// BYTE
+	sizeof(double),
+	sizeof(void *),	// USERDATA
+};
+
 struct field {
 	const char *key;
 	int offset;
@@ -832,12 +845,36 @@ write_value(lua_State *L, struct field *f, char *buffer) {
 	lua_pop(L, 1);
 }
 
+static void
+write_value_check(lua_State *L, struct field *f, const char *buffer, const char *name) {
+	struct field tmp_f = *f;
+	tmp_f.offset = 0;
+	char tmp[sizeof(void *)];
+	write_value(L, &tmp_f, tmp);
+	if (memcmp(buffer + f->offset, tmp, sizeof_type[f->type]) != 0) {
+		if (f->key) {
+			luaL_error(L, "[%s.%s] changes", name, f->key);
+		} else {
+			luaL_error(L, "[%s] changes", name);
+		}
+	}
+}
+
 static inline void
 write_component(lua_State *L, int field_n, struct field *f, int index, char *buffer) {
 	int i;
 	for (i=0; i < field_n; i++) {
 		lua_getfield(L, index, f[i].key);
 		write_value(L, &f[i], buffer);
+	}
+}
+
+static inline void
+write_component_check(lua_State *L, int field_n, struct field *f, int index, const char *buffer, const char *name) {
+	int i;
+	for (i=0; i < field_n; i++) {
+		lua_getfield(L, index, f[i].key);
+		write_value_check(L, &f[i], buffer, name);
 	}
 }
 
@@ -965,6 +1002,16 @@ write_component_object(lua_State *L, int n, struct field *f, void *buffer) {
 		write_value(L, f, buffer);
 	} else {
 		write_component(L, n, f, -1, (char *)buffer);
+		lua_pop(L, 1);
+	}
+}
+
+static void
+write_component_object_check(lua_State *L, int n, struct field *f, const void *buffer, const char *name) {
+	if (f->key == NULL) {
+		write_value_check(L, f, buffer, name);
+	} else {
+		write_component_check(L, n, f, -1, (char *)buffer, name);
 		lua_pop(L, 1);
 	}
 }
@@ -1103,6 +1150,30 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 
 	if (disable_mainkey) {
 		entity_disable_tag_(iter->world, mainkey, idx, mainkey);
+	}
+}
+
+static void
+check_update(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
+	int mainkey = iter->k[0].id;
+	int i;
+	struct field *f = iter->f;
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key *k = &iter->k[i];
+		if (!(k->attrib & COMPONENT_FILTER)) {
+			struct component_pool *c = &iter->world->c[k->id];
+			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN)) {
+				// readonly C component, check it
+				if (get_write_component(L, lua_index, k->name, f, c)) {
+					int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+					if (index > 0) {
+						void *buffer = get_ptr(c, index - 1);
+						write_component_object_check(L, k->field_n, f, buffer, k->name);
+					}
+				}
+			}
+		}
+		f += k->field_n;
 	}
 }
 
@@ -1305,8 +1376,8 @@ postpone(lua_State *L, struct group_iter *iter, struct component_pool *c) {
 	return ret;
 }
 
-static int
-leach_group(lua_State *L) {
+static inline int
+leach_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1); 
 	if (lua_rawgeti(L, 2, 1) != LUA_TNUMBER) {
 		return luaL_error(L, "Invalid group iterator");
@@ -1332,8 +1403,13 @@ leach_group(lua_State *L) {
 			unsigned int tmp = c->id[i];
 			memmove(&c->id[i], &c->id[i+1], (c->n-i-1) * sizeof(c->id[0]));
 			c->id[c->n-1] = tmp;
-		} else if (!iter->readonly) {
-			update_last_index(L, world_index, 2, iter, i-1);
+		} else {
+			if (check) {
+				check_update(L, world_index, 2, iter, i-1);
+			}
+			if (!iter->readonly) {
+				update_last_index(L, world_index, 2, iter, i-1);
+			}
 		}
 	}
 	for (;;) {
@@ -1353,6 +1429,16 @@ leach_group(lua_State *L) {
 
 	lua_settop(L, 2);
 	return 1;
+}
+
+static int
+leach_group_nocheck(lua_State *L) {
+	return leach_group_(L, 0);
+}
+
+static int
+leach_group_check(lua_State *L) {
+	return leach_group_(L, 1);
 }
 
 static int
@@ -1409,10 +1495,10 @@ create_key_cache(lua_State *L, struct group_key *k, struct field *f) {
 	lua_setfield(L, -2, k->name);
 }
 
-static int
-lpairs_group(lua_State *L) {
+static inline int
+lpairs_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1); 
-	lua_pushcfunction(L, leach_group);
+	lua_pushcfunction(L, check ? leach_group_check : leach_group_nocheck);
 	lua_pushvalue(L, 1);
 	lua_createtable(L, 2, iter->nkey);
 	int i;
@@ -1442,6 +1528,16 @@ lpairs_group(lua_State *L) {
 	lua_pushinteger(L, iter->k[0].id);	// mainkey
 	lua_rawseti(L, -2, 2);
 	return 3;		
+}
+
+static inline int
+lpairs_group(lua_State *L) {
+	return lpairs_group_(L, 0);
+}
+
+static inline int
+lpairs_group_check(lua_State *L) {
+	return lpairs_group_(L, 1);
 }
 
 static int
@@ -1607,6 +1703,15 @@ lgroupiter(lua_State *L) {
 	}
 	lua_setmetatable(L, -2);
 	return 1;
+}
+
+static int
+lcheck_iter(lua_State *L) {
+	int enable_check = lua_toboolean(L, 1);
+	luaL_newmetatable(L, "ENTITY_GROUPITER");
+	lua_pushcfunction(L, enable_check ? lpairs_group_check : lpairs_group);
+	lua_setfield(L, -2, "__call");
+	return 0;
 }
 
 static int
@@ -2654,6 +2759,7 @@ lmethods(lua_State *L) {
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
+		{ "check_select", lcheck_iter },
 		{ "remove", lremove },
 		{ "_object", lobject },
 		{ "_sync", lsync },

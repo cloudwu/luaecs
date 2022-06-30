@@ -2520,7 +2520,7 @@ ltemplate_instance(lua_State *L) {
 	struct entity_world *w = getW(L);
 	size_t sz;
 	const char *buffer = luaL_checklstring(L, 2, &sz);
-	luaL_checktype(L, 3, LUA_TFUNCTION);
+	lua_settop(L, 3);
 	unsigned int eid = ++w->max_id;
 	assert(eid != 0);
 

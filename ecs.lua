@@ -463,6 +463,10 @@ do
 			if not tc then
 				error ("Invalid key : ".. k)
 			end
+			local init = tc.init
+			if init then
+				v = init(v)
+			end
 			buf[i] = tc.id
 			if tc.size == ecs._LUAOBJECT then
 				buf[i+1] = _serialize_lua(serifunc(v))

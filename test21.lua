@@ -16,6 +16,12 @@ w:new {
 	size = "42x24"
 }
 
+local t = w:template {
+	size = "3x4"
+}
+
+w:template_instance(t)
+
 for v in w:select "size:in" do
 	print(v.size.x, v.size.y)
 end

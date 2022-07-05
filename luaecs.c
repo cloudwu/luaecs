@@ -692,7 +692,7 @@ lcontext(lua_State *L) {
 		ctx->cid[i] = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 		int cid = ctx->cid[i];
-		if (cid == ENTITY_REMOVED || cid < 0 || cid >= MAX_COMPONENT)
+		if (cid < 0 || cid >= MAX_COMPONENT)
 			return luaL_error(L, "Invalid id (%d) at index %d", cid, i);
 	}
 	return 1;

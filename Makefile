@@ -7,7 +7,7 @@ LUA_LIB=-L /usr/local/bin -llua54
 CFLAGS=-O2 -Wall
 SHARED=--shared
 
-ecs.dll : luaecs.c
+ecs.dll : luaecs.c ecs_group.c ecs_persistence.c ecs_template.c ecs_index.c ecs_capi.c
 	gcc $(CFLAGS) $(SHARED) -DTEST_LUAECS -o $@ $^ $(LUA_INC) $(LUA_LIB)
 
 clean :

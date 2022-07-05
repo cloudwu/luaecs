@@ -106,9 +106,8 @@ lcollect_memory(lua_State *L) {
 	return 0;
 }
 
-int
-ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid) {
-	struct component_pool *pool = &w->c[cid];
+static inline int
+add_component_id_(lua_State *L, int world_index, struct component_pool *pool, int cid, unsigned int eid) {
 	int cap = pool->cap;
 	int index = pool->n;
 	if (pool->n == 0) {
@@ -141,10 +140,23 @@ ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int
 	}
 	++pool->n;
 	pool->id[index] = eid;
-	if (pool->stride != STRIDE_ORDER && index > 0 && eid < pool->id[index-1]) {
+	return index;
+}
+
+int
+ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid) {
+	struct component_pool *pool = &w->c[cid];
+	int index = add_component_id_(L, world_index, pool, cid, eid);
+	if (index > 0 && eid < pool->id[index-1]) {
 		luaL_error(L, "Add component %d fail", cid);
 	}
 	return index;
+}
+
+int
+ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, unsigned int eid) {
+	struct component_pool *pool = &w->c[cid];
+	return add_component_id_(L, world_index, pool, cid, eid);
 }
 
 static int
@@ -289,28 +301,15 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 	int count = 0;
 	int i;
 	int first_removed = 0;
-	if (pool->stride != STRIDE_ORDER) {
-		unsigned int *removed_id = removed->id;
-		for (i=0;i<removed->n;i++) {
-			int r = lookup_component_from(pool, removed_id[i], index);
-			if (r >= 0) {
-				index = r + 1;
-				pool->id[r] = 0;
-				if (count == 0)
-					first_removed = r;
-				++count;
-			}
-		}
-	} else {
-		unsigned int *id = pool->id;
-		for (i=0;i<pool->n;i++) {
-			int r = ecs_lookup_component_(removed, id[i], 0);
-			if (r >= 0) {
-				id[i] = 0;
-				if (count == 0)
-					first_removed = i;
-				++count;
-			}
+	unsigned int *removed_id = removed->id;
+	for (i=0;i<removed->n;i++) {
+		int r = lookup_component_from(pool, removed_id[i], index);
+		if (r >= 0) {
+			index = r + 1;
+			pool->id[r] = 0;
+			if (count == 0)
+				first_removed = r;
+			++count;
 		}
 	}
 	if (count > 0) {
@@ -329,7 +328,6 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			lua_pop(L, 1);	// pop lua object table
 			break;
 		case STRIDE_TAG:
-		case STRIDE_ORDER:
 			for (i=first_removed;i<pool->n;i++) {
 				if (pool->id[i] != 0) {
 					move_tag(pool, i, index);
@@ -791,16 +789,6 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 					}
 					lua_pop(L, 1);
 				}
-			} else if (c->stride == STRIDE_ORDER) {
-				assert(is_temporary(k->attrib));
-				if (lua_getfield(L, lua_index, k->name) != LUA_TNIL) {
-					if (!lua_isboolean(L, -1) || lua_toboolean(L, -1) == 0)
-						luaL_error(L, "Only support true for order key .%s", k->name);
-					lua_pop(L, 1);
-					entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
-					lua_pushnil(L);
-					lua_setfield(L, lua_index, k->name);
-				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
 				int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
@@ -991,19 +979,17 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 					lua_pushnil(L);
 					lua_setfield(L, obj_index, k->name);
 				}
-			} else if (c->stride != STRIDE_ORDER) {
-				if (k->attrib & COMPONENT_IN) {
-					if (index[i]) {
-						void *ptr = get_ptr(c, index[i]-1);
-						read_component_in_field(L, obj_index, k->name, k->field_n, f, ptr);
-					} else {
-						lua_pushnil(L);
-						lua_setfield(L, obj_index, k->name);
-					}
-				} else if (index[i] == 0 && !is_temporary(k->attrib)) {
+			} else if (k->attrib & COMPONENT_IN) {
+				if (index[i]) {
+					void *ptr = get_ptr(c, index[i]-1);
+					read_component_in_field(L, obj_index, k->name, k->field_n, f, ptr);
+				} else {
 					lua_pushnil(L);
 					lua_setfield(L, obj_index, k->name);
 				}
+			} else if (index[i] == 0 && !is_temporary(k->attrib)) {
+				lua_pushnil(L);
+				lua_setfield(L, obj_index, k->name);
 			}
 		}
 		f += k->field_n;
@@ -1069,20 +1055,6 @@ lread(lua_State *L) {
 	return 1;
 }
 
-static int
-postpone(lua_State *L, struct group_iter *iter, struct component_pool *c) {
-	int ret = 0;
-	if (c->stride == STRIDE_ORDER) {
-		if (lua_getfield(L, 2, iter->k[0].name) == LUA_TBOOLEAN) {
-			ret = (lua_toboolean(L, -1) == 0);
-			lua_pushnil(L);
-			lua_setfield(L, 2, iter->k[0].name);
-		}
-		lua_pop(L, 1);
-	}
-	return ret;
-}
-
 static inline int
 leach_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1); 
@@ -1103,20 +1075,12 @@ leach_group_(lua_State *L, int check) {
 	unsigned int index[MAX_COMPONENT];
 	int mainkey = iter->k[0].id;
 
-	struct component_pool *c = &iter->world->c[mainkey];
 	if (i>0) {
-		if (postpone(L, iter, c)) {
-			--i;
-			unsigned int tmp = c->id[i];
-			memmove(&c->id[i], &c->id[i+1], (c->n-i-1) * sizeof(c->id[0]));
-			c->id[c->n-1] = tmp;
-		} else {
-			if (check) {
-				check_update(L, world_index, 2, iter, i-1);
-			}
-			if (!iter->readonly) {
-				update_last_index(L, world_index, 2, iter, i-1);
-			}
+		if (check) {
+			check_update(L, world_index, 2, iter, i-1);
+		}
+		if (!iter->readonly) {
+			update_last_index(L, world_index, 2, iter, i-1);
 		}
 	}
 	for (;;) {
@@ -1384,14 +1348,6 @@ lgroupiter(lua_State *L) {
 			if (n != 0)
 				return luaL_error(L, ".%s is object component, no fields needed", iter->k[i].name);
 			iter->k[i].attrib |= COMPONENT_OBJECT;
-		} else if (c->stride == STRIDE_ORDER) {
-			if (i != 0) {
-				if (!is_temporary(iter->k[i].attrib)) {
-					return luaL_error(L, ".%s is an order key, must be main key or temporary", iter->k[i].name);
-				}
-			} else if (!(iter->k[0].attrib & COMPONENT_EXIST)) {
-				return luaL_error(L, ".%s is an order key, it can only be exist", iter->k[0].name);
-			}
 		}
 		int attrib = iter->k[i].attrib;
 		if (!(attrib & COMPONENT_FILTER)) {
@@ -1571,7 +1527,6 @@ lclone(lua_State *L) {
 					lua_pop(L, 1);	// pop lua object table
 					break;
 				case STRIDE_TAG:
-				case STRIDE_ORDER:
 					move_tag(cp, index, new_index);
 					break;
 				default:
@@ -1664,8 +1619,6 @@ luaopen_ecs_core(lua_State *L) {
 	lua_setfield(L, -2, "_LUAOBJECT");
 	lua_pushinteger(L, ENTITY_REMOVED);
 	lua_setfield(L, -2, "_REMOVED");
-	lua_pushinteger(L, STRIDE_ORDER);
-	lua_setfield(L, -2, "_ORDERKEY");
 	lua_pushlightuserdata(L, NULL);
 	lua_setfield(L, -2, "NULL");
 

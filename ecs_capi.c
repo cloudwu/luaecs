@@ -51,7 +51,6 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_i
 		return 0;
 	unsigned int eid = c->id[index];
 	c = &w->c[silbling_id];
-	assert(c->stride != STRIDE_ORDER);
 	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;

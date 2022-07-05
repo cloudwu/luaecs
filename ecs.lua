@@ -101,18 +101,16 @@ local function cache_world(obj, k)
 		local desc = {}
 		local i = 1
 		for name,t in pairs(c.typenames) do
-			if t.tag ~= "ORDER" then
-				local a = {
-					name = t.name,
-					id = t.id,
-					type = t.type,
-					opt = true,
-					r = true,
-				}
-				table.move(t, 1, #t, 1, a)
-				desc[i] = a
-				i = i + 1
-			end
+			local a = {
+				name = t.name,
+				id = t.id,
+				type = t.type,
+				opt = true,
+				r = true,
+			}
+			table.move(t, 1, #t, 1, a)
+			desc[i] = a
+			i = i + 1
 		end
 		return desc
 	end
@@ -286,9 +284,6 @@ do	-- newtype
 				c.type = t
 				c.size = typesize[t]
 				c[1] = { t, "v", 0 }
-			elseif typeclass.order then
-				c.size = ecs._ORDERKEY
-				c.tag = "ORDER"
 			else
 				c.tag = true
 			end
@@ -319,13 +314,11 @@ local function _new_entity(self, eid, obj)
 			error ("Invalid key : ".. k)
 		end
 		local id = self:_addcomponent(eid, tc.id)
-		if tc.tag ~= "ORDER" then
-			local init = tc.init
-			if init then
-				v = init(v)
-			end
-			self:object(k, id, v)
+		local init = tc.init
+		if init then
+			v = init(v)
 		end
+		self:object(k, id, v)
 	end
 end
 

@@ -283,14 +283,13 @@ ecs_group_enable(lua_State *L) {
 	}
 	int tagid = check_cid(L, w, 4);
 	struct component_pool *tag = &w->c[tagid];
-	if (tag->stride != STRIDE_ORDER && tag->stride != STRIDE_TAG) {
+	if (tag->stride != STRIDE_TAG) {
 		return luaL_error(L, "Invalid tag");
 	}
-	tag->stride = STRIDE_ORDER;
 	tag->n = 0;
 	while (n > 0) {
 		int index = array[n-1].index;
-		ecs_add_component_id_(L, 1, w, tagid, g->id[index]);
+		ecs_add_component_id_nocheck_(L, 1, w, tagid, g->id[index]);
 		index = next_groupid(group, index);
 		if (index >= 0) {
 			group_enable_insert(array, n-1, array[n-1].groupid, index);
@@ -306,6 +305,5 @@ ecs_group_enable(lua_State *L) {
 		tag->id[last] = tmp;
 		--last;
 	}
-	tag->stride = STRIDE_TAG;
 	return 0;
 }

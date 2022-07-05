@@ -26,7 +26,7 @@ foo()
 local v = w:singleton("size","size:in")
 assert(v.size.x == 42)
 
-w.check_select(true)
+ecs.check_select(true)
 
 print(pcall(foo))
 

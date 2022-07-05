@@ -2759,7 +2759,6 @@ lmethods(lua_State *L) {
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
-		{ "check_select", lcheck_iter },
 		{ "remove", lremove },
 		{ "_object", lobject },
 		{ "_sync", lsync },
@@ -2984,6 +2983,7 @@ luaopen_ecs_core(lua_State *L) {
 		{ "_access_index", laccess_index },
 		{ "writer", lnew_writer },
 		{ "reader", lnew_reader },
+		{ "check_select", lcheck_iter },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);

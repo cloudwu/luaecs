@@ -1,12 +1,13 @@
 #ifdef TEST_LUAECS
 
 #include <stdio.h>
+#include "luaecs.h"
 
-#define COMPONENT_VECTOR2 1
-#define TAG_MARK 2
-#define COMPONENT_ID 3
-#define SINGLETON_STRING 4
-#define COMPONENT_LUA 5
+#define COMPONENT_VECTOR2 MAKE_COMPONENT_ID(1)
+#define TAG_MARK MAKE_COMPONENT_ID(2)
+#define COMPONENT_ID MAKE_COMPONENT_ID(3)
+#define SINGLETON_STRING MAKE_COMPONENT_ID(4)
+#define COMPONENT_LUA MAKE_COMPONENT_ID(5)
 
 struct vector2 {
 	float x;

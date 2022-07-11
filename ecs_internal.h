@@ -28,7 +28,7 @@ typedef unsigned short component_id_t;
 struct component_pool {
 	int cap;
 	int n;
-	int stride;	// -1 means lua object
+	int stride; // -1 means lua object
 	int last_lookup;
 	unsigned int *id;
 	void *buffer;
@@ -67,7 +67,7 @@ getW(lua_State *L) {
 
 static inline void
 check_cid_valid(lua_State *L, struct entity_world *w, int cid) {
-	if (cid < 0 || cid >=MAX_COMPONENT || w->c[cid].cap == 0) {
+	if (cid < 0 || cid >= MAX_COMPONENT || w->c[cid].cap == 0) {
 		luaL_error(L, "Invalid type %d", cid);
 	}
 }

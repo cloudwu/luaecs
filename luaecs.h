@@ -11,10 +11,10 @@ typedef unsigned int cid_t;
 struct entity_world;
 
 struct ecs_capi {
-	void * (*iter)(struct entity_world *w, int cid, int index);
+	void *(*iter)(struct entity_world *w, int cid, int index);
 	void (*clear_type)(struct entity_world *w, int cid);
 	int (*sibling_id)(struct entity_world *w, int cid, int index, int slibling_id);
-	void* (*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index);
+	void *(*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer, void *L, int world_index);
 	void (*remove)(struct entity_world *w, int cid, int index, void *L, int world_index);
 	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id, void *L, int world_index);
@@ -25,7 +25,7 @@ struct ecs_capi {
 struct ecs_context {
 	struct ecs_capi *api;
 	struct entity_world *world;
-	void *L;	// for memory allocator
+	void *L; // for memory allocator
 	int max_id;
 	int cid[1];
 };
@@ -64,11 +64,11 @@ static inline void *
 entity_sibling(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id) {
 	int mid = real_id_(ctx, cid);
 	int sid = real_id_(ctx, sibling_id);
-	int id = ctx->api->sibling_id(ctx->world,  mid, index, sid);
+	int id = ctx->api->sibling_id(ctx->world, mid, index, sid);
 	if (id == 0) {
 		return NULL;
 	} else {
-		return ctx->api->iter(ctx->world, sid, id-1);
+		return ctx->api->iter(ctx->world, sid, id - 1);
 	}
 }
 
@@ -109,7 +109,7 @@ static inline int
 entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L) {
 	int mid = real_id_(ctx, cid);
 	assert(index > 0);
-	return ctx->api->get_lua(ctx->world, mid, index-1, ctx->L, 1, L);
+	return ctx->api->get_lua(ctx->world, mid, index - 1, ctx->L, 1, L);
 }
 
 static inline int

@@ -16,7 +16,7 @@ read_id(lua_State *L, FILE *f, unsigned int *id, int n, int inc) {
 		luaL_error(L, "Read id error");
 	int i;
 	unsigned int last_id = 0;
-	for (i=0;i<n;i++) {
+	for (i = 0; i < n; i++) {
 		id[i] += last_id + inc;
 		last_id = id[i];
 	}
@@ -60,7 +60,7 @@ ecs_persistence_readcomponent(lua_State *L) {
 		return luaL_error(L, "Component %d exists", cid);
 	}
 	if (c->stride != stride) {
-		return luaL_error(L, "Invalid component %d (%d != %d)", cid, c->stride,stride);
+		return luaL_error(L, "Invalid component %d (%d != %d)", cid, c->stride, stride);
 	}
 	if (n > c->cap)
 		c->cap = n;
@@ -100,7 +100,7 @@ static unsigned int
 write_id_(lua_State *L, struct file_writer *w, unsigned int *id, int n, unsigned int last_id, int inc) {
 	unsigned int buffer[1024];
 	int i;
-	for (i=0;i<n;i++) {
+	for (i = 0; i < n; i++) {
 		buffer[i] = id[i] - last_id - inc;
 		last_id = id[i];
 	}
@@ -115,7 +115,7 @@ static void
 write_id(lua_State *L, struct file_writer *w, struct component_pool *c, int inc) {
 	int i;
 	unsigned int last_id = 0;
-	for (i=0;i<c->n;i+=1024) {
+	for (i = 0; i < c->n; i += 1024) {
 		int n = c->n - i;
 		if (n > 1024)
 			n = 1024;
@@ -150,7 +150,7 @@ lwrite_section(lua_State *L) {
 	if (w->n == 0) {
 		s->offset = 0;
 	} else {
-		s->offset = get_length(&w->c[w->n-1]);
+		s->offset = get_length(&w->c[w->n - 1]);
 	}
 	s->stride = c->stride;
 	s->n = c->n;
@@ -182,7 +182,7 @@ lclose_writer(lua_State *L) {
 	lrawclose_writer(L);
 	lua_createtable(L, w->n, 0);
 	int i;
-	for (i=0;i<w->n;i++) {
+	for (i = 0; i < w->n; i++) {
 		lua_createtable(L, 0, 3);
 		struct file_section *s = &w->c[i];
 		lua_pushinteger(L, s->offset);
@@ -191,7 +191,7 @@ lclose_writer(lua_State *L) {
 		lua_setfield(L, -2, "stride");
 		lua_pushinteger(L, s->n);
 		lua_setfield(L, -2, "n");
-		lua_rawseti(L, -2, i+1);
+		lua_rawseti(L, -2, i + 1);
 	}
 	return 1;
 }
@@ -199,7 +199,7 @@ lclose_writer(lua_State *L) {
 static FILE *
 fileopen(lua_State *L, int idx, const char *mode) {
 	if (lua_type(L, idx) == LUA_TSTRING) {
-		const char * filename = lua_tostring(L, idx);
+		const char *filename = lua_tostring(L, idx);
 		FILE *f = fopen(filename, mode);
 		if (f == NULL) {
 			luaL_error(L, "Can't open %s (%s)", filename, mode);

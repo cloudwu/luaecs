@@ -48,46 +48,49 @@ find_key_from(struct index_cache *c, int64_t key_, int n) {
 	case TYPE_INT: {
 		int *buffer = (int *)buffer_;
 		int key = (int)key_;
-		for (i=n;i>=0;i--) {
+		for (i = n; i >= 0; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		for (i=len;i>n;i--) {
+		for (i = len; i > n; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		break; }
+		break;
+	}
 	case TYPE_DWORD: {
 		unsigned int *buffer = (unsigned int *)buffer_;
 		int key = (unsigned int)key_;
-		for (i=n;i>=0;i--) {
+		for (i = n; i >= 0; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		for (i=len;i>n;i--) {
+		for (i = len; i > n; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		break; }
+		break;
+	}
 	case TYPE_INT64: {
 		int64_t *buffer = (int64_t *)buffer_;
 		int64_t key = (int64_t)key_;
-		for (i=n;i>=0;i--) {
+		for (i = n; i >= 0; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		for (i=len;i>n;i--) {
+		for (i = len; i > n; i--) {
 			if (buffer[i] == key)
 				return i;
 		}
-		break; }
+		break;
+	}
 	}
 	return INVALID_INDEX;
 }
 
 static inline unsigned int
 find_key(struct index_cache *c, int64_t key) {
-	return find_key_from(c, key, c->world->c[c->id].n-1);
+	return find_key_from(c, key, c->world->c[c->id].n - 1);
 }
 
 static inline unsigned int
@@ -98,7 +101,7 @@ check_key(struct index_cache *c, unsigned int index, int64_t key) {
 static void
 make_iterator(lua_State *L, struct index_cache *c, int slot, unsigned int index) {
 	lua_createtable(L, 2, 0);
-	lua_pushinteger(L, index+1);
+	lua_pushinteger(L, index + 1);
 	lua_rawseti(L, -2, 1);
 	lua_pushinteger(L, c->id);
 	lua_rawseti(L, -2, 2);
@@ -117,7 +120,7 @@ ecs_index_cache(lua_State *L) {
 		if (index != INVALID_INDEX) {
 			// get iterator
 			lua_getiuservalue(L, 1, OBJECT_INDEX);
-			if (lua_rawgeti(L, -1, slot+1) != LUA_TTABLE) {
+			if (lua_rawgeti(L, -1, slot + 1) != LUA_TTABLE) {
 				lua_pop(L, 1);
 				make_iterator(L, c, slot, index);
 			}
@@ -137,7 +140,7 @@ ecs_index_cache(lua_State *L) {
 					return 0;
 				}
 				// fix iterator
-				lua_pushinteger(L, real_index+1);
+				lua_pushinteger(L, real_index + 1);
 				lua_rawseti(L, -2, 1);
 			}
 			return 1;
@@ -175,8 +178,8 @@ ecs_index_access(lua_State *L) {
 	if (idx != cached_index) {
 		if (index_value(cache)[slot] != INVALID_INDEX) {
 			lua_getiuservalue(L, 1, OBJECT_INDEX);
-			if (lua_rawgeti(L, -1, slot+1) == LUA_TTABLE) {
-				lua_pushinteger(L, idx+1);
+			if (lua_rawgeti(L, -1, slot + 1) == LUA_TTABLE) {
+				lua_pushinteger(L, idx + 1);
 				lua_rawseti(L, -2, 1);
 			}
 			lua_pop(L, 2);
@@ -269,8 +272,7 @@ ecs_index_make(lua_State *L) {
 		return luaL_error(L, "Invalid index component type");
 	}
 	struct index_cache *index = (struct index_cache *)lua_newuserdatauv(L,
-		sizeof(struct index_cache) + (size - 1) * sizeof(index->key[0]) + size * sizeof(unsigned int)
-		, MAX_INDEX);
+		sizeof(struct index_cache) + (size - 1) * sizeof(index->key[0]) + size * sizeof(unsigned int), MAX_INDEX);
 	index->world = w;
 	index->id = id;
 	index->type = type;
@@ -278,7 +280,7 @@ ecs_index_make(lua_State *L) {
 
 	int i;
 	unsigned int *value = index_value(index);
-	for (i=0;i<size;i++) {
+	for (i = 0; i < size; i++) {
 		value[i] = INVALID_INDEX;
 	}
 

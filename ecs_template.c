@@ -30,20 +30,20 @@ varint_decode(lua_State *L, uint8_t *buffer, size_t sz, size_t *r) {
 		int s = buffer[rsize] & 0x7f;
 		*r |= (size_t)s << shift;
 		if (s == buffer[rsize]) {
-			return rsize+1;
+			return rsize + 1;
 		}
 		++rsize;
-		shift += 7; 
+		shift += 7;
 	}
 	return luaL_error(L, "Invalid varint");
-} 
+}
 
 int
 ecs_serialize_object(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
 	int cid = iter->k[0].id;
-	struct entity_world * w = iter->world;
-	if (cid < 0 || cid >=MAX_COMPONENT) {
+	struct entity_world *w = iter->world;
+	if (cid < 0 || cid >= MAX_COMPONENT) {
 		return luaL_error(L, "Invalid object %d", cid);
 	}
 	lua_settop(L, 2);
@@ -58,7 +58,7 @@ ecs_serialize_object(lua_State *L) {
 	luaL_buffinit(L, &b);
 	varint_encode(&b, c->stride);
 
-	void * buffer = luaL_prepbuffsize (&b, c->stride);
+	void *buffer = luaL_prepbuffsize(&b, c->stride);
 	lua_pushvalue(L, 2);
 	ecs_write_component_object_(L, iter->k[0].field_n, iter->f, buffer);
 	luaL_addsize(&b, c->stride);
@@ -88,10 +88,11 @@ ecs_template_create(lua_State *L) {
 			break;
 		case LUA_TUSERDATA: {
 			size_t sz = lua_rawlen(L, -1);
-			void * buf = lua_touserdata(L, -1);
+			void *buf = lua_touserdata(L, -1);
 			luaL_addlstring(&b, (const char *)buf, sz);
 			lua_pop(L, 1);
-			break; }
+			break;
+		}
 		default:
 			return luaL_error(L, "Invalid valid with cid = %d", (int)cid);
 		}
@@ -120,7 +121,7 @@ ecs_template_instance_component(lua_State *L) {
 		size_t sz;
 		void *s;
 		switch (lua_type(L, 4)) {
-		case LUA_TSTRING :
+		case LUA_TSTRING:
 			s = (void *)lua_tolstring(L, 4, &sz);
 			break;
 		case LUA_TLIGHTUSERDATA:
@@ -154,14 +155,14 @@ ecs_template_extract(lua_State *L) {
 	sz -= offset;
 	buffer += offset;
 	size_t cid;
-	size_t r = varint_decode(L, (uint8_t*)buffer, sz, &cid);
+	size_t r = varint_decode(L, (uint8_t *)buffer, sz, &cid);
 	lua_pushinteger(L, cid);
 	sz -= r;
 	buffer += r;
 	size_t slen;
-	size_t r2 = varint_decode(L, (uint8_t*)buffer, sz, &slen);
-	if (slen == 0 && r2 == 2) {		// magic number 0x80 0x00 , string
-		r2 += varint_decode(L, (uint8_t*)buffer+2, sz-2, &slen);
+	size_t r2 = varint_decode(L, (uint8_t *)buffer, sz, &slen);
+	if (slen == 0 && r2 == 2) { // magic number 0x80 0x00 , string
+		r2 += varint_decode(L, (uint8_t *)buffer + 2, sz - 2, &slen);
 		sz -= r2;
 		buffer += r2;
 		if (slen > sz) {
@@ -190,20 +191,19 @@ ecs_serialize_lua(lua_State *L) {
 		const char *s = lua_tolstring(L, 1, &sz);
 		luaL_buffinitsize(L, &b, sz + 8);
 		luaL_addchar(&b, 0x80);
-		luaL_addchar(&b, 0);	// 0x80 0x00 : magic number, it's string
+		luaL_addchar(&b, 0); // 0x80 0x00 : magic number, it's string
 		varint_encode(&b, sz);
 		luaL_addlstring(&b, s, sz);
 	} else {
 		// Support seri function in ltask : https://github.com/cloudwu/ltask/blob/master/src/lua-seri.c
 		luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
-		const char * buf = (const char *)lua_touserdata(L, 1);
+		const char *buf = (const char *)lua_touserdata(L, 1);
 		size_t sz = luaL_checkinteger(L, 2);
 		luaL_buffinitsize(L, &b, sz + 8);
 		varint_encode(&b, sz);
 		luaL_addlstring(&b, buf, sz);
-		free((void *)buf);	// lightuserdata, free
+		free((void *)buf); // lightuserdata, free
 	}
 	luaL_pushresult(&b);
 	return 1;
 }
-

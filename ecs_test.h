@@ -23,13 +23,13 @@ ltest(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
 	struct vector2 *v;
 	int i;
-	for (i=0;(v=(struct vector2 *)entity_iter(ctx, COMPONENT_VECTOR2, i));i++) {
+	for (i = 0; (v = (struct vector2 *)entity_iter(ctx, COMPONENT_VECTOR2, i)); i++) {
 		printf("vector2 %d: x=%f y=%f\n", i, v->x, v->y);
-		struct id * id = (struct id *)entity_sibling(ctx, COMPONENT_VECTOR2, i, COMPONENT_ID);
+		struct id *id = (struct id *)entity_sibling(ctx, COMPONENT_VECTOR2, i, COMPONENT_ID);
 		if (id) {
 			printf("\tid = %d\n", id->v);
 		}
-		void * mark = entity_sibling(ctx, COMPONENT_VECTOR2, i, TAG_MARK);
+		void *mark = entity_sibling(ctx, COMPONENT_VECTOR2, i, TAG_MARK);
 		if (mark) {
 			printf("\tMARK\n");
 		}
@@ -44,7 +44,7 @@ lsum(lua_State *L) {
 	struct vector2 *v;
 	int i;
 	float s = 0;
-	for (i=0;(v=(struct vector2 *)entity_iter(ctx, COMPONENT_VECTOR2, i));i++) {
+	for (i = 0; (v = (struct vector2 *)entity_iter(ctx, COMPONENT_VECTOR2, i)); i++) {
 		s += v->x + v->y;
 	}
 	lua_pushnumber(L, s);
@@ -69,7 +69,7 @@ static int
 lgetlua(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
 	int index = luaL_checkinteger(L, 2);
-	int t = entity_get_lua(ctx, COMPONENT_LUA , index, L);
+	int t = entity_get_lua(ctx, COMPONENT_LUA, index, L);
 	if (t) {
 		return 1;
 	}
@@ -80,7 +80,7 @@ static int
 lsiblinglua(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
 	int index = luaL_checkinteger(L, 2);
-	int t = entity_sibling_lua(ctx, TAG_MARK , index, COMPONENT_LUA, L);
+	int t = entity_sibling_lua(ctx, TAG_MARK, index, COMPONENT_LUA, L);
 	if (t) {
 		return 1;
 	}

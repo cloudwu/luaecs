@@ -1542,6 +1542,27 @@ lclone(lua_State *L) {
 }
 
 static int
+lfilter(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int tagid = check_cid(L, w, 2);
+	entity_clear_type_(w, tagid);
+	struct group_iter *iter = luaL_checkudata(L, 3, "ENTITY_GROUPITER");
+	int mainkey = iter->k[0].id;
+	int i,j;
+	for (i = 0; entity_iter_(w, mainkey, i); i++) {
+		for (j = 1; j < iter->nkey; j++) {
+			struct group_key *k = &iter->k[j];
+			if ((entity_sibling_index_(w, mainkey, i, k->id) != 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {
+				break;
+			}
+		}
+		if (j == iter->nkey)
+			entity_enable_tag_(w, mainkey, i, tagid, L, 1);
+	}
+	return 0;
+}
+
+static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
@@ -1574,6 +1595,7 @@ lmethods(lua_State *L) {
 		{ "_count", lcount },
 		{ "_clone", lclone },
 		{ "_clone_blacklist", lclone_blacklist },
+		{ "_filter", lfilter },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

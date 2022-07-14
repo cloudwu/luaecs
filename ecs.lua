@@ -567,6 +567,14 @@ function M:type(name)
 	end
 end
 
+do
+	local cfilter = M._filter
+	function M:filter(tagname, pat)
+		local ctx = context[self]
+		return cfilter(self, ctx.typenames[tagname].id, ctx.select[pat])
+	end
+end
+
 function ecs.world()
 	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {

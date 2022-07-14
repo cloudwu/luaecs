@@ -165,6 +165,7 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 			return;
 		c->last_lookup = index;
 	}
+	assert(c->stride == STRIDE_TAG);
 	int from, to;
 	// find next tag. You may disable subsquent tags in iteration.
 	// For example, The sequence is 1 3 5 7 9 . We are now on 5 , and disable 7 .

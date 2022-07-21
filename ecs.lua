@@ -140,6 +140,9 @@ local function cache_world(obj, k)
 				error("Unknown type " .. key)
 			end
 			local a = get_attrib(opt, inout)
+			if tc.raw then
+				assert(not a.r and not a.w, "try to access raw component")
+			end
 			a.name = tc.name
 			a.id = tc.id
 			a.type = tc.type
@@ -275,6 +278,10 @@ do	-- newtype
 			assert(c.size == 0)
 			c.size = ecs._LUAOBJECT
 			assert(c[1] == nil)
+		elseif ttype == "raw" then
+			assert(c.size == 0)
+			c.size = typeclass.size
+			c.raw = true
 		elseif c.size > 0 then
 			align_struct(c, c[1][1])
 		else

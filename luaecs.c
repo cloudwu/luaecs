@@ -1444,9 +1444,18 @@ lobject(lua_State *L) {
 	if (lua_isnoneornil(L, 2)) {
 		ecs_read_object_(L, iter, buffer);
 	} else {
-		// write object
-		lua_pushvalue(L, 2);
-		ecs_write_component_object_(L, iter->k[0].field_n, iter->f, buffer);
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			size_t sz;
+			const char *raw = lua_tolstring(L, 2, &sz);
+			if (sz != c->stride) {
+				return luaL_error(L, "rawdata need %d bytes, it's %d.", c->stride, (int)sz);
+			}
+			memcpy(buffer, raw, sz);
+		} else {
+			// write object
+			lua_pushvalue(L, 2);
+			ecs_write_component_object_(L, iter->k[0].field_n, iter->f, buffer);
+		}
 	}
 	return 1;
 }

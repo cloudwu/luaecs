@@ -207,3 +207,19 @@ ecs_serialize_lua(lua_State *L) {
 	luaL_pushresult(&b);
 	return 1;
 }
+
+
+int
+ltemplate_methods(lua_State *L) {
+	luaL_Reg m[] = {
+		{ "_serialize", ecs_serialize_object },
+		{ "_serialize_lua", ecs_serialize_lua },
+		{ "_template_extract", ecs_template_extract },
+		{ "_template_create", ecs_template_create },
+		{ "_template_instance_component", ecs_template_instance_component },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, m);
+
+	return 1;
+}

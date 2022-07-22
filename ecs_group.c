@@ -307,3 +307,17 @@ ecs_group_enable(lua_State *L) {
 	}
 	return 0;
 }
+
+int
+lgroup_methods(lua_State *L) { 
+		luaL_Reg m[] = {
+		{ "_group_update", ecs_group_update },
+		{ "_group_fetch", ecs_group_fetch },
+		{ "_group_enable", ecs_group_enable },
+		{ "_group_id", ecs_group_id },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, m);
+
+	return 1;
+}

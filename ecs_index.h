@@ -3,8 +3,6 @@
 
 #include <lua.h>
 
-int ecs_index_cache(lua_State *L);
-int ecs_index_access(lua_State *L);
-int ecs_index_make(lua_State *L);
+int lindex_methods(lua_State *L);
 
 #endif

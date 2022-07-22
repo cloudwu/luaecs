@@ -270,3 +270,17 @@ ecs_persistence_resetmaxid(lua_State *L) {
 	w->max_id = 0;
 	return 0;
 }
+
+int
+lpersistence_methods(lua_State *L) {
+	luaL_Reg m[] = {
+		{ "_readcomponent", ecs_persistence_readcomponent },
+		{ "_resetmaxid", ecs_persistence_resetmaxid },
+		{ "writer", ecs_persistence_writer },
+		{ "reader", ecs_persistence_reader },		
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, m);
+
+	return 1;
+}

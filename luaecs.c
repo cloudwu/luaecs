@@ -1589,18 +1589,6 @@ lmethods(lua_State *L) {
 		{ "_read", lread },
 		{ "_dumpid", ldumpid },
 		{ "_readid", lreadid },
-		{ "_make_index", ecs_index_make },
-		{ "_readcomponent", ecs_persistence_readcomponent },
-		{ "_resetmaxid", ecs_persistence_resetmaxid },
-		{ "_group_update", ecs_group_update },
-		{ "_group_fetch", ecs_group_fetch },
-		{ "_group_enable", ecs_group_enable },
-		{ "_group_id", ecs_group_id },
-		{ "_serialize", ecs_serialize_object },
-		{ "_serialize_lua", ecs_serialize_lua },
-		{ "_template_extract", ecs_template_extract },
-		{ "_template_create", ecs_template_create },
-		{ "_template_instance_component", ecs_template_instance_component },
 		{ "_count", lcount },
 		{ "_clone", lclone },
 		{ "_clone_blacklist", lclone_blacklist },
@@ -1618,11 +1606,13 @@ luaopen_ecs_core(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "_world", lnew_world },
 		{ "_methods", lmethods },
-		{ "_cache_index", ecs_index_cache },
-		{ "_access_index", ecs_index_access },
-		{ "writer", ecs_persistence_writer },
-		{ "reader", ecs_persistence_reader },
 		{ "check_select", lcheck_iter },
+		
+		/*library extension*/
+		{ "_group_methods", lgroup_methods },
+		{ "_index_methods", lindex_methods },
+		{ "_persistence_methods", lpersistence_methods },
+		{ "_template_methods", ltemplate_methods },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

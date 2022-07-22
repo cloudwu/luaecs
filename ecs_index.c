@@ -292,3 +292,16 @@ ecs_index_make(lua_State *L) {
 	lua_setmetatable(L, -2);
 	return 1;
 }
+
+int
+lindex_methods(lua_State *L) {
+	luaL_Reg m[] = {
+		{ "_cache_index", ecs_index_cache },
+		{ "_access_index", ecs_index_access },
+		{ "_make_index", ecs_index_make },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, m);
+
+	return 1;
+}

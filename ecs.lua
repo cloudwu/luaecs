@@ -54,6 +54,12 @@ local function get_attrib(opt, inout)
 	return desc
 end
 
+local persistence_methods = ecs._persistence_methods()
+ecs.writer = persistence_methods.writer
+ecs.reader = persistence_methods.reader
+
+local index_methods = ecs._index_methods()
+
 local DEFAULT_BLACKLIST
 
 local function cache_world(obj, k)
@@ -69,8 +75,8 @@ local function cache_world(obj, k)
 
 	do
 		local c_select = c.select
-		local access_index = ecs._access_index
-		c.index_meta.__index = ecs._cache_index
+		local access_index = index_methods._access_index
+		c.index_meta.__index = index_methods._cache_index
 		c.index_meta.__call = function (self, id, pat_string, ...)
 			return access_index(self, id, c_select[pat_string], ...)
 		end
@@ -220,6 +226,7 @@ local TYPENAME = {
 }
 
 -- make metatable
+local group_methods = ecs._group_methods()
 local M = ecs._methods()
 M.__index = M
 
@@ -335,13 +342,14 @@ function M:new(obj)
 	_new_entity(self, eid, obj)
 end
 
+local template_methods = ecs._template_methods()
 function M:template_instance(temp, obj)
 	local eid = self:_newentity()
 	local ctx = context[self]
 	local offset = 0
 	local cid, arg1, arg2
 	while true do
-		cid, offset, arg1, arg2 = self._template_extract(temp, offset)
+		cid, offset, arg1, arg2 = template_methods._template_extract(temp, offset)
 		if not cid then
 			break
 		end
@@ -350,12 +358,12 @@ function M:template_instance(temp, obj)
 		local tc = ctx.typenames[tname]
 		if tc.unmarshal then
 			local v = tc.unmarshal( arg1, arg2 )
-			if self:_template_instance_component(cid, id, v) then
+			if template_methods._template_instance_component(self, cid, id, v) then
 				self:object(tname, id, v)
 			end
 		elseif not tc.tag then
 			assert(tc.size > 0, "Missing unmarshal function for lua object")
-			self:_template_instance_component(cid, id, arg1, arg2)
+			template_methods._template_instance_component(self, cid, id, arg1, arg2)
 		end
 	end
 	if obj then
@@ -422,7 +430,7 @@ function M:clearall()
 	for _, tc in pairs(context[self].typenames) do
 		self:_clear(assert(tc.id))
 	end
-	self:_resetmaxid()
+	persistence_methods._resetmaxid(self)
 end
 
 function M:dumpid(name)
@@ -435,7 +443,7 @@ function M:make_index(name, size)
 	local t = assert(c.typenames[name])
 	local id = t.id
 	local type = t[1][1]
-	return self:_make_index(id, type, size or 1024, c.index_meta)
+	return index_methods._make_index(self, id, type, size or 1024, c.index_meta)
 end
 
 function M:component_id(name)
@@ -445,7 +453,7 @@ end
 
 function M:read_component(reader, name, offset, stride, n)
 	local t = assert(context[self].typenames[name])
-	return self:_readcomponent(reader, t.id, offset, stride, n)
+	return persistence_methods._readcomponent(self, reader, t.id, offset, stride, n)
 end
 
 do
@@ -476,8 +484,8 @@ do
 end
 
 do
-	local _serialize = M._serialize
-	local _serialize_lua = M._serialize_lua
+	local _serialize = template_methods._serialize
+	local _serialize_lua = template_methods._serialize_lua
 
 	function M:template(obj, serifunc)
 		local buf = {}
@@ -500,7 +508,7 @@ do
 			end
 			i = i + 2
 		end
-		return self:_template_create(buf)
+		return template_methods._template_create(self, buf)
 	end
 end
 
@@ -528,32 +536,32 @@ end
 
 function M:group_id(iter)
 	local ctx = context[self]
-	return self:_group_id(iter,ctx.group_struct)
+	return group_methods._group_id(self, iter,ctx.group_struct)
 end
 
 -- debug use
 function M:group_fetch(groupid)
 	local ctx = context[self]
-	return self:_group_fetch(ctx.group, ctx.group_struct, groupid)
+	return group_methods._group_fetch(self, ctx.group, ctx.group_struct, groupid)
 end
 
 function M:group_check()
 	local ctx = context[self]
 	for k in pairs(ctx.group) do
-		assert(	#self:_group_fetch(ctx.group, ctx.group_struct, k, true) ==
-			#self:_group_fetch(ctx.group, ctx.group_struct, k, false) )
+		assert(	#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, true) ==
+			#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, false) )
 	end
 end
 
 function M:group_update()
 	local ctx = context[self]
-	ctx.uid = self:_group_update(ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)
+	ctx.uid = group_methods._group_update(self, ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)
 end
 
 function M:group_enable(tagname, ...)
 	local ctx = context[self]
 	local tagid = ctx.typenames[tagname].id
-	self:_group_enable(ctx.group, ctx.group_struct,tagid,...)
+	group_methods._group_enable(self, ctx.group, ctx.group_struct,tagid,...)
 end
 
 function M:remove_update(tagname)

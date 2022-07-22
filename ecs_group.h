@@ -3,9 +3,6 @@
 
 #include <lua.h>
 
-int ecs_group_update(lua_State *L);
-int ecs_group_id(lua_State *L);
-int ecs_group_fetch(lua_State *L);
-int ecs_group_enable(lua_State *L);
+int lgroup_methods(lua_State *L);
 
 #endif

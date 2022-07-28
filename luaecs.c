@@ -365,7 +365,7 @@ static int
 lupdate(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int removed_id = luaL_optinteger(L, 2, ENTITY_REMOVED);
-    int disable_rearrange = lua_toboolean(L, 3);
+	int disable_rearrange = lua_toboolean(L, 3);
 	struct component_pool *removed = &w->c[removed_id];
 	int i;
 	if (removed->n > 0) {

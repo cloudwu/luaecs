@@ -172,7 +172,7 @@ static int
 binary_search(unsigned int *a, int from, int to, unsigned int v) {
 	while (from < to) {
 		int mid = (from + to) / 2;
-		int aa = a[mid];
+		unsigned int aa = a[mid];
 		if (aa == v)
 			return mid;
 		else if (aa < v) {
@@ -192,7 +192,7 @@ search_after(struct component_pool *pool, unsigned int eid, int from_index) {
 	if (from_index + GUESS_RANGE * 2 >= pool->n) {
 		return binary_search(a, from_index + 1, pool->n, eid);
 	}
-	int higher = a[from_index + GUESS_RANGE];
+	unsigned int higher = a[from_index + GUESS_RANGE];
 	if (eid > higher) {
 		return binary_search(a, from_index + GUESS_RANGE + 1, pool->n, eid);
 	}
@@ -207,7 +207,7 @@ ecs_lookup_component_(struct component_pool *pool, unsigned int eid, int guess_i
 	if (guess_index < 0 || guess_index >= pool->n)
 		return binary_search(pool->id, 0, pool->n, eid);
 	unsigned int *a = pool->id;
-	int lower = a[guess_index];
+	unsigned int lower = a[guess_index];
 	if (eid <= lower) {
 		if (eid == lower)
 			return guess_index;
@@ -222,7 +222,7 @@ lookup_component_from(struct component_pool *pool, unsigned int eid, int from_in
 	if (from_index >= n)
 		return -1;
 	unsigned int *a = pool->id;
-	int from_id = a[from_index];
+	unsigned int from_id = a[from_index];
 	if (eid <= from_id) {
 		if (eid == from_id)
 			return from_index;

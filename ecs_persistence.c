@@ -9,13 +9,13 @@ struct file_reader {
 	FILE *f;
 };
 
-static unsigned int
-read_id(lua_State *L, FILE *f, unsigned int *id, int n, int inc) {
-	size_t r = fread(id, sizeof(unsigned int), n, f);
+static entityid_t
+read_id(lua_State *L, FILE *f, entityid_t *id, int n, int inc) {
+	size_t r = fread(id, sizeof(entityid_t), n, f);
 	if (r != n)
 		luaL_error(L, "Read id error");
 	int i;
-	unsigned int last_id = 0;
+	entityid_t last_id = 0;
 	for (i = 0; i < n; i++) {
 		id[i] += last_id + inc;
 		last_id = id[i];
@@ -30,14 +30,14 @@ read_data(lua_State *L, FILE *f, void *buffer, int stride, int n) {
 		luaL_error(L, "Read data error");
 }
 
-static unsigned int
+static entityid_t
 read_section(lua_State *L, struct file_reader *reader, struct component_pool *c, size_t offset, int stride, int n) {
 	if (reader->f == NULL)
 		luaL_error(L, "Invalid reader");
 	if (fseek(reader->f, offset, SEEK_SET) != 0) {
 		luaL_error(L, "Reader seek error");
 	}
-	unsigned int maxid;
+	entityid_t maxid;
 	if (stride > 0) {
 		maxid = read_id(L, reader->f, c->id, n, 1);
 		read_data(L, reader->f, c->buffer, stride, n);
@@ -64,13 +64,13 @@ ecs_persistence_readcomponent(lua_State *L) {
 	}
 	if (n > c->cap)
 		c->cap = n;
-	c->id = (unsigned int *)lua_newuserdatauv(L, c->cap * sizeof(unsigned int), 0);
+	c->id = (entityid_t *)lua_newuserdatauv(L, c->cap * sizeof(entityid_t), 0);
 	lua_setiuservalue(L, 1, cid * 2 + 1);
 	if (stride > 0) {
-		c->buffer = (unsigned int *)lua_newuserdatauv(L, c->cap * stride, 0);
+		c->buffer = (entityid_t *)lua_newuserdatauv(L, c->cap * stride, 0);
 		lua_setiuservalue(L, 1, cid * 2 + 2);
 	}
-	unsigned int maxid = read_section(L, reader, c, offset, stride, n);
+	entityid_t maxid = read_section(L, reader, c, offset, stride, n);
 	if (maxid > w->max_id)
 		w->max_id = maxid;
 	c->n = n;
@@ -92,19 +92,19 @@ struct file_writer {
 
 static size_t
 get_length(struct file_section *s) {
-	size_t len = s->offset + s->n * (sizeof(unsigned int) + s->stride);
+	size_t len = s->offset + s->n * (sizeof(entityid_t) + s->stride);
 	return len;
 }
 
-static unsigned int
-write_id_(lua_State *L, struct file_writer *w, unsigned int *id, int n, unsigned int last_id, int inc) {
-	unsigned int buffer[1024];
+static entityid_t
+write_id_(lua_State *L, struct file_writer *w, entityid_t *id, int n, entityid_t last_id, int inc) {
+	entityid_t buffer[1024];
 	int i;
 	for (i = 0; i < n; i++) {
 		buffer[i] = id[i] - last_id - inc;
 		last_id = id[i];
 	}
-	size_t r = fwrite(buffer, sizeof(unsigned int), n, w->f);
+	size_t r = fwrite(buffer, sizeof(entityid_t), n, w->f);
 	if (r != n) {
 		luaL_error(L, "Can't write section id");
 	}
@@ -114,7 +114,7 @@ write_id_(lua_State *L, struct file_writer *w, unsigned int *id, int n, unsigned
 static void
 write_id(lua_State *L, struct file_writer *w, struct component_pool *c, int inc) {
 	int i;
-	unsigned int last_id = 0;
+	entityid_t last_id = 0;
 	for (i = 0; i < c->n; i += 1024) {
 		int n = c->n - i;
 		if (n > 1024)

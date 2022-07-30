@@ -300,7 +300,7 @@ ecs_group_enable(lua_State *L) {
 	n = tag->n;
 	int last = n - 1;
 	for (i = 0; i < n / 2; i++) {
-		entityid_t tmp = tag->id[i];
+		entity_index_t tmp = tag->id[i];
 		tag->id[i] = tag->id[last];
 		tag->id[last] = tmp;
 		--last;

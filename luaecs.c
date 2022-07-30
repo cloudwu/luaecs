@@ -17,6 +17,7 @@
 #include "ecs_index.h"
 #include "ecs_capi.h"
 
+
 static void
 init_component_pool(struct entity_world *w, int index, int stride, int opt_size) {
 	struct component_pool *c = &w->c[index];
@@ -62,8 +63,8 @@ lcount_memory(lua_State *L) {
 	for (i = 0; i < MAX_COMPONENT; i++) {
 		struct component_pool *c = &w->c[i];
 		if (c->id) {
-			sz += c->cap * sizeof(entityid_t);
-			msz += c->n * sizeof(entityid_t);
+			sz += c->cap * sizeof(entity_index_t);
+			msz += c->n * sizeof(entity_index_t);
 		}
 		if (c->buffer != DUMMY_PTR) {
 			sz += c->cap * c->stride;
@@ -89,7 +90,7 @@ shrink_component_pool(lua_State *L, struct component_pool *c, int id) {
 		lua_setiuservalue(L, 1, id * 2 + 2);
 	} else if (c->stride > 0 && c->n < c->cap) {
 		c->cap = c->n;
-		c->id = (entityid_t *)lua_newuserdatauv(L, c->n * sizeof(entityid_t), 0);
+		c->id = (entity_index_t *)lua_newuserdatauv(L, c->n * sizeof(entity_index_t), 0);
 		lua_setiuservalue(L, 1, id * 2 + 1);
 		c->buffer = lua_newuserdatauv(L, c->n * c->stride, 0);
 		lua_setiuservalue(L, 1, id * 2 + 2);
@@ -107,12 +108,12 @@ lcollect_memory(lua_State *L) {
 }
 
 static inline int
-add_component_id_(lua_State *L, int world_index, struct component_pool *pool, int cid, entityid_t eid) {
+add_component_id_(lua_State *L, int world_index, struct component_pool *pool, int cid, entity_index_t eid) {
 	int cap = pool->cap;
 	int index = pool->n;
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
-			pool->id = (entityid_t *)lua_newuserdatauv(L, cap * sizeof(entityid_t), 0);
+			pool->id = (entity_index_t *)lua_newuserdatauv(L, cap * sizeof(entity_index_t), 0);
 			lua_setiuservalue(L, world_index, cid * 2 + 1);
 		}
 		if (pool->buffer == NULL) {
@@ -125,9 +126,9 @@ add_component_id_(lua_State *L, int world_index, struct component_pool *pool, in
 	} else if (pool->n >= pool->cap) {
 		// expand pool
 		int newcap = cap * 3 / 2;
-		entityid_t *newid = (entityid_t *)lua_newuserdatauv(L, newcap * sizeof(entityid_t), 0);
+		entity_index_t *newid = (entity_index_t *)lua_newuserdatauv(L, newcap * sizeof(entity_index_t), 0);
 		lua_setiuservalue(L, world_index, cid * 2 + 1);
-		memcpy(newid, pool->id, cap * sizeof(entityid_t));
+		memcpy(newid, pool->id, cap * sizeof(entity_index_t));
 		pool->id = newid;
 		int stride = pool->stride;
 		if (stride > 0) {
@@ -144,7 +145,7 @@ add_component_id_(lua_State *L, int world_index, struct component_pool *pool, in
 }
 
 int
-ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entityid_t eid) {
+ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid) {
 	struct component_pool *pool = &w->c[cid];
 	int index = add_component_id_(L, world_index, pool, cid, eid);
 	if (index > 0 && eid < pool->id[index - 1]) {
@@ -154,7 +155,7 @@ ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int
 }
 
 int
-ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entityid_t eid) {
+ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid) {
 	struct component_pool *pool = &w->c[cid];
 	return add_component_id_(L, world_index, pool, cid, eid);
 }
@@ -162,17 +163,17 @@ ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world
 static int
 lnew_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
-	entityid_t eid = ++w->max_id;
+	entity_index_t eid = ++w->max_id;
 	assert(eid != 0);
 	lua_pushinteger(L, (lua_Integer)eid);
 	return 1;
 }
 
 static int
-binary_search(entityid_t *a, int from, int to, entityid_t v) {
+binary_search(entity_index_t *a, int from, int to, entity_index_t v) {
 	while (from < to) {
 		int mid = (from + to) / 2;
-		entityid_t aa = a[mid];
+		entity_index_t aa = a[mid];
 		if (aa == v)
 			return mid;
 		else if (aa < v) {
@@ -187,12 +188,12 @@ binary_search(entityid_t *a, int from, int to, entityid_t v) {
 #define GUESS_RANGE 64
 
 static inline int
-search_after(struct component_pool *pool, entityid_t eid, int from_index) {
-	entityid_t *a = pool->id;
+search_after(struct component_pool *pool, entity_index_t eid, int from_index) {
+	entity_index_t *a = pool->id;
 	if (from_index + GUESS_RANGE * 2 >= pool->n) {
 		return binary_search(a, from_index + 1, pool->n, eid);
 	}
-	entityid_t higher = a[from_index + GUESS_RANGE];
+	entity_index_t higher = a[from_index + GUESS_RANGE];
 	if (eid > higher) {
 		return binary_search(a, from_index + GUESS_RANGE + 1, pool->n, eid);
 	}
@@ -200,14 +201,14 @@ search_after(struct component_pool *pool, entityid_t eid, int from_index) {
 }
 
 int
-ecs_lookup_component_(struct component_pool *pool, entityid_t eid, int guess_index) {
+ecs_lookup_component_(struct component_pool *pool, entity_index_t eid, int guess_index) {
 	int n = pool->n;
 	if (n == 0)
 		return -1;
 	if (guess_index < 0 || guess_index >= pool->n)
 		return binary_search(pool->id, 0, pool->n, eid);
-	entityid_t *a = pool->id;
-	entityid_t lower = a[guess_index];
+	entity_index_t *a = pool->id;
+	entity_index_t lower = a[guess_index];
 	if (eid <= lower) {
 		if (eid == lower)
 			return guess_index;
@@ -217,12 +218,12 @@ ecs_lookup_component_(struct component_pool *pool, entityid_t eid, int guess_ind
 }
 
 static inline int
-lookup_component_from(struct component_pool *pool, entityid_t eid, int from_index) {
+lookup_component_from(struct component_pool *pool, entity_index_t eid, int from_index) {
 	int n = pool->n;
 	if (from_index >= n)
 		return -1;
-	entityid_t *a = pool->id;
-	entityid_t from_id = a[from_index];
+	entity_index_t *a = pool->id;
+	entity_index_t from_id = a[from_index];
 	if (eid <= from_id) {
 		if (eid == from_id)
 			return from_index;
@@ -238,7 +239,7 @@ struct rearrange_context {
 
 static int
 find_min(struct rearrange_context *ctx) {
-	entityid_t m = MAX_ENTITYID;
+	entity_index_t m = MAX_ENTITYID;
 	int i;
 	int r = -1;
 	struct entity_world *w = ctx->w;
@@ -260,11 +261,11 @@ rearrange(struct entity_world *w) {
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.w = w;
 	int cid;
-	entityid_t new_id = (entityid_t)1;
-	entityid_t last_id = (entityid_t)0;
+	entity_index_t new_id = (entity_index_t)1;
+	entity_index_t last_id = (entity_index_t)0;
 	while ((cid = find_min(&ctx)) >= 0) {
 		int index = ctx.ptr[cid - 1];
-		entityid_t current_id = w->c[cid].id[index];
+		entity_index_t current_id = w->c[cid].id[index];
 		//		printf("arrange %d <- %d\n", new_id, w->c[cid].id[index]);
 		w->c[cid].id[index] = new_id;
 		if (current_id != last_id) {
@@ -301,7 +302,7 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 	int count = 0;
 	int i;
 	int first_removed = 0;
-	entityid_t *removed_id = removed->id;
+	entity_index_t *removed_id = removed->id;
 	for (i = 0; i < removed->n; i++) {
 		int r = lookup_component_from(pool, removed_id[i], index);
 		if (r >= 0) {
@@ -351,7 +352,7 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 static int
 ladd_component(lua_State *L) {
 	struct entity_world *w = getW(L);
-	entityid_t eid = (entityid_t)luaL_checkinteger(L, 2);
+	entity_index_t eid = (entity_index_t)luaL_checkinteger(L, 2);
 	int cid = check_cid(L, w, 3);
 	struct component_pool *c = &w->c[cid];
 	int index = ecs_lookup_component_(c, eid, c->n - 1);
@@ -396,7 +397,7 @@ static int
 add_sibling_index_(lua_State *L, int world_index, struct entity_world *w, int cid, int index, int slibling_id) {
 	struct component_pool *c = &w->c[cid];
 	assert(index >= 0 && index < c->n);
-	entityid_t eid = c->id[index];
+	entity_index_t eid = c->id[index];
 	// todo: pcall add_component_
 	int ret = ecs_add_component_id_(L, world_index, w, slibling_id, eid);
 	return ret;
@@ -1515,8 +1516,8 @@ lclone(lua_State *L) {
 	struct component_pool *c = &w->c[mainkey];
 	if (idx < 0 || idx >= c->n)
 		return luaL_error(L, "Invalid iterator");
-	entityid_t eid = c->id[idx];
-	entityid_t newid = ++w->max_id;
+	entity_index_t eid = c->id[idx];
+	entity_index_t newid = ++w->max_id;
 	assert(newid != 0);
 
 	int i;

@@ -4,12 +4,16 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-typedef unsigned int entity_index_t;
-#define MAX_ENTITYID ((entity_index_t)0xffffffff)
-#define REARRANGE_THRESHOLD ((entity_index_t)0x80000000)
+typedef struct { uint8_t idx[3]; } entity_index_t;
+
+static const entity_index_t INVALID_ENTITY = { { 0xff, 0xff, 0xff } };
+
+#define MAX_ENTITY 0xffffff 
+#define ENTITY_INIT_SIZE 4096
 
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
+#define ENTITYID_TAG -1
 #define DEFAULT_SIZE 128
 #define STRIDE_TAG 0
 #define STRIDE_LUA -1
@@ -46,7 +50,6 @@ struct entity_id {
 
 struct entity_world {
 	struct entity_id eid;
-	entity_index_t max_id;
 	struct component_pool c[MAX_COMPONENT];
 };
 
@@ -110,10 +113,51 @@ get_integer(lua_State *L, int index, int i, const char *key) {
 	return r;
 }
 
+static inline uint32_t
+index_(entity_index_t x) {
+	return (uint32_t) x.idx[0] << 16 | (uint32_t) x.idx[1] << 8 | x.idx[2]; 
+}
+
+static inline entity_index_t
+make_index_(uint32_t v) {
+	entity_index_t r = {{ (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff }};
+	return r;
+}
+
+static inline int
+INVALID_ENTITY_INDEX(entity_index_t e) {
+	return index_(e) == MAX_ENTITY;
+}
+
+static inline int
+ENTITY_INDEX_AFTER(const uint64_t *map, entity_index_t a, entity_index_t b) {
+	uint32_t aa = map[index_(a)];
+	uint32_t bb = map[index_(b)];
+	return aa > bb;
+} 
+
+static inline int
+ENTITY_INDEX_BEFORE(const uint64_t *map, entity_index_t a, entity_index_t b) {
+	uint32_t aa = map[index_(a)];
+	uint32_t bb = map[index_(b)];
+	return aa < bb;
+}
+
+static inline entity_index_t
+DEC_ENTITY_INDEX(entity_index_t e, int delta) {
+	return make_index_(index_(e) - delta);
+}
+
+static inline int
+ENTITY_INDEX_SAME(entity_index_t a, entity_index_t b) {
+	return a.idx[0] == b.idx[0] && a.idx[1] == b.idx[1] && a.idx[2] == b.idx[2];
+}
+
 int ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 int ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 void ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *buffer);
 void ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer);
-int ecs_lookup_component_(struct component_pool *pool, entity_index_t eid, int guess_index);
+int ecs_lookup_component_(const uint64_t *e, struct component_pool *pool, entity_index_t eid, int guess_index);
+entity_index_t ecs_new_entityid_(lua_State *L, struct entity_world *w); 
 
 #endif

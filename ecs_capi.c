@@ -12,7 +12,7 @@ remove_dup(struct component_pool *c, int index) {
 	entity_index_t eid = c->id[index];
 	int to = index;
 	for (i = index + 1; i < c->n; i++) {
-		if (c->id[i] != eid) {
+		if (!ENTITY_INDEX_SAME(c->id[i],eid)) {
 			eid = c->id[i];
 			c->id[to] = eid;
 			++to;
@@ -30,7 +30,7 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	if (c->stride == STRIDE_TAG) {
 		// it's a tag
 		entity_index_t eid = c->id[index];
-		if (index < c->n - 1 && eid == c->id[index + 1]) {
+		if (index < c->n - 1 && ENTITY_INDEX_SAME(eid , c->id[index + 1])) {
 			remove_dup(c, index + 1);
 		}
 		return DUMMY_PTR;
@@ -51,7 +51,7 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_i
 		return 0;
 	entity_index_t eid = c->id[index];
 	c = &w->c[silbling_id];
-	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);
+	int result_index = ecs_lookup_component_(w->eid.id, c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
 		return result_index + 1;
@@ -82,8 +82,7 @@ entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id,
 
 int
 entity_new_(struct entity_world *w, int cid, const void *buffer, void *L, int world_index) {
-	entity_index_t eid = ++w->max_id;
-	assert(eid != 0);
+	entity_index_t eid = ecs_new_entityid_(L, w);
 	struct component_pool *c = &w->c[cid];
 	assert(c->cap > 0);
 	if (buffer == NULL) {
@@ -103,14 +102,17 @@ entity_remove_(struct entity_world *w, int cid, int index, void *L, int world_in
 }
 
 static void
-insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid) {
+insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eindex) {
 	struct component_pool *c = &w->c[cid];
 	assert(c->stride == STRIDE_TAG);
 	int from = 0;
 	int to = c->n;
+	const uint64_t *map = w->eid.id;
+	uint64_t eid = map[index_(eindex)];
 	while (from < to) {
 		int mid = (from + to) / 2;
-		entity_index_t aa = c->id[mid];
+		entity_index_t aa_index = c->id[mid];
+		uint64_t aa = map[index_(aa_index)];
 		if (aa == eid)
 			return;
 		else if (aa < eid) {
@@ -124,17 +126,16 @@ insert_id(lua_State *L, int world_index, struct entity_world *w, int cid, entity
 		int i;
 		// Any dup id ?
 		for (i = from; i < c->n - 1; i++) {
-			if (c->id[i] == c->id[i + 1]) {
+			if (ENTITY_INDEX_SAME(c->id[i] , c->id[i + 1])) {
 				memmove(c->id + from + 1, c->id + from, sizeof(entity_index_t) * (i - from));
-				c->id[from] = eid;
+				c->id[from] = eindex;
 				return;
 			}
 		}
 	}
-	// max entityid avoid check
-	ecs_add_component_id_(L, world_index, w, cid, MAX_ENTITYID);
+	ecs_add_component_id_nocheck_(L, world_index, w, cid, INVALID_ENTITY);
 	memmove(c->id + from + 1, c->id + from, sizeof(entity_index_t) * (c->n - from - 1));
-	c->id[from] = eid;
+	c->id[from] = eindex;
 }
 
 void
@@ -160,7 +161,7 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 	entity_index_t eid = c->id[index];
 	if (cid != tag_id) {
 		c = &w->c[tag_id];
-		index = ecs_lookup_component_(c, eid, c->last_lookup);
+		index = ecs_lookup_component_(w->eid.id, c, eid, c->last_lookup);
 		if (index < 0)
 			return;
 		c->last_lookup = index;
@@ -172,9 +173,9 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 	// We should change 7 to 9 ( 1 3 5 9 9 ) rather than 7 to 5 ( 1 3 5 5 9 )
 	//                   iterator ->   ^                                ^
 	for (to = index + 1; to < c->n; to++) {
-		if (c->id[to] != eid) {
+		if (!ENTITY_INDEX_SAME(c->id[to] , eid)) {
 			for (from = index - 1; from >= 0; from--) {
-				if (c->id[from] != eid)
+				if (!ENTITY_INDEX_SAME(c->id[from] , eid))
 					break;
 			}
 			replace_id(c, from + 1, to, c->id[to]);
@@ -182,7 +183,7 @@ entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
 		}
 	}
 	for (from = index - 1; from >= 0; from--) {
-		if (c->id[from] != eid)
+		if (!ENTITY_INDEX_SAME(c->id[from] , eid))
 			break;
 	}
 	c->n = from + 1;

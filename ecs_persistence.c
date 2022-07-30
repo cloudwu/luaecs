@@ -10,17 +10,17 @@ struct file_reader {
 };
 
 static entity_index_t
-read_id(lua_State *L, FILE *f, entity_index_t *id, int n, int inc) {
+read_id(lua_State *L, FILE *f, entity_index_t *id, int n) {
 	size_t r = fread(id, sizeof(entity_index_t), n, f);
 	if (r != n)
 		luaL_error(L, "Read id error");
 	int i;
-	entity_index_t last_id = 0;
+	uint32_t last_id = 0;
 	for (i = 0; i < n; i++) {
-		id[i] += last_id + inc;
-		last_id = id[i];
+		last_id += index_(id[i]); 
+		id[i] = make_index_(last_id);
 	}
-	return last_id;
+	return make_index_(last_id);
 }
 
 static void
@@ -39,10 +39,10 @@ read_section(lua_State *L, struct file_reader *reader, struct component_pool *c,
 	}
 	entity_index_t maxid;
 	if (stride > 0) {
-		maxid = read_id(L, reader->f, c->id, n, 1);
+		maxid = read_id(L, reader->f, c->id, n);
 		read_data(L, reader->f, c->buffer, stride, n);
 	} else {
-		maxid = read_id(L, reader->f, c->id, n, 0);
+		maxid = read_id(L, reader->f, c->id, n);
 	}
 	return maxid;
 }
@@ -70,9 +70,7 @@ ecs_persistence_readcomponent(lua_State *L) {
 		c->buffer = (entity_index_t *)lua_newuserdatauv(L, c->cap * stride, 0);
 		lua_setiuservalue(L, 1, cid * 2 + 2);
 	}
-	entity_index_t maxid = read_section(L, reader, c, offset, stride, n);
-	if (maxid > w->max_id)
-		w->max_id = maxid;
+	read_section(L, reader, c, offset, stride, n);
 	c->n = n;
 	lua_pushinteger(L, n);
 	return 1;
@@ -96,13 +94,13 @@ get_length(struct file_section *s) {
 	return len;
 }
 
-static entity_index_t
-write_id_(lua_State *L, struct file_writer *w, entity_index_t *id, int n, entity_index_t last_id, int inc) {
+static uint32_t
+write_id_(lua_State *L, struct file_writer *w, entity_index_t *id, int n, uint32_t last_id) {
 	entity_index_t buffer[1024];
 	int i;
 	for (i = 0; i < n; i++) {
-		buffer[i] = id[i] - last_id - inc;
-		last_id = id[i];
+		last_id = index_(id[i]) - last_id;
+		buffer[i] = make_index_(last_id);
 	}
 	size_t r = fwrite(buffer, sizeof(entity_index_t), n, w->f);
 	if (r != n) {
@@ -112,14 +110,14 @@ write_id_(lua_State *L, struct file_writer *w, entity_index_t *id, int n, entity
 }
 
 static void
-write_id(lua_State *L, struct file_writer *w, struct component_pool *c, int inc) {
+write_id(lua_State *L, struct file_writer *w, struct component_pool *c) {
 	int i;
-	entity_index_t last_id = 0;
+	uint32_t last_id = 0;
 	for (i = 0; i < c->n; i += 1024) {
 		int n = c->n - i;
 		if (n > 1024)
 			n = 1024;
-		last_id = write_id_(L, w, c->id + i, n, last_id, inc);
+		last_id = write_id_(L, w, c->id + i, n, last_id);
 	}
 }
 
@@ -156,10 +154,10 @@ lwrite_section(lua_State *L) {
 	s->n = c->n;
 	++w->n;
 	if (s->stride > 0) {
-		write_id(L, w, c, 1);
+		write_id(L, w, c);
 		write_data(L, w, c);
 	} else {
-		write_id(L, w, c, 0);
+		write_id(L, w, c);
 	}
 	return 0;
 }
@@ -265,17 +263,9 @@ ecs_persistence_reader(lua_State *L) {
 }
 
 int
-ecs_persistence_resetmaxid(lua_State *L) {
-	struct entity_world *w = getW(L);
-	w->max_id = 0;
-	return 0;
-}
-
-int
 lpersistence_methods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "_readcomponent", ecs_persistence_readcomponent },
-		{ "_resetmaxid", ecs_persistence_resetmaxid },
 		{ "writer", ecs_persistence_writer },
 		{ "reader", ecs_persistence_reader },		
 		{ NULL, NULL },

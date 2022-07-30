@@ -60,8 +60,6 @@ ecs.reader = persistence_methods.reader
 
 local index_methods = ecs._index_methods()
 
-local DEFAULT_BLACKLIST
-
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
@@ -70,7 +68,6 @@ local function cache_world(obj, k)
 		select = {},
 		ref = {},
 		index_meta = {},
-		blacklist = DEFAULT_BLACKLIST,
 	}
 
 	do
@@ -371,15 +368,6 @@ function M:template_instance(temp, obj)
 	end
 end
 
-DEFAULT_BLACKLIST = M._clone_blacklist { ecs._REMOVED }
-
-function M:clone(iter, obj)
-	local eid = self:_clone(iter, context[self].blacklist)
-	if obj then
-		_new_entity(self, eid, obj)
-	end
-end
-
 function M:context(t)
 	local typenames = context[self].typenames
 	local id = {}
@@ -430,7 +418,6 @@ function M:clearall()
 	for _, tc in pairs(context[self].typenames) do
 		self:_clear(assert(tc.id))
 	end
-	persistence_methods._resetmaxid(self)
 end
 
 function M:dumpid(name)
@@ -530,8 +517,6 @@ function M:group_init(groupname)
 	ctx.group_struct = ctx.typenames[gsname].id
 	ctx.uid = 0
 	ctx.group = {}
-	-- Add group_struct to blacklist
-	ctx.blacklist = self._clone_blacklist ( { ctx.group_struct } , ctx.blacklist )
 end
 
 function M:group_id(iter)
@@ -595,6 +580,12 @@ function ecs.world()
 	context[w].typenames.REMOVED = {
 		name = "REMOVED",
 		id = ecs._REMOVED,
+		size = 0,
+		tag = true,
+	}
+	context[w].typenames._eid = {
+		name = "_eid",
+		id = ecs._EID,
 		size = 0,
 		tag = true,
 	}

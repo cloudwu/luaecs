@@ -11,6 +11,7 @@ static const entity_index_t INVALID_ENTITY = { { 0xff, 0xff, 0xff } };
 
 #define MAX_ENTITY 0xffffff 
 #define ENTITY_INIT_SIZE 4096
+#define ENTITY_ID_LOOKUP 8191
 
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
@@ -31,8 +32,6 @@ static const entity_index_t INVALID_ENTITY = { { 0xff, 0xff, 0xff } };
 #define TYPE_USERDATA 8
 #define TYPE_COUNT 9
 
-typedef unsigned short component_id_t;
-
 struct component_pool {
 	int cap;
 	int n;
@@ -47,6 +46,7 @@ struct entity_id {
 	uint32_t cap;
 	uint64_t last_id;
 	uint64_t *id;
+	entity_index_t lookup[ENTITY_ID_LOOKUP];
 };
 
 struct entity_world {

@@ -29,18 +29,18 @@ for i = 1, 10 do
 
 end
 
-for v in w:select "value:in string?in _eid:in" do
+for v in w:select "value:in _eid:in" do
 	if v.value % 2 == 0 then
-		print(v.value, v.string, v._eid, "REMOVED")
+		print(v.value, v._eid, "REMOVED")
 		w:remove(v._eid)
 	else
-		print(v.value, v.string, v._eid)
+		-- read component by eid
+		local str = w:access(v._eid, "string")
+		print(v.value, str, v._eid)
 	end
 end
 
 w:update()
-
-print "------"
 
 for v in w:select "value:in string?in _eid:in" do
 	print(v.value, v.string, v._eid)

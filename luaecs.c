@@ -14,9 +14,7 @@
 #include "ecs_internal.h"
 #include "ecs_persistence.h"
 #include "ecs_template.h"
-#include "ecs_index.h"
 #include "ecs_capi.h"
-
 
 static void
 init_component_pool(struct entity_world *w, int index, int stride, int opt_size) {
@@ -1658,6 +1656,76 @@ lfilter(lua_State *L) {
 	return 0;
 }
 
+int
+laccess(lua_State *L) {
+	struct entity_world *w = getW(L);
+	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
+	int idx = find_eid(w, eid);
+	if (idx < 0)
+		return luaL_error(L, "eid %x not found", idx);
+	struct group_iter *iter = lua_touserdata(L, 3);
+	int value_index = 4;
+	if (iter->nkey > 1)
+		return luaL_error(L, "More than one key in pattern");
+	if (iter->world != w)
+		return luaL_error(L, "World mismatch");
+
+	int output = (lua_gettop(L) >= value_index);
+	int mainkey = ENTITYID_TAG;
+	struct group_key *k = &iter->k[0];
+
+	struct component_pool *c = &w->c[k->id];
+	if (c->stride == STRIDE_TAG) {
+		// It is a tag
+		if (output) {
+			if (lua_toboolean(L, value_index)) {
+				entity_enable_tag_(w, mainkey, idx, k->id);
+			} else {
+				entity_disable_tag_(w, mainkey, idx, k->id);
+			}
+			return 0;
+		} else {
+			lua_pushboolean(L, entity_sibling_index_(w, mainkey, idx, k->id) != 0);
+			return 1;
+		}
+	}
+
+	unsigned int index = entity_sibling_index_(w, mainkey, idx, k->id);
+	if (index == 0) {
+		if (output)
+			return luaL_error(L, "No component .%s", k->name);
+		else
+			return 0;
+	}
+	if (c->stride == STRIDE_LUA) {
+		// It is lua component
+		lua_settop(L, value_index);
+		int world_index = 1;
+		if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
+			luaL_error(L, "Missing lua table for .%s", k->name);
+		}
+		if (output) {
+			lua_pushvalue(L, value_index);
+			lua_rawseti(L, -2, index);
+			return 0;
+		} else {
+			lua_rawgeti(L, -1, index);
+			return 1;
+		}
+	}
+
+	// It is C component
+	void *buffer = get_ptr(c, index - 1);
+	if (output) {
+		ecs_write_component_object_(L, k->field_n, iter->f, buffer);
+		return 0;
+	} else {
+		ecs_read_object_(L, iter, buffer);
+		return 1;
+	}
+}
+
+
 static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
@@ -1678,6 +1746,7 @@ lmethods(lua_State *L) {
 		{ "_readid", lreadid },
 		{ "_count", lcount },
 		{ "_filter", lfilter },
+		{ "_access", laccess },
 		{ "__gc", ldeinit_world },
 		{ NULL, NULL },
 	};
@@ -1696,7 +1765,6 @@ luaopen_ecs_core(lua_State *L) {
 		
 		/*library extension*/
 		{ "_group_methods", lgroup_methods },
-		{ "_index_methods", lindex_methods },
 		{ "_persistence_methods", lpersistence_methods },
 		{ "_template_methods", ltemplate_methods },
 		{ NULL, NULL },

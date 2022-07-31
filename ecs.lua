@@ -58,8 +58,6 @@ local persistence_methods = ecs._persistence_methods()
 ecs.writer = persistence_methods.writer
 ecs.reader = persistence_methods.reader
 
-local index_methods = ecs._index_methods()
-
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
@@ -67,17 +65,7 @@ local function cache_world(obj, k)
 		id = 0,
 		select = {},
 		ref = {},
-		index_meta = {},
 	}
-
-	do
-		local c_select = c.select
-		local access_index = index_methods._access_index
-		c.index_meta.__index = index_methods._cache_index
-		c.index_meta.__call = function (self, id, pat_string, ...)
-			return access_index(self, id, c_select[pat_string], ...)
-		end
-	end
 
 	local function gen_ref_pat(key)
 		local typenames = c.typenames
@@ -386,6 +374,13 @@ function M:select(pat)
 end
 
 do
+	local access = M._access
+	function M:access(eid, pat, ...)
+		return access(self, eid, context[self].select[pat], ...)
+	end
+end
+
+do
 	local _count = M._count
 	function M:count(pat)
 		return _count(context[self].select[pat])
@@ -423,14 +418,6 @@ end
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)
-end
-
-function M:make_index(name, size)
-	local c = context[self]
-	local t = assert(c.typenames[name])
-	local id = t.id
-	local type = t[1][1]
-	return index_methods._make_index(self, id, type, size or 1024, c.index_meta)
 end
 
 function M:component_id(name)

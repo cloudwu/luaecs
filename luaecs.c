@@ -62,7 +62,7 @@ lnew_type(lua_State *L) {
 static int
 lcount_memory(lua_State *L) {
 	struct entity_world *w = getW(L);
-	size_t sz = sizeof(*w);
+	size_t sz = sizeof(*w) + sizeof(uint64_t) * w->eid.cap;
 	int i;
 	size_t msz = sz;
 	for (i = 0; i < MAX_COMPONENT; i++) {
@@ -73,7 +73,7 @@ lcount_memory(lua_State *L) {
 		}
 		if (c->buffer != DUMMY_PTR) {
 			sz += c->cap * c->stride;
-			msz += c->cap * c->stride;
+			msz += c->n * c->stride;
 		}
 	}
 	lua_pushinteger(L, sz);

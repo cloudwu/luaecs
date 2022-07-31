@@ -13,7 +13,7 @@ w:register {
 	type = "lua",
 }
 
-w:new {
+local eid = w:new {
 	value = 42
 }
 
@@ -40,7 +40,13 @@ for v in w:select "value:in _eid:in" do
 	end
 end
 
+assert(w:exist(eid))
+assert(w:access(eid, "REMOVED") == true)
+assert(w:access(eid, "value") == 42)
+
 w:update()
+
+assert(w:exist(eid) == false)
 
 for v in w:select "value:in string?in _eid:in" do
 	print(v.value, v.string, v._eid)

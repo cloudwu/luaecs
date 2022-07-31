@@ -323,8 +323,9 @@ end
 
 function M:new(obj)
 --	dump(obj)
-	local eid = self:_newentity()
-	_new_entity(self, eid, obj)
+	local index, eid = self:_newentity()
+	_new_entity(self, index, obj)
+	return eid
 end
 
 local template_methods = ecs._template_methods()

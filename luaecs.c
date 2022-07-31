@@ -202,8 +202,10 @@ lnew_entity(lua_State *L) {
 		return luaL_error(L, "Too many entities");
 	}
 
-	lua_pushinteger(L, index_(n));
-	return 1;
+	int index = index_(n);
+	lua_pushinteger(L, index);
+	lua_pushinteger(L, w->eid.id[index]);
+	return 2;
 }
 
 static int
@@ -1527,7 +1529,15 @@ find_eid(struct entity_world *w, uint64_t eid) {
 			begin = mid+1;
 	}
 	return -1;
-};
+}
+
+static int
+lexist(lua_State *L) {
+	struct entity_world *w = getW(L);
+	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
+	lua_pushboolean(L, find_eid(w, eid) >= 0);
+	return 1;
+}
 
 static int
 lremove(lua_State *L) {
@@ -1738,6 +1748,7 @@ lmethods(lua_State *L) {
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
+		{ "exist", lexist },
 		{ "remove", lremove },
 		{ "_object", lobject },
 		{ "_sync", lsync },

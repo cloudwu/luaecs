@@ -204,8 +204,7 @@ ecs_index_access(lua_State *L) {
 			if (lua_toboolean(L, value_index)) {
 				lua_settop(L, value_index);
 				lua_getiuservalue(L, 1, WORLD_INDEX);
-				int world_index = value_index + 1;
-				entity_enable_tag_(cache->world, mainkey, idx, k->id, L, world_index);
+				entity_enable_tag_(cache->world, mainkey, idx, k->id);
 			} else {
 				entity_disable_tag_(cache->world, mainkey, idx, k->id);
 			}

@@ -17,7 +17,7 @@ w:new {
 	value = 42
 }
 
-for i = 2, 10 do
+for i = 1, 10 do
 	local str
 	if i % 3 == 0 then
 		str = "Str" .. i
@@ -32,7 +32,7 @@ end
 for v in w:select "value:in string?in _eid:in" do
 	if v.value % 2 == 0 then
 		print(v.value, v.string, v._eid, "REMOVED")
-		w:remove(v)
+		w:remove(v._eid)
 	else
 		print(v.value, v.string, v._eid)
 	end

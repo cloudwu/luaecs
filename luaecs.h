@@ -14,10 +14,10 @@ struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index);
 	void (*clear_type)(struct entity_world *w, int cid);
 	int (*sibling_id)(struct entity_world *w, int cid, int index, int slibling_id);
-	void *(*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer, void *L, int world_index);
-	int (*new_entity)(struct entity_world *w, int cid, const void *buffer, void *L, int world_index);
-	void (*remove)(struct entity_world *w, int cid, int index, void *L, int world_index);
-	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id, void *L, int world_index);
+	void *(*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer);
+	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
+	void (*remove)(struct entity_world *w, int cid, int index);
+	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id);
 	void (*disable_tag)(struct entity_world *w, int cid, int index, int tag_id);
 	int (*get_lua)(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
 };
@@ -76,26 +76,26 @@ static inline void *
 entity_add_sibling(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id, const void *buffer) {
 	int mid = real_id_(ctx, cid);
 	int sid = real_id_(ctx, sibling_id);
-	return ctx->api->add_sibling(ctx->world, mid, index, sid, buffer, ctx->L, 1);
+	return ctx->api->add_sibling(ctx->world, mid, index, sid, buffer);
 }
 
 static inline int
 entity_new(struct ecs_context *ctx, cid_t cid, const void *buffer) {
 	int mid = real_id_(ctx, cid);
-	return ctx->api->new_entity(ctx->world, mid, buffer, ctx->L, 1);
+	return ctx->api->new_entity(ctx->world, mid, buffer);
 }
 
 static inline void
 entity_remove(struct ecs_context *ctx, cid_t cid, int index) {
 	int mid = real_id_(ctx, cid);
-	ctx->api->remove(ctx->world, mid, index, ctx->L, 1);
+	ctx->api->remove(ctx->world, mid, index);
 }
 
 static inline void
 entity_enable_tag(struct ecs_context *ctx, cid_t cid, int index, cid_t tag_id) {
 	int mid = real_id_(ctx, cid);
 	int tid = real_id_(ctx, tag_id);
-	ctx->api->enable_tag(ctx->world, mid, index, tid, ctx->L, 1);
+	ctx->api->enable_tag(ctx->world, mid, index, tid);
 }
 
 static inline void

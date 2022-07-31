@@ -151,11 +151,10 @@ ecs_get_eid(struct entity_world *w, int cid, int index) {
 	return w->eid.id[index_(c->id[index])];
 }
 
-int ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
-int ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
+int ecs_add_component_id_(struct entity_world *w, int cid, entity_index_t eindex);
 void ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *buffer);
 void ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer);
-int ecs_lookup_component_(struct component_pool *pool, entity_index_t eid, int guess_index);
-entity_index_t ecs_new_entityid_(lua_State *L, struct entity_world *w); 
+int ecs_lookup_component_(struct component_pool *pool, entity_index_t eindex, int guess_index);
+entity_index_t ecs_new_entityid_(struct entity_world *w); 
 
 #endif

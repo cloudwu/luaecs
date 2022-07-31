@@ -276,15 +276,6 @@ move_item(struct component_pool *pool, int from, int to, int delta) {
 }
 
 static void
-move_object(lua_State *L, struct component_pool *pool, int from, int to, int delta) {
-	pool->id[to] = DEC_ENTITY_INDEX(pool->id[from], delta);
-	if (from != to) {
-		lua_rawgeti(L, -1, from + 1);
-		lua_rawseti(L, -2, to + 1);
-	}
-}
-
-static void
 remove_entityid(struct entity_world *w, struct component_pool *removed) {
 	int n = removed->n;
 	if (n == 0)
@@ -330,7 +321,8 @@ less_part(struct component_pool *c, entity_index_t vidx, int from) {
 }
 
 static void
-remove_all(lua_State *L, struct component_pool *pool, struct component_pool *removed, int cid) {
+remove_all(lua_State *L, struct entity_world *w, struct component_pool *removed, int cid) {
+	struct component_pool *pool = &w->c[cid];
 	if (pool->n == 0)
 		return;
 	entity_index_t *removed_id = removed->id;
@@ -364,12 +356,14 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			int cmp = ENTITY_INDEX_CMP(pool->id[i], removed_id[removed_n]);
 			if (cmp == 0) {
 				// pool[i] should be removed
+				lua_pushnil(L);
+				lua_rawseti(L, -2, ENTITY_EID(w, pool->id[i]));
 				++removed_n;
 				++delta;
 				++i;
 			} else if (cmp < 0) {
 				// pool[i] < current removed
-				move_object(L, pool, i, index, removed_n);
+				move_tag(pool, i, index, removed_n);
 				++index;
 				++i;
 			} else {
@@ -378,7 +372,7 @@ remove_all(lua_State *L, struct component_pool *pool, struct component_pool *rem
 			}
 		}
 		for (;i<pool->n;i++) {
-			move_object(L, pool, i, index, removed_n);
+			move_tag(pool, i, index, removed_n);
 			++index;
 		}
 		lua_pop(L, 1); // pop lua object table
@@ -464,9 +458,8 @@ lupdate(lua_State *L) {
 	if (removed->n > 0) {
 		// mark removed
 		for (i = 0; i < MAX_COMPONENT; i++) {
-			struct component_pool *pool = &w->c[i];
 			if (i != removed_id)
-				remove_all(L, pool, removed, i);
+				remove_all(L, w, removed, i);
 		}
 		remove_entityid(w, removed);
 		removed->n = 0;
@@ -891,7 +884,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
-					lua_rawseti(L, -2, index);
+					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index-1));
 				} else {
 					void *buffer = get_ptr(c, index - 1);
 					ecs_write_component_object_(L, k->field_n, f, buffer);
@@ -904,7 +897,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
-					lua_rawseti(L, -2, index + 1);
+					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index-1));
 				} else {
 					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL, L, world_index);
 					ecs_write_component_object_(L, k->field_n, f, buffer);
@@ -936,7 +929,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 					luaL_error(L, "Missing lua table for %d", mainkey);
 				}
 				lua_insert(L, -2);
-				lua_rawseti(L, -2, idx + 1);
+				lua_rawseti(L, -2, ecs_get_eid(iter->world, mainkey, idx));
 			} else {
 				void *buffer = get_ptr(c, idx);
 				ecs_write_component_object_(L, iter->k[0].field_n, iter->f, buffer);
@@ -1071,7 +1064,7 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 
-					lua_rawgeti(L, -1, index[i]);
+					lua_rawgeti(L, -1, ecs_get_eid(iter->world, k->id, index[i]-1));
 					lua_setfield(L, obj_index, k->name);
 					lua_pop(L, 1);
 				} else {
@@ -1131,8 +1124,8 @@ lreadid(lua_State *L) {
 		return 0;
 	}
 	struct entity_world *w = getW(L);
-	uint32_t index = index_(w->c[mainkey].id[idx]);
-	lua_pushinteger(L, (lua_Integer)w->eid.id[index]);
+	entity_index_t index = w->c[mainkey].id[idx];
+	lua_pushinteger(L, (lua_Integer)ENTITY_EID(w, index));
 	return 1;
 }
 
@@ -1530,10 +1523,10 @@ lobject(lua_State *L) {
 			return luaL_error(L, "Missing lua table for %d", cid);
 		}
 		if (lua_isnil(L, 2)) {
-			lua_rawgeti(L, -1, index + 1);
+			lua_rawgeti(L, -1, ecs_get_eid(w, cid, index));
 		} else {
 			lua_pushvalue(L, 2);
-			lua_rawseti(L, -2, index + 1);
+			lua_rawseti(L, -2, ecs_get_eid(w, cid, index));
 			lua_settop(L, 2);
 		}
 		return 1;
@@ -1576,7 +1569,7 @@ ldumpid(lua_State *L) {
 	int i;
 	for (i = 0; i < c->n; i++) {
 		entity_index_t index = c->id[i];
-		lua_pushinteger(L, w->eid.id[index_(index)]);
+		lua_pushinteger(L, ENTITY_EID(w, index));
 		lua_rawseti(L, -2, i + 1);
 	}
 	return 1;

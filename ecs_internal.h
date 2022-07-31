@@ -140,6 +140,17 @@ DEC_ENTITY_INDEX(entity_index_t e, int delta) {
 	return make_index_(index_(e) - delta);
 }
 
+static inline uint64_t
+ENTITY_EID(struct entity_world *w, entity_index_t e) {
+	return w->eid.id[index_(e)];
+}
+
+static inline uint64_t
+ecs_get_eid(struct entity_world *w, int cid, int index) {
+	struct component_pool *c = &w->c[cid];
+	return w->eid.id[index_(c->id[index])];
+}
+
 int ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 int ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 void ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *buffer);

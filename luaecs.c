@@ -1514,10 +1514,8 @@ lcheck_iter(lua_State *L) {
 }
 
 static int
-find_eid_(struct entity_world *w, uint64_t eid) {
+find_eid_(struct entity_world *w, uint64_t eid, int begin, int end) {
 	const uint64_t *id = w->eid.id;
-	int begin = 0;
-	int end = w->eid.n;
 	while (begin < end) {
 		int mid = (begin + end) / 2;
 		if (eid == id[mid]) {
@@ -1528,7 +1526,8 @@ find_eid_(struct entity_world *w, uint64_t eid) {
 		else
 			begin = mid+1;
 	}
-	return -1;
+	int p = begin > w->eid.n / 2 ? begin : begin + 1;
+	return -p;
 }
 
 static int
@@ -1536,13 +1535,30 @@ find_eid(struct entity_world *w, uint64_t eid) {
 	unsigned h = (unsigned)(2654435761 * (uint32_t)eid) % ENTITY_ID_LOOKUP;
 	entity_index_t p = w->eid.lookup[h];
 	int index = index_(p);
-	if (index >= w->eid.n || w->eid.id[index] != eid) {
-		index = find_eid_(w, eid);
-		if (index < 0)
-			return -1;
-		w->eid.lookup[h] = make_index_(index);
+	int begin = 0;
+	int end;
+	if (index >= w->eid.n) {
+		end = w->eid.n;
+	} else {
+		uint64_t v = w->eid.id[index];
+		if (v == eid) {
+			return index;
+		}
+		if (v > eid) {
+			end = index;
+		} else {
+			begin = index + 1;
+			end = w->eid.n;
+		}
 	}
-	return index;
+	index = find_eid_(w, eid, begin, end);
+	if (index < 0) {
+		w->eid.lookup[h] = make_index_(-index);
+		return -1;
+	} else {
+		w->eid.lookup[h] = make_index_(index);
+		return index;
+	}
 }
 
 static int

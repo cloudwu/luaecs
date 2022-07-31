@@ -148,7 +148,7 @@ int
 ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid) {
 	struct component_pool *pool = &w->c[cid];
 	int index = add_component_id_(L, world_index, pool, cid, eid);
-	if (index > 0 && ! ENTITY_INDEX_AFTER(w->eid.id, eid , pool->id[index - 1])) {
+	if (index > 0 && ENTITY_INDEX_CMP(eid , pool->id[index - 1]) <= 0) {
 		luaL_error(L, "Add component %d fail", cid);
 	}
 	return index;
@@ -195,11 +195,10 @@ lnew_entity(lua_State *L) {
 }
 
 static int
-binary_search(const uint64_t *map, entity_index_t *a, int from, int to, uint64_t v) {
+binary_search(entity_index_t *a, int from, int to, uint32_t v) {
 	while (from < to) {
 		int mid = (from + to) / 2;
-		entity_index_t a_index = a[mid];
-		uint64_t aa = map[index_(a_index)];
+		uint32_t aa = index_(a[mid]);
 		if (aa == v)
 			return mid;
 		else if (aa < v) {
@@ -214,52 +213,52 @@ binary_search(const uint64_t *map, entity_index_t *a, int from, int to, uint64_t
 #define GUESS_RANGE 64
 
 static inline int
-search_after(const uint64_t *e, struct component_pool *pool, uint64_t eid, int from_index) {
+search_after(struct component_pool *pool, uint32_t eid, int from_index) {
 	entity_index_t *a = pool->id;
 	if (from_index + GUESS_RANGE * 2 >= pool->n) {
-		return binary_search(e, a, from_index + 1, pool->n, eid);
+		return binary_search(a, from_index + 1, pool->n, eid);
 	}
 	entity_index_t higher_index = a[from_index + GUESS_RANGE];
-	uint64_t higher = e[index_(higher_index)];
+	uint32_t higher = index_(higher_index);
 	if (eid > higher) {
-		return binary_search(e, a, from_index + GUESS_RANGE + 1, pool->n, eid);
+		return binary_search(a, from_index + GUESS_RANGE + 1, pool->n, eid);
 	}
-	return binary_search(e, a, from_index + 1, from_index + GUESS_RANGE + 1, eid);
+	return binary_search(a, from_index + 1, from_index + GUESS_RANGE + 1, eid);
 }
 
 int
-ecs_lookup_component_(const uint64_t *e, struct component_pool *pool, entity_index_t eindex, int guess_index) {
+ecs_lookup_component_(struct component_pool *pool, entity_index_t eindex, int guess_index) {
 	int n = pool->n;
 	if (n == 0)
 		return -1;
-	uint64_t eid = e[index_(eindex)];
+	uint32_t eid = index_(eindex);
 	if (guess_index < 0 || guess_index >= pool->n)
-		return binary_search(e, pool->id, 0, pool->n, eid);
+		return binary_search(pool->id, 0, pool->n, eid);
 	entity_index_t *a = pool->id;
 	entity_index_t lower_index = a[guess_index];
-	uint64_t lower = e[index_(lower_index)];
+	uint32_t lower = index_(lower_index);
 	if (eid <= lower) {
 		if (eid == lower)
 			return guess_index;
-		return binary_search(e, a, 0, guess_index, eid);
+		return binary_search(a, 0, guess_index, eid);
 	}
-	return search_after(e, pool, eid, guess_index);
+	return search_after(pool, eid, guess_index);
 }
 
 static inline int
-lookup_component_from(const uint64_t *e, struct component_pool *pool, entity_index_t eindex, int from_index) {
+lookup_component_from(struct component_pool *pool, entity_index_t eindex, int from_index) {
 	int n = pool->n;
 	if (from_index >= n)
 		return -1;
-	uint64_t eid = e[index_(eindex)];
+	uint32_t eid = index_(eindex);
 	entity_index_t *a = pool->id;
-	uint64_t from_id = e[index_(a[from_index])];
+	uint32_t from_id = index_(a[from_index]);
 	if (eid <= from_id) {
 		if (eid == from_id)
 			return from_index;
 		return -1;
 	}
-	return search_after(e, pool, eid, from_index);
+	return search_after(pool, eid, from_index);
 }
 
 static inline void
@@ -270,15 +269,19 @@ move_tag(struct component_pool *pool, int from, int to, int delta) {
 static inline void
 move_item(struct component_pool *pool, int from, int to, int delta) {
 	pool->id[to] = DEC_ENTITY_INDEX(pool->id[from], delta);
-	int stride = pool->stride;
-	memcpy((char *)pool->buffer + to * stride, (char *)pool->buffer + from * stride, stride);
+	if (from != to) {
+		int stride = pool->stride;
+		memcpy((char *)pool->buffer + to * stride, (char *)pool->buffer + from * stride, stride);
+	}
 }
 
 static void
 move_object(lua_State *L, struct component_pool *pool, int from, int to, int delta) {
 	pool->id[to] = DEC_ENTITY_INDEX(pool->id[from], delta);
-	lua_rawgeti(L, -1, from + 1);
-	lua_rawseti(L, -2, to + 1);
+	if (from != to) {
+		lua_rawgeti(L, -1, from + 1);
+		lua_rawseti(L, -2, to + 1);
+	}
 }
 
 static void
@@ -293,72 +296,147 @@ remove_entityid(struct entity_world *w, struct component_pool *removed) {
 	for (i=1;i<n;i++) {
 		uint32_t next = index_(removed->id[i]);
 		uint32_t t = next - last - 1;
-		memmove(eid+offset, eid+offset+1, t * sizeof(uint64_t));
+		memmove(eid+offset, eid+last+1, t * sizeof(uint64_t));
 		offset += t;
+		last = next;
 	}
 	uint32_t t = w->eid.n - last - 1;
-	memmove(eid+offset, eid+offset+1, t * sizeof(uint64_t));
+	memmove(eid+offset, eid+last+1, t * sizeof(uint64_t));
 	w->eid.n -= removed->n;
 }
 
+// return the biggset index less than v, or [index] = v:
+// c : [ 1 3 5 7 ], v = 4, from = 0, return 2 (1 3)
+// c : [ 1 3 5 7 ], v = 3, from = 1, return 1 (1)
+static int
+less_part(struct component_pool *c, entity_index_t vidx, int from) {
+	if (from >= c->n)
+		return c->n;
+	entity_index_t *id = c->id;
+	uint32_t v = index_(vidx);
+	if (v <= index_(id[from]))
+		return from;
+	int begin = from;
+	int end = c->n;
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		uint32_t p = index_(id[mid]);
+		if (p < v)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+	return begin;
+}
+
 static void
-remove_all(lua_State *L, const uint64_t *e, struct component_pool *pool, struct component_pool *removed, int cid) {
-	int index = 0;
-	int count = 0;
-	int i;
-	int first_removed = 0;
+remove_all(lua_State *L, struct component_pool *pool, struct component_pool *removed, int cid) {
+	if (pool->n == 0)
+		return;
 	entity_index_t *removed_id = removed->id;
-	for (i = 0; i < removed->n; i++) {
-		int r = lookup_component_from(e, pool, removed_id[i], index);
-		if (r >= 0) {
-			index = r + 1;
-			pool->id[r] = INVALID_ENTITY;
-			if (count == 0)
-				first_removed = r;
-			++count;
-		}
+	if (ENTITY_INDEX_CMP(removed_id[0], pool->id[pool->n-1]) > 0) {
+		// No action, because removed_id[0] is bigger than the biggest index in pool
+		return;
 	}
-	if (count > 0) {
-		index = first_removed;
-		int delta = 0;
-		switch (pool->stride) {
-		case STRIDE_LUA:
-			if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
-				luaL_error(L, "Missing lua object table for type %d", cid);
-			}
-			for (i = first_removed; i < pool->n; i++) {
-				if (!INVALID_ENTITY_INDEX(pool->id[i])) {
-					move_object(L, pool, i, index, delta);
-					++index;
-				} else {
-					++delta;
-				}
-			}
-			lua_pop(L, 1); // pop lua object table
-			break;
-		case STRIDE_TAG:
-			for (i = first_removed; i < pool->n; i++) {
-				if (!INVALID_ENTITY_INDEX(pool->id[i])) {
-					move_tag(pool, i, index, delta);
-					++index;
-				} else {
-					++delta;
-				}
-			}
-			break;
-		default:
-			for (i = first_removed; i < pool->n; i++) {
-				if (!INVALID_ENTITY_INDEX(pool->id[i])) {
-					move_item(pool, i, index, delta);
-					++index;
-				} else {
-					++delta;
-				}
-			}
-			break;
+	if (ENTITY_INDEX_CMP(pool->id[0], removed_id[removed->n-1]) > 0) {
+		// No removed components, but the id in pool should -= removed->n
+		int n = removed->n;
+		int i;
+		for (i=0;i<pool->n;i++) {
+			pool->id[i] = DEC_ENTITY_INDEX(pool->id[i], n);
 		}
-		pool->n -= count;
+		return;
 	}
+	int removed_n = less_part(removed, pool->id[0], 0);
+	int i = 0;
+	if (removed_n == 0) {
+		// removed[0] is less than pool[0], find the start point of pool
+		i = less_part(pool, removed_id[0], 0);
+	}
+	int index = i;
+	int delta = 0;
+	switch (pool->stride) {
+	case STRIDE_LUA:
+		if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+			luaL_error(L, "Missing lua object table for type %d", cid);
+		}
+		while (i < pool->n && removed_n < removed->n) {
+			int cmp = ENTITY_INDEX_CMP(pool->id[i], removed_id[removed_n]);
+			if (cmp == 0) {
+				// pool[i] should be removed
+				++removed_n;
+				++delta;
+				++i;
+			} else if (cmp < 0) {
+				// pool[i] < current removed
+				move_object(L, pool, i, index, removed_n);
+				++index;
+				++i;
+			} else {
+				// pool[i] > current removed, find next removed
+				removed_n = less_part(removed, pool->id[i], removed_n);
+			}
+		}
+		for (;i<pool->n;i++) {
+			move_object(L, pool, i, index, removed_n);
+			++index;
+		}
+		lua_pop(L, 1); // pop lua object table
+		break;
+	case STRIDE_TAG: {
+		entity_index_t last = INVALID_ENTITY;
+		while (i < pool->n && removed_n < removed->n) {
+			if (ENTITY_INDEX_CMP(pool->id[i], last) == 0) {
+				// remove duplicate
+				++i;
+			} else {
+				int cmp = ENTITY_INDEX_CMP(pool->id[i], removed_id[removed_n]);
+				if (cmp == 0) {
+					// pool[i] should be removed
+					++delta;
+					++i;
+				} else if (cmp < 0) {
+					// pool[i] < current removed
+					last = pool->id[i];
+					move_tag(pool, i, index, removed_n);
+					++index;
+					++i;
+				} else {
+					// pool[i] > current removed, find next removed
+					removed_n = less_part(removed, pool->id[i], removed_n);
+				}
+			}
+		}
+		for (;i<pool->n;i++) {
+			move_tag(pool, i, index, removed_n);
+			++index;
+		}
+		break; }
+	default:
+		while (i < pool->n && removed_n < removed->n) {
+			int cmp = ENTITY_INDEX_CMP(pool->id[i], removed_id[removed_n]);
+			if (cmp == 0) {
+				// pool[i] should be removed
+				++removed_n;
+				++delta;
+				++i;
+			} else if (cmp < 0) {
+				// pool[i] < current removed
+				move_item(pool, i, index, removed_n);
+				++index;
+				++i;
+			} else {
+				// pool[i] > current removed, find next removed
+				removed_n = less_part(removed, pool->id[i], removed_n);
+			}
+		}
+		for (;i<pool->n;i++) {
+			move_item(pool, i, index, removed_n);
+			++index;
+		}
+		break;
+	}
+	pool->n -= delta;
 }
 
 static int
@@ -370,7 +448,7 @@ ladd_component(lua_State *L) {
 	entity_index_t eid = make_index_(n);
 	int cid = check_cid(L, w, 3);
 	struct component_pool *c = &w->c[cid];
-	int index = ecs_lookup_component_(w->eid.id, c, eid, c->n - 1);
+	int index = ecs_lookup_component_(c, eid, c->n - 1);
 	if (index < 0)
 		index = ecs_add_component_id_(L, 1, w, cid, eid);
 	lua_pushinteger(L, index + 1);
@@ -387,8 +465,8 @@ lupdate(lua_State *L) {
 		// mark removed
 		for (i = 0; i < MAX_COMPONENT; i++) {
 			struct component_pool *pool = &w->c[i];
-			if (i != removed_id && pool->n > 0)
-				remove_all(L, w->eid.id, pool, removed, i);
+			if (i != removed_id)
+				remove_all(L, pool, removed, i);
 		}
 		remove_entityid(w, removed);
 		removed->n = 0;

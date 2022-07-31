@@ -3,6 +3,7 @@
 
 #include <lua.h>
 #include <lauxlib.h>
+#include <string.h>
 
 typedef struct { uint8_t idx[3]; } entity_index_t;
 
@@ -130,34 +131,20 @@ INVALID_ENTITY_INDEX(entity_index_t e) {
 }
 
 static inline int
-ENTITY_INDEX_AFTER(const uint64_t *map, entity_index_t a, entity_index_t b) {
-	uint32_t aa = map[index_(a)];
-	uint32_t bb = map[index_(b)];
-	return aa > bb;
+ENTITY_INDEX_CMP(entity_index_t a, entity_index_t b) {
+	return memcmp(&a, &b, sizeof(a));
 } 
-
-static inline int
-ENTITY_INDEX_BEFORE(const uint64_t *map, entity_index_t a, entity_index_t b) {
-	uint32_t aa = map[index_(a)];
-	uint32_t bb = map[index_(b)];
-	return aa < bb;
-}
 
 static inline entity_index_t
 DEC_ENTITY_INDEX(entity_index_t e, int delta) {
 	return make_index_(index_(e) - delta);
 }
 
-static inline int
-ENTITY_INDEX_SAME(entity_index_t a, entity_index_t b) {
-	return a.idx[0] == b.idx[0] && a.idx[1] == b.idx[1] && a.idx[2] == b.idx[2];
-}
-
 int ecs_add_component_id_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 int ecs_add_component_id_nocheck_(lua_State *L, int world_index, struct entity_world *w, int cid, entity_index_t eid);
 void ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *buffer);
 void ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer);
-int ecs_lookup_component_(const uint64_t *e, struct component_pool *pool, entity_index_t eid, int guess_index);
+int ecs_lookup_component_(struct component_pool *pool, entity_index_t eid, int guess_index);
 entity_index_t ecs_new_entityid_(lua_State *L, struct entity_world *w); 
 
 #endif

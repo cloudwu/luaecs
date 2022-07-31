@@ -197,7 +197,7 @@ entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_
 	if (c->stride != STRIDE_LUA || index <= 0 || index > c->n) {
 		return LUA_TNIL;
 	}
-	if (lua_getiuservalue(wL, world_index, cid * 2 + 2) != LUA_TTABLE) {
+	if (lua_getiuservalue(wL, world_index, cid) != LUA_TTABLE) {
 		lua_pop(wL, 1);
 		return LUA_TNIL;
 	}

@@ -65,10 +65,10 @@ ecs_persistence_readcomponent(lua_State *L) {
 	if (n > c->cap)
 		c->cap = n;
 	c->id = (entity_index_t *)lua_newuserdatauv(L, c->cap * sizeof(entity_index_t), 0);
-	lua_setiuservalue(L, 1, cid * 2 + 1);
+	lua_setiuservalue(L, 1, cid);
 	if (stride > 0) {
 		c->buffer = (entity_index_t *)lua_newuserdatauv(L, c->cap * stride, 0);
-		lua_setiuservalue(L, 1, cid * 2 + 2);
+		lua_setiuservalue(L, 1, cid);
 	}
 	read_section(L, reader, c, offset, stride, n);
 	c->n = n;

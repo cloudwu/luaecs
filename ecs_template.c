@@ -112,7 +112,7 @@ ecs_template_instance_component(lua_State *L) {
 	int index = luaL_checkinteger(L, 3) - 1;
 	struct component_pool *c = &w->c[cid];
 	if (c->stride == STRIDE_LUA) {
-		if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+		if (lua_getiuservalue(L, 1, cid) != LUA_TTABLE) {
 			return luaL_error(L, "Missing lua table for %d", cid);
 		}
 		lua_pushvalue(L, 4);

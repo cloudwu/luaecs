@@ -77,23 +77,53 @@ lcount_memory(lua_State *L) {
 }
 
 static void
+init_buffers(struct component_pool *pool) {
+	int cap = pool->cap;
+	if (pool->stride <= 0) {
+		// only id
+		size_t id_sz = sizeof(entity_index_t) * cap;
+		pool->id = (entity_index_t *)malloc(id_sz);
+	} else {
+		size_t offset = pool->stride * cap;
+		size_t sz = offset + sizeof(entity_index_t) * cap;
+		pool->buffer = malloc(sz);
+		pool->id = (entity_index_t *)((uint8_t *)pool->buffer + offset);
+	}
+}
+
+static void
+move_buffers(struct component_pool *pool, void *buffer, entity_index_t *id) {
+	memcpy(pool->id, id, pool->n * sizeof(entity_index_t));
+	if (pool->stride > 0) {
+		memcpy(pool->buffer, buffer, pool->n * pool->stride);
+		free(buffer);
+	} else {
+		free(id);
+	}
+}
+
+static void
 shrink_component_pool(lua_State *L, struct component_pool *c, int id) {
 	if (c->id == NULL)
 		return;
 	if (c->n == 0) {
-		c->id = NULL;
-		if (c->stride > 0)
+		if (c->stride > 0) {
+			free(c->buffer);
 			c->buffer = NULL;
-		lua_pushnil(L);
-		lua_setiuservalue(L, 1, id * 2 + 1);
-		lua_pushnil(L);
-		lua_setiuservalue(L, 1, id * 2 + 2);
+			c->id = NULL;
+		} else {
+			free(c->id);
+			c->id = NULL;
+		}
+		if (c->stride == STRIDE_LUA) {
+			lua_pushnil(L);
+			lua_setiuservalue(L, 1, id);
+		}
 	} else if (c->stride > 0 && c->n < c->cap) {
 		c->cap = c->n;
-		c->id = (entity_index_t *)lua_newuserdatauv(L, c->n * sizeof(entity_index_t), 0);
-		lua_setiuservalue(L, 1, id * 2 + 1);
-		c->buffer = lua_newuserdatauv(L, c->n * c->stride, 0);
-		lua_setiuservalue(L, 1, id * 2 + 2);
+		void *buffer = c->buffer;
+		entity_index_t *id = c->id;
+		move_buffers(c, buffer, id);
 	}
 }
 
@@ -113,31 +143,19 @@ add_component_id_(lua_State *L, int world_index, struct component_pool *pool, in
 	int index = pool->n;
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
-			pool->id = (entity_index_t *)lua_newuserdatauv(L, cap * sizeof(entity_index_t), 0);
-			lua_setiuservalue(L, world_index, cid * 2 + 1);
-		}
-		if (pool->buffer == NULL) {
-			pool->buffer = lua_newuserdatauv(L, cap * pool->stride, 0);
-			lua_setiuservalue(L, world_index, cid * 2 + 2);
-		} else if (pool->stride == STRIDE_LUA) {
-			lua_newtable(L);
-			lua_setiuservalue(L, world_index, cid * 2 + 2);
+			if (pool->stride == STRIDE_LUA) {
+				lua_newtable(L);
+				lua_setiuservalue(L, world_index, cid);
+			}
+			init_buffers(pool);
 		}
 	} else if (pool->n >= pool->cap) {
 		// expand pool
-		int newcap = cap * 3 / 2;
-		entity_index_t *newid = (entity_index_t *)lua_newuserdatauv(L, newcap * sizeof(entity_index_t), 0);
-		lua_setiuservalue(L, world_index, cid * 2 + 1);
-		memcpy(newid, pool->id, cap * sizeof(entity_index_t));
-		pool->id = newid;
-		int stride = pool->stride;
-		if (stride > 0) {
-			void *newbuffer = lua_newuserdatauv(L, newcap * stride, 0);
-			lua_setiuservalue(L, world_index, cid * 2 + 2);
-			memcpy(newbuffer, pool->buffer, cap * stride);
-			pool->buffer = newbuffer;
-		}
-		pool->cap = newcap;
+		pool->cap = cap * 3 / 2;
+		void *buffer = pool->buffer;
+		entity_index_t *id = pool->id;
+		init_buffers(pool);
+		move_buffers(pool, buffer, id);
 	}
 	++pool->n;
 	pool->id[index] = eid;
@@ -349,7 +367,7 @@ remove_all(lua_State *L, struct entity_world *w, struct component_pool *removed,
 	int delta = 0;
 	switch (pool->stride) {
 	case STRIDE_LUA:
-		if (lua_getiuservalue(L, 1, cid * 2 + 2) != LUA_TTABLE) {
+		if (lua_getiuservalue(L, 1, cid) != LUA_TTABLE) {
 			luaL_error(L, "Missing lua object table for type %d", cid);
 		}
 		while (i < pool->n && removed_n < removed->n) {
@@ -534,7 +552,7 @@ lcontext(lua_State *L) {
 static int
 lnew_world(lua_State *L) {
 	size_t sz = sizeof(struct entity_world);
-	struct entity_world *w = (struct entity_world *)lua_newuserdatauv(L, sz, MAX_COMPONENT * 2);
+	struct entity_world *w = (struct entity_world *)lua_newuserdatauv(L, sz, MAX_COMPONENT-1);	// REMOVED 0 don't need uservalue
 	memset(w, 0, sz);
 	// removed set
 	entity_new_type(L, w, ENTITY_REMOVED, 0, 0);
@@ -542,6 +560,26 @@ lnew_world(lua_State *L) {
 	lua_pushvalue(L, 1);
 	lua_setmetatable(L, -2);
 	return 1;
+}
+
+static int
+ldeinit_world(lua_State *L) {
+	struct entity_world *w = lua_touserdata(L, 1);
+	free(w->eid.id);
+	w->eid.id = NULL;
+	int i;
+	for (i=0;i<MAX_COMPONENT;i++) {
+		struct component_pool *c = &w->c[i];
+		if (c->stride > 0) {
+			free(c->buffer);
+			c->buffer = NULL;
+			c->id = NULL;
+		} else {
+			free(c->id);
+			c->id = NULL;
+		}
+	}
+	return 0;
 }
 
 static const int
@@ -880,7 +918,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
 				}
 				if (c->stride == STRIDE_LUA) {
-					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
@@ -893,7 +931,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 				&& get_write_component(L, lua_index, k->name, f, c)) {
 				if (c->stride == STRIDE_LUA) {
 					int index = add_sibling_index_(L, world_index, iter->world, mainkey, idx, k->id);
-					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
@@ -925,7 +963,8 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 				luaL_error(L, "Can't find component %s for index %d", iter->k[0].name, idx);
 			}
 			if (c->stride == STRIDE_LUA) {
-				if (lua_getiuservalue(L, world_index, mainkey * 2 + 2) != LUA_TTABLE) {
+				assert(mainkey > 0);
+				if (lua_getiuservalue(L, world_index, mainkey) != LUA_TTABLE) {
 					luaL_error(L, "Missing lua table for %d", mainkey);
 				}
 				lua_insert(L, -2);
@@ -1060,7 +1099,7 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 			if (c->stride == STRIDE_LUA) {
 				// lua object component
 				if (index[i]) {
-					if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 
@@ -1519,7 +1558,7 @@ lobject(lua_State *L) {
 		if (lua_getiuservalue(L, 1, 1) != LUA_TUSERDATA) {
 			return luaL_error(L, "No world");
 		}
-		if (lua_getiuservalue(L, -1, cid * 2 + 2) != LUA_TTABLE) {
+		if (lua_getiuservalue(L, -1, cid) != LUA_TTABLE) {
 			return luaL_error(L, "Missing lua table for %d", cid);
 		}
 		if (lua_isnil(L, 2)) {
@@ -1616,6 +1655,7 @@ lmethods(lua_State *L) {
 		{ "_readid", lreadid },
 		{ "_count", lcount },
 		{ "_filter", lfilter },
+		{ "__gc", ldeinit_world },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

@@ -230,7 +230,7 @@ ecs_index_access(lua_State *L) {
 			luaL_error(L, "Invalid index cache");
 		}
 		int world_index = value_index + 1;
-		if (lua_getiuservalue(L, world_index, k->id * 2 + 2) != LUA_TTABLE) {
+		if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 			luaL_error(L, "Missing lua table for .%s", k->name);
 		}
 		if (output) {

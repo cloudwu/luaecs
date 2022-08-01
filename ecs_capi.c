@@ -78,6 +78,8 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_i
 static void *
 add_component_(struct entity_world *w, int cid, entity_index_t eid, const void *buffer) {
 	int index = ecs_add_component_id_(w, cid, eid);
+	if (index < 0)
+		return NULL;
 	struct component_pool *pool = &w->c[cid];
 	void *ret = get_ptr(pool, index);
 	if (buffer) {
@@ -107,6 +109,7 @@ entity_new_(struct entity_world *w, int cid, const void *buffer) {
 	} else {
 		assert(c->stride >= 0);
 		int index = ecs_add_component_id_(w, cid, eid);
+		assert(index >= 0);
 		void *ret = get_ptr(c, index);
 		memcpy(ret, buffer, c->stride);
 		return index;
@@ -150,9 +153,7 @@ insert_id(struct entity_world *w, int cid, entity_index_t eindex) {
 			}
 		}
 	}
-	ecs_add_component_id_(w, cid, INVALID_ENTITY);
-	memmove(c->id + from + 1, c->id + from, sizeof(entity_index_t) * (c->n - from - 1));
-	c->id[from] = eindex;
+	ecs_add_component_id_(w, cid, eindex);
 }
 
 void

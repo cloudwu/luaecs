@@ -90,6 +90,7 @@ ecs_group_update(lua_State *L) {
 		int index = read_group(L, g, 2, group[i]);
 		//		printf("Group %d group = %d index = %d\n", i, group[i], index);
 		int n = ecs_add_component_id_(w, sid, c->id[i]);
+		assert(n>=0);
 		struct group *gs = (struct group *)get_ptr(g, n);
 		gs->uid = ++uid;
 		gs->group = group[i];
@@ -289,6 +290,7 @@ ecs_group_enable(lua_State *L) {
 	tag->n = 0;
 	while (n > 0) {
 		int index = array[n - 1].index;
+		assert(index >= 0);
 		ecs_add_component_id_(w, tagid, g->id[index]);
 		index = next_groupid(group, index);
 		if (index >= 0) {

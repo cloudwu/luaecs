@@ -52,11 +52,6 @@ for v in w:select "visible id:in name:in tag?in" do
 	end
 end
 
-for v in w:select "REMOVED" do
-	-- id 0 reborn, reset group to 1, and reset tag
-	w:clone(v, { group = 1, tag = false })
-end
-
 w:group_update()
 w:update()
 

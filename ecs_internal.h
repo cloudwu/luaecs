@@ -4,6 +4,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <string.h>
+#include <stdint.h>
 
 typedef struct { uint8_t idx[3]; } entity_index_t;
 
@@ -133,7 +134,7 @@ INVALID_ENTITY_INDEX(entity_index_t e) {
 static inline int
 ENTITY_INDEX_CMP(entity_index_t a, entity_index_t b) {
 	return memcmp(&a, &b, sizeof(a));
-} 
+}
 
 static inline entity_index_t
 DEC_ENTITY_INDEX(entity_index_t e, int delta) {

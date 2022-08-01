@@ -158,8 +158,23 @@ add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
 		init_buffers(pool);
 		move_buffers(pool, buffer, id);
 	}
-	++pool->n;
+	int cmp;
+	if (index > 0 && (cmp = ENTITY_INDEX_CMP(pool->id[index-1], eid)) >= 0) {
+		do {
+			if (cmp == 0)
+				return -1;
+			--index;
+		} while (index > 0 && (cmp = ENTITY_INDEX_CMP(pool->id[index-1], eid)) >= 0);
+		// move [index, pool->n) -> [index+1, pool->n]
+		memmove(&pool->id[index+1], &pool->id[index], (pool->n - index) * sizeof(pool->id[0]));
+		if (pool->stride > 0) {
+			memmove((uint8_t *)pool->buffer + (index+1) * pool->stride,
+				(uint8_t *)pool->buffer + index * pool->stride,
+				(pool->n - index) * pool->stride);
+		}
+	}
 	pool->id[index] = eid;
+	++pool->n;
 	return index;
 }
 
@@ -203,8 +218,8 @@ lnew_entity(lua_State *L) {
 	}
 
 	int index = index_(n);
-	lua_pushinteger(L, index);
 	lua_pushinteger(L, w->eid.id[index]);
+	lua_pushinteger(L, index);
 	return 2;
 }
 
@@ -455,10 +470,9 @@ ladd_component(lua_State *L) {
 		return luaL_error(L, "Invalid entity index %u", n); 
 	entity_index_t eid = make_index_(n);
 	int cid = check_cid(L, w, 3);
-	struct component_pool *c = &w->c[cid];
-	int index = ecs_lookup_component_(c, eid, c->n - 1);
+	int	index = ecs_add_component_id_(w, cid, eid);
 	if (index < 0)
-		index = ecs_add_component_id_(w, cid, eid);
+		return luaL_error(L, "Component %d exist", cid);
 	lua_pushinteger(L, index + 1);
 	return 1;
 }
@@ -495,9 +509,7 @@ add_sibling_index_(lua_State *L, struct entity_world *w, int cid, int index, int
 	struct component_pool *c = &w->c[cid];
 	assert(index >= 0 && index < c->n);
 	entity_index_t eid = c->id[index];
-	// todo: pcall add_component_
-	int ret = ecs_add_component_id_(w, slibling_id, eid);
-	return ret;
+	return ecs_add_component_id_(w, slibling_id, eid);
 }
 
 static int
@@ -928,11 +940,14 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 				&& get_write_component(L, lua_index, k->name, f, c)) {
 				if (c->stride == STRIDE_LUA) {
 					int index = add_sibling_index_(L, iter->world, mainkey, idx, k->id);
+					if (index < 0) {
+						luaL_error(L, "sibling %d exist", k->id);
+					}
 					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
-					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index-1));
+					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index));
 				} else {
 					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL);
 					ecs_write_component_object_(L, k->field_n, f, buffer);
@@ -1090,7 +1105,7 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 		struct group_key *k = &iter->k[i];
 		if (k->id == ENTITYID_TAG) {
 			lua_pushinteger(L, iter->world->eid.id[index[i]]);
-			lua_setfield(L, obj_index, "_eid");
+			lua_setfield(L, obj_index, "eid");
 		} else if (!(k->attrib & COMPONENT_FILTER)) {
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_LUA) {
@@ -1407,8 +1422,12 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct grou
 	}
 	key->attrib = attrib;
 	if (key->id == ENTITYID_TAG) {
-		if (attrib != COMPONENT_IN) {
-			return luaL_error(L, "_id must be in");
+		attrib &= ~COMPONENT_IN;
+		attrib &= ~COMPONENT_OPTIONAL;
+		attrib &= ~COMPONENT_EXIST;
+
+		if (attrib != 0) {
+			return luaL_error(L, "eid should be input");
 		}
 	}
 	if (is_value(L, f)) {
@@ -1560,6 +1579,18 @@ find_eid(struct entity_world *w, uint64_t eid) {
 		return index;
 	}
 }
+
+static int
+lindex_entity(lua_State *L) {
+	struct entity_world *w = getW(L);
+	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
+	int index = find_eid(w, eid);
+	if (index < 0)
+		return luaL_error(L, "Missing entity %x", eid);
+	lua_pushinteger(L, index);
+	return 1;
+}
+
 
 static int
 lexist(lua_State *L) {
@@ -1773,6 +1804,7 @@ lmethods(lua_State *L) {
 		{ "collect", lcollect_memory },
 		{ "_newtype", lnew_type },
 		{ "_newentity", lnew_entity },
+		{ "_indexentity", lindex_entity },
 		{ "_addcomponent", ladd_component },
 		{ "update", lupdate },
 		{ "_clear", lclear_type },

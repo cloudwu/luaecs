@@ -35,5 +35,3 @@ print_entity()
 
 add_temp(6)
 print_entity()
-
-assert(pcall(add_temp, 4) == false)

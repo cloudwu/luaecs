@@ -321,10 +321,17 @@ local function _new_entity(self, eid, obj)
 	end
 end
 
-function M:new(obj)
+function M:new(obj, eid)
 --	dump(obj)
-	local index, eid = self:_newentity()
-	_new_entity(self, index, obj)
+	local index
+	if eid then
+		index = self:_indexentity(eid)
+	else
+		eid, index = self:_newentity()
+	end
+	if obj then
+		_new_entity(self, index, obj)
+	end
 	return eid
 end
 
@@ -412,7 +419,10 @@ end
 
 function M:clearall()
 	for _, tc in pairs(context[self].typenames) do
-		self:_clear(assert(tc.id))
+		local id = assert(tc.id)
+		if id >= 0 then
+			self:_clear(id)
+		end
 	end
 end
 
@@ -571,8 +581,8 @@ function ecs.world()
 		size = 0,
 		tag = true,
 	}
-	context[w].typenames._eid = {
-		name = "_eid",
+	context[w].typenames.eid = {
+		name = "eid",
 		id = ecs._EID,
 		size = 0,
 		tag = true,

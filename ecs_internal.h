@@ -110,8 +110,6 @@ get_integer(lua_State *L, int index, int i, const char *key) {
 	}
 	int r = lua_tointeger(L, -1);
 	lua_pop(L, 1);
-	if (r < 0)
-		return luaL_error(L, "Invalid %s (%d)", key, r);
 	return r;
 }
 
@@ -157,5 +155,7 @@ void ecs_write_component_object_(lua_State *L, int n, struct group_field *f, voi
 void ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer);
 int ecs_lookup_component_(struct component_pool *pool, entity_index_t eindex, int guess_index);
 entity_index_t ecs_new_entityid_(struct entity_world *w); 
+void ecs_reserve_component_(struct component_pool *pool, int cid, int cap);
+void ecs_reserve_eid_(struct entity_world *w, int n);
 
 #endif

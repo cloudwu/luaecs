@@ -47,33 +47,80 @@ read_section(lua_State *L, struct file_reader *reader, struct component_pool *c,
 	return maxid;
 }
 
+static void
+read_section_eid(lua_State *L, struct file_reader *reader, uint64_t *eid, size_t offset, int n) {
+	if (reader->f == NULL)
+		luaL_error(L, "Invalid reader");
+	if (fseek(reader->f, offset, SEEK_SET) != 0) {
+		luaL_error(L, "Reader seek error");
+	}
+	size_t r = fread(eid, sizeof(uint64_t), n, reader->f);
+	if (r != n)
+		luaL_error(L, "Read eid error");
+	int i;
+	uint64_t last_id = (uint64_t)-1;
+	for (i = 0; i < n; i++) {
+		last_id += eid[i];
+		eid[i] = last_id;
+	}
+}
+
+static int
+ecs_persistence_generate_eid(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int i;
+	int maxid = -1;
+	for (i=0;i<MAX_COMPONENT;i++) {
+		struct component_pool *c = &w->c[i];
+		if (c->n > 0) {
+			int m = index_(c->id[c->n-1]);
+			if (m > maxid)
+				maxid = m;
+		}
+	}
+	if (maxid < 0) {
+		return 0;
+	}
+	ecs_reserve_eid_(w, maxid);
+	w->eid.n = maxid;
+	for (i=0;i<maxid;i++) {
+		w->eid.id[i] = (uint64_t)i;
+	}
+	return 0;
+}
+
 int
 ecs_persistence_readcomponent(lua_State *L) {
 	struct entity_world *w = getW(L);
 	struct file_reader *reader = luaL_checkudata(L, 2, "LUAECS_READER");
-	int cid = check_cid(L, w, 3);
+	int cid = luaL_checkinteger(L, 3);
 	size_t offset = luaL_checkinteger(L, 4);
-	int stride = luaL_checkinteger(L, 5);
+	int stride = luaL_optinteger(L, 5, -1);
 	int n = luaL_checkinteger(L, 6);
-	struct component_pool *c = &w->c[cid];
-	if (c->n != 0) {
-		return luaL_error(L, "Component %d exists", cid);
+
+	if (cid == ENTITYID_TAG) {
+		if (stride != -1)
+			return luaL_error(L, "Invalid eid");
+		ecs_reserve_eid_(w, n);
+		read_section_eid(L, reader, w->eid.id, offset, n);
+		w->eid.n = n;
+		lua_pushinteger(L, n);
+		return 1;
+	} else {
+		check_cid_valid(L, w, cid);
+		struct component_pool *c = &w->c[cid];
+		if (c->n != 0) {
+			return luaL_error(L, "Component %d exists", cid);
+		}
+		if (c->stride != stride) {
+			return luaL_error(L, "Invalid component %d (%d != %d)", cid, c->stride, stride);
+		}
+		ecs_reserve_component_(c, cid, n);
+		entity_index_t maxid = read_section(L, reader, c, offset, stride, n);
+		c->n = n;
+		lua_pushinteger(L, index_(maxid));
+		return 1;
 	}
-	if (c->stride != stride) {
-		return luaL_error(L, "Invalid component %d (%d != %d)", cid, c->stride, stride);
-	}
-	if (n > c->cap)
-		c->cap = n;
-	c->id = (entity_index_t *)lua_newuserdatauv(L, c->cap * sizeof(entity_index_t), 0);
-	lua_setiuservalue(L, 1, cid);
-	if (stride > 0) {
-		c->buffer = (entity_index_t *)lua_newuserdatauv(L, c->cap * stride, 0);
-		lua_setiuservalue(L, 1, cid);
-	}
-	read_section(L, reader, c, offset, stride, n);
-	c->n = n;
-	lua_pushinteger(L, n);
-	return 1;
 }
 
 struct file_section {
@@ -90,8 +137,10 @@ struct file_writer {
 
 static size_t
 get_length(struct file_section *s) {
-	size_t len = s->offset + s->n * (sizeof(entity_index_t) + s->stride);
-	return len;
+	if (s->stride < 0)
+		return s->offset + s->n * sizeof(uint64_t);
+	else
+		return s->offset + s->n * (sizeof(entity_index_t) + s->stride);
 }
 
 static uint32_t
@@ -129,6 +178,33 @@ write_data(lua_State *L, struct file_writer *w, struct component_pool *c) {
 	}
 }
 
+static uint64_t
+write_eid_(lua_State *L, struct file_writer *w, const uint64_t *id, int n, uint64_t last_id) {
+	uint64_t buffer[1024];
+	int i;
+	for (i = 0; i < n; i++) {
+		last_id = id[i] - last_id - 1;
+		buffer[i] = last_id;
+	}
+	size_t r = fwrite(buffer, sizeof(uint64_t), n, w->f);
+	if (r != n) {
+		luaL_error(L, "Can't write section id");
+	}
+	return last_id;
+}
+
+static void
+write_eid(lua_State *L, struct file_writer *w, const struct entity_id *eid) {
+	int i;
+	uint64_t last_id = (uint64_t)-1;
+	for (i = 0; i < eid->n; i += 1024) {
+		int n = eid->n - i;
+		if (n > 1024)
+			n = 1024;
+		last_id = write_eid_(L, w, eid->id + i, n, last_id);
+	}
+}
+
 static int
 lwrite_section(lua_State *L) {
 	struct file_writer *w = (struct file_writer *)luaL_checkudata(L, 1, "LUAECS_WRITER");
@@ -139,25 +215,36 @@ lwrite_section(lua_State *L) {
 		return luaL_error(L, "Invalid world");
 	if (w->n >= MAX_COMPONENT)
 		return luaL_error(L, "Too many sections");
-	int cid = check_cid(L, world, 3);
-	struct component_pool *c = &world->c[cid];
-	if (c->stride < 0) {
-		return luaL_error(L, "The component is not writable");
-	}
+
 	struct file_section *s = &w->c[w->n];
 	if (w->n == 0) {
 		s->offset = 0;
 	} else {
 		s->offset = get_length(&w->c[w->n - 1]);
+		printf("offset = %d\n", (int)s->offset);
 	}
-	s->stride = c->stride;
-	s->n = c->n;
-	++w->n;
-	if (s->stride > 0) {
-		write_id(L, w, c);
-		write_data(L, w, c);
+
+	int cid = luaL_checkinteger(L, 3);
+	if (cid == ENTITYID_TAG) {
+		s->stride = -1;	// It's eid
+		s->n = world->eid.n;
+		++w->n;
+		write_eid(L, w, &world->eid);
 	} else {
-		write_id(L, w, c);
+		check_cid_valid(L, world, cid);
+		struct component_pool *c = &world->c[cid];
+		if (c->stride < 0) {
+			return luaL_error(L, "The component is not writable");
+		}
+		s->stride = c->stride;
+		s->n = c->n;
+		++w->n;
+		if (s->stride > 0) {
+			write_id(L, w, c);
+			write_data(L, w, c);
+		} else {
+			write_id(L, w, c);
+		}
 	}
 	return 0;
 }
@@ -185,8 +272,10 @@ lclose_writer(lua_State *L) {
 		struct file_section *s = &w->c[i];
 		lua_pushinteger(L, s->offset);
 		lua_setfield(L, -2, "offset");
-		lua_pushinteger(L, s->stride);
-		lua_setfield(L, -2, "stride");
+		if (s->stride >= 0) {
+			lua_pushinteger(L, s->stride);
+			lua_setfield(L, -2, "stride");
+		}
 		lua_pushinteger(L, s->n);
 		lua_setfield(L, -2, "n");
 		lua_rawseti(L, -2, i + 1);
@@ -266,6 +355,7 @@ int
 lpersistence_methods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "_readcomponent", ecs_persistence_readcomponent },
+		{ "generate_eid", ecs_persistence_generate_eid },
 		{ "writer", ecs_persistence_writer },
 		{ "reader", ecs_persistence_reader },		
 		{ NULL, NULL },

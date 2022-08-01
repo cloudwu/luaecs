@@ -395,6 +395,18 @@ do
 	end
 end
 
+do
+	local EID <const> = ecs._EID
+	local get_index = M._indexentity
+
+	function M:fetch(eid, iter)
+		iter = iter or {}
+		iter[1] = get_index(self, eid) + 1
+		iter[2] = EID
+		return iter
+	end
+end
+
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
 	self:_sync(p, iter)
@@ -440,6 +452,8 @@ function M:read_component(reader, name, offset, stride, n)
 	local t = assert(context[self].typenames[name])
 	return persistence_methods._readcomponent(self, reader, t.id, offset, stride, n)
 end
+
+M.generate_eid = persistence_methods.generate_eid
 
 do
 	local _object = M._object

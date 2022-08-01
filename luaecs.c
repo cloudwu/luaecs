@@ -108,28 +108,56 @@ move_buffers(struct component_pool *pool, void *buffer, entity_index_t *id) {
 }
 
 static void
-shrink_component_pool(lua_State *L, struct component_pool *c, int id) {
+free_buffers(struct component_pool *c) {
+	if (c->stride > 0) {
+		free(c->buffer);
+		c->buffer = NULL;
+		c->id = NULL;
+	} else {
+		free(c->id);
+		c->id = NULL;
+	}
+}
+
+void
+ecs_reserve_eid_(struct entity_world *w, int n) {
+	if (w->eid.cap >= n) {
+		return;
+	}
+	free(w->eid.id);
+	w->eid.id = (uint64_t *)malloc(n * sizeof(uint64_t));
+	w->eid.n = 0;
+	w->eid.cap = n;
+}
+
+void
+ecs_reserve_component_(struct component_pool *pool, int cid, int cap) {
+	if (pool->n == 0) {
+		if (cap > pool->cap) {
+			free_buffers(pool);
+		}
+		pool->cap = cap;
+		if (pool->id == NULL) {
+			init_buffers(pool);
+		}
+	} else if (cap > pool->cap) {
+		pool->cap = cap;
+		void *buffer = pool->buffer;
+		entity_index_t *id = pool->id;
+		init_buffers(pool);
+		move_buffers(pool, buffer, id);
+	}
+}
+
+static void
+shrink_component_pool(lua_State *L, struct component_pool *c, int cid) {
 	if (c->id == NULL)
 		return;
-	if (c->n == 0) {
-		if (c->stride > 0) {
-			free(c->buffer);
-			c->buffer = NULL;
-			c->id = NULL;
-		} else {
-			free(c->id);
-			c->id = NULL;
-		}
-		if (c->stride == STRIDE_LUA) {
-			lua_pushnil(L);
-			lua_setiuservalue(L, 1, id);
-		}
-	} else if (c->stride > 0 && c->n < c->cap) {
-		c->cap = c->n;
-		void *buffer = c->buffer;
-		entity_index_t *id = c->id;
-		move_buffers(c, buffer, id);
+	if (c->n == 0 && c->stride == STRIDE_LUA) {
+		lua_pushnil(L);
+		lua_setiuservalue(L, 1, cid);
 	}
+	ecs_reserve_component_(c, cid, c->n);
 }
 
 static int

@@ -23,6 +23,11 @@ remove_dup(struct component_pool *c, int index) {
 
 void *
 entity_iter_(struct entity_world *w, int cid, int index) {
+	if (cid < 0) {
+		if (index >= w->eid.n)
+			return NULL;
+		return DUMMY_PTR;
+	}
 	struct component_pool *c = &w->c[cid];
 	assert(index >= 0);
 	if (index >= c->n)

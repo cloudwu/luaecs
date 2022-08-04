@@ -62,7 +62,10 @@ lnew_type(lua_State *L) {
 static int
 lcount_memory(lua_State *L) {
 	struct entity_world *w = getW(L);
-	size_t sz = sizeof(*w) + sizeof(uint64_t) * w->eid.cap;
+	// count eid
+	size_t sz = sizeof(*w);
+	sz += entity_id_memsize(&w->eid);
+	sz += entity_group_memsize(&w->group);
 	int i;
 	size_t msz = sz;
 	for (i = 0; i < MAX_COMPONENT; i++) {
@@ -215,25 +218,10 @@ ecs_add_component_id_(struct entity_world *w, int cid, entity_index_t eid) {
 entity_index_t
 ecs_new_entityid_(struct entity_world *w) {
 	struct entity_id *e = &w->eid;
-
-	int n = e->n;
-	if (n >= MAX_ENTITY) {
+	uint64_t eid;
+	int n = entity_id_alloc(e, &eid);
+	if (n < 0)
 		return INVALID_ENTITY;
-	}
-	e->n++;
-
-	if (n >= e->cap) {
-		if (e->id == NULL) {
-			e->cap = ENTITY_INIT_SIZE;
-			e->id = (uint64_t *)malloc(e->cap * sizeof(uint64_t));
-		} else {
-		int newcap = e->cap * 3 / 2;
-			e->id = (uint64_t *)realloc(e->id, newcap * sizeof(uint64_t));
-			e->cap = newcap;
-		}
-	}
-	uint64_t eid = ++e->last_id;
-	e->id[n] = eid;
 	return make_index_(n);
 } 
 
@@ -602,8 +590,8 @@ lnew_world(lua_State *L) {
 static int
 ldeinit_world(lua_State *L) {
 	struct entity_world *w = lua_touserdata(L, 1);
-	free(w->eid.id);
-	w->eid.id = NULL;
+	entity_group_deinit(&w->group);
+	entity_id_deinit(&w->eid);
 	int i;
 	for (i=0;i<MAX_COMPONENT;i++) {
 		struct component_pool *c = &w->c[i];
@@ -1561,58 +1549,10 @@ lcheck_iter(lua_State *L) {
 }
 
 static int
-find_eid_(struct entity_world *w, uint64_t eid, int begin, int end) {
-	const uint64_t *id = w->eid.id;
-	while (begin < end) {
-		int mid = (begin + end) / 2;
-		if (eid == id[mid]) {
-			return mid;
-		}
-		if (eid < id[mid])
-			end = mid;
-		else
-			begin = mid+1;
-	}
-	int p = begin > w->eid.n / 2 ? begin : begin + 1;
-	return -p;
-}
-
-static int
-find_eid(struct entity_world *w, uint64_t eid) {
-	unsigned h = (unsigned)(2654435761 * (uint32_t)eid) % ENTITY_ID_LOOKUP;
-	entity_index_t p = w->eid.lookup[h];
-	int index = index_(p);
-	int begin = 0;
-	int end;
-	if (index >= w->eid.n) {
-		end = w->eid.n;
-	} else {
-		uint64_t v = w->eid.id[index];
-		if (v == eid) {
-			return index;
-		}
-		if (v > eid) {
-			end = index;
-		} else {
-			begin = index + 1;
-			end = w->eid.n;
-		}
-	}
-	index = find_eid_(w, eid, begin, end);
-	if (index < 0) {
-		w->eid.lookup[h] = make_index_(-index);
-		return -1;
-	} else {
-		w->eid.lookup[h] = make_index_(index);
-		return index;
-	}
-}
-
-static int
 lindex_entity(lua_State *L) {
 	struct entity_world *w = getW(L);
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
-	int index = find_eid(w, eid);
+	int index = entity_id_find(&w->eid, eid);
 	if (index < 0)
 		return luaL_error(L, "Missing entity %x", eid);
 	lua_pushinteger(L, index);
@@ -1624,7 +1564,7 @@ static int
 lexist(lua_State *L) {
 	struct entity_world *w = getW(L);
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
-	lua_pushboolean(L, find_eid(w, eid) >= 0);
+	lua_pushboolean(L, entity_id_find(&w->eid, eid) >= 0);
 	return 1;
 }
 
@@ -1633,7 +1573,7 @@ lremove(lua_State *L) {
 	struct entity_world *w = getW(L);
 	if (lua_isinteger(L, 2)) {
 		// It's eid
-		int index = find_eid(w, lua_tointeger(L, 2));
+		int index = entity_id_find(&w->eid, lua_tointeger(L, 2));
 		if (index < 0)
 			return luaL_error(L, "No eid %x", lua_tointeger(L, 2));
 		entity_remove_(w, ENTITYID_TAG, index);
@@ -1759,7 +1699,7 @@ int
 laccess(lua_State *L) {
 	struct entity_world *w = getW(L);
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
-	int idx = find_eid(w, eid);
+	int idx = entity_id_find(&w->eid, eid);
 	if (idx < 0)
 		return luaL_error(L, "eid %x not found", idx);
 	struct group_iter *iter = lua_touserdata(L, 3);
@@ -1825,6 +1765,51 @@ laccess(lua_State *L) {
 }
 
 
+// 1: world
+// 2: groupid
+// 3: eid
+static int
+lgroup_add(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int groupid = luaL_checkinteger(L, 2);
+	uint64_t eid = (uint64_t)luaL_checkinteger(L, 3);
+	if (!entity_group_add(&w->group, groupid, eid)) {
+		return luaL_error(L, "group add fail");
+	}
+	return 0;
+}
+
+#define MAXGROUP 1024
+
+static void
+enable_(lua_State *L, struct entity_world *w, int tagid, int from, int n) {
+	int groupid[MAXGROUP];
+	int i;
+	for (i=0;i<n;i++) {
+		groupid[i] = luaL_checkinteger(L, from+i);
+	}
+	entity_group_enable(w, tagid, n, groupid);
+}
+
+// 1: world
+// 2: tagid
+// 3...: groupids
+static int
+lgroup_enable(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int tagid = check_tagid(L, w, 2);
+	int top = lua_gettop(L);
+	int from = 3;
+	int n = top - from + 1;
+	while (n > MAXGROUP) {
+		enable_(L, w, tagid, from, MAXGROUP);
+		n -= MAXGROUP;
+		from += MAXGROUP;
+	}
+	enable_(L, w, tagid, from, n);
+	return 0;
+}
+
 static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
@@ -1849,6 +1834,8 @@ lmethods(lua_State *L) {
 		{ "_filter", lfilter },
 		{ "_access", laccess },
 		{ "__gc", ldeinit_world },
+		{ "group_add", lgroup_add },
+		{ "_group_enable", lgroup_enable },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
@@ -1865,7 +1852,6 @@ luaopen_ecs_core(lua_State *L) {
 		{ "check_select", lcheck_iter },
 		
 		/*library extension*/
-		{ "_group_methods", lgroup_methods },
 		{ "_persistence_methods", lpersistence_methods },
 		{ "_template_methods", ltemplate_methods },
 		{ NULL, NULL },

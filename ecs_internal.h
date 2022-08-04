@@ -6,13 +6,9 @@
 #include <string.h>
 #include <stdint.h>
 
-typedef struct { uint8_t idx[3]; } entity_index_t;
-
-static const entity_index_t INVALID_ENTITY = { { 0xff, 0xff, 0xff } };
-
-#define MAX_ENTITY 0xffffff 
-#define ENTITY_INIT_SIZE 4096
-#define ENTITY_ID_LOOKUP 8191
+#include "ecs_group.h"
+#include "ecs_entityindex.h"
+#include "ecs_entityid.h"
 
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
@@ -42,16 +38,9 @@ struct component_pool {
 	void *buffer;
 };
 
-struct entity_id {
-	uint32_t n;
-	uint32_t cap;
-	uint64_t last_id;
-	uint64_t *id;
-	entity_index_t lookup[ENTITY_ID_LOOKUP];
-};
-
 struct entity_world {
 	struct entity_id eid;
+	struct entity_group_arena group;
 	struct component_pool c[MAX_COMPONENT];
 };
 
@@ -95,6 +84,15 @@ check_cid(lua_State *L, struct entity_world *w, int index) {
 	return cid;
 }
 
+static inline int
+check_tagid(lua_State *L, struct entity_world *w, int index) {
+	int cid = luaL_checkinteger(L, index);
+	check_cid_valid(L, w, cid);
+	if (w->c[cid].stride != 0)
+		luaL_error(L, "Invalid tag %d", cid);
+	return cid;
+}
+
 static inline void *
 get_ptr(struct component_pool *c, int index) {
 	if (c->stride > 0)
@@ -111,32 +109,6 @@ get_integer(lua_State *L, int index, int i, const char *key) {
 	int r = lua_tointeger(L, -1);
 	lua_pop(L, 1);
 	return r;
-}
-
-static inline uint32_t
-index_(entity_index_t x) {
-	return (uint32_t) x.idx[0] << 16 | (uint32_t) x.idx[1] << 8 | x.idx[2]; 
-}
-
-static inline entity_index_t
-make_index_(uint32_t v) {
-	entity_index_t r = {{ (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff }};
-	return r;
-}
-
-static inline int
-INVALID_ENTITY_INDEX(entity_index_t e) {
-	return index_(e) == MAX_ENTITY;
-}
-
-static inline int
-ENTITY_INDEX_CMP(entity_index_t a, entity_index_t b) {
-	return memcmp(&a, &b, sizeof(a));
-}
-
-static inline entity_index_t
-DEC_ENTITY_INDEX(entity_index_t e, int delta) {
-	return make_index_(index_(e) - delta);
 }
 
 static inline uint64_t

@@ -211,7 +211,6 @@ local TYPENAME = {
 }
 
 -- make metatable
-local group_methods = ecs._group_methods()
 local M = ecs._methods()
 M.__index = M
 
@@ -531,34 +530,10 @@ function M:group_init(groupname)
 	ctx.group = {}
 end
 
-function M:group_id(iter)
-	local ctx = context[self]
-	return group_methods._group_id(self, iter,ctx.group_struct)
-end
-
--- debug use
-function M:group_fetch(groupid)
-	local ctx = context[self]
-	return group_methods._group_fetch(self, ctx.group, ctx.group_struct, groupid)
-end
-
-function M:group_check()
-	local ctx = context[self]
-	for k in pairs(ctx.group) do
-		assert(	#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, true) ==
-			#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, false) )
-	end
-end
-
-function M:group_update()
-	local ctx = context[self]
-	ctx.uid = group_methods._group_update(self, ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)
-end
-
 function M:group_enable(tagname, ...)
 	local ctx = context[self]
 	local tagid = ctx.typenames[tagname].id
-	group_methods._group_enable(self, ctx.group, ctx.group_struct,tagid,...)
+	self:_group_enable(tagid, ...)
 end
 
 function M:remove_update(tagname)

@@ -1,325 +1,333 @@
-#include <lua.h>
-#include <lauxlib.h>
-
 #include <stdint.h>
+#include <stdlib.h>
 #include <assert.h>
+#include <string.h>
+#include <stdio.h>
 
 #include "ecs_internal.h"
 #include "ecs_capi.h"
+#include "ecs_group.h"
+#include "ecs_entityindex.h"
 
-struct group {
-	uint64_t uid;
-	uint64_t lastid;
-	uint32_t group;
-	uint32_t next;
+#define DEFAULT_GROUP_SIZE 1024
+#define GROUP_COMBINE 1024
+
+struct entity_iterator {
+	int last_pos;
+	int pos;
+	uint64_t eid;
 };
 
-static inline int
-find_groupid(struct component_pool *g, int index, int groupid) {
-	if (index >= g->n) {
-		index = g->n - 1;
+struct entity_group {
+	int n;
+	int cap;
+	int groupid;
+	uint64_t last;
+	uint8_t *s;
+};
+
+void
+entity_group_deinit(struct entity_group_arena *G) {
+	int i;
+	for (i=0;i<G->n;i++) {
+		free(G->g[i]);
 	}
-	if (index < 0)
-		return -1;
-	struct group *group = (struct group *)g->buffer;
-	while (group[index].group != groupid) {
-		--index;
-		if (index < 0)
-			return -1;
+	free(G->g);
+}
+
+size_t
+entity_group_memsize(struct entity_group_arena *G) {
+	size_t sz = G->cap * sizeof(struct entity_group *);
+	int i;
+	for (i=0;i<G->n;i++) {
+		sz += sizeof(struct entity_group) +  G->g[i]->cap;
+	}
+	return sz;
+}
+
+static inline void
+add_byte(struct entity_group *g, uint8_t b) {
+	if (g->n >= g->cap) {
+		if (g->s == NULL) {
+			g->cap = DEFAULT_GROUP_SIZE;
+			g->s = (uint8_t *)malloc(DEFAULT_GROUP_SIZE);
+		} else {
+			int newcap = g->cap * 3 / 2;
+			g->s = (uint8_t *)realloc(g->s, newcap);
+			g->cap = newcap;
+		}
+	}
+	g->s[g->n++] = b;
+}
+
+static void
+add_eid(struct entity_group *g, uint64_t eid) {
+	uint64_t eid_diff = eid - g->last - 1;
+	if (eid_diff < 128) {
+		add_byte(g, eid_diff);
+	} else {
+		do {
+			add_byte(g, (eid_diff & 0x7f) | 0x80);
+			eid_diff >>= 7;
+		} while (eid_diff >= 128);
+		add_byte(g, eid_diff);
+	}
+	g->last = eid;
+}
+
+static inline void
+foreach_begin(struct entity_group *g, struct entity_iterator *iter) {
+	memset(iter, 0, sizeof(*iter));
+}
+
+static inline void
+decode_eid(struct entity_group *g, struct entity_iterator *iter) {
+	uint8_t *s = g->s;
+	int i = iter->pos++;
+	if (s[i] < 128) {
+		iter->eid += s[i] + 1;
+		return;
+	}
+	int shift = 7;
+	uint64_t diff = s[i] & 0x7f;
+	for (;;) {
+		++i;
+		assert(i < g->n);
+		if (s[i] < 128) {
+			diff |= s[i] << shift;
+			iter->eid += diff + 1;
+			iter->pos = i + 1;
+			return;
+		} else {
+			diff |= (s[i] & 0x7f) << shift;
+		}
+		shift += 7;
+	}
+}
+
+static int
+foreach_end(struct entity_group *g, struct entity_iterator *iter) {
+	if (iter->pos >= g->n)
+		return 0;
+	iter->last_pos = iter->pos;
+	decode_eid(g, iter);
+	return 1;
+}
+
+static int
+insert_group(struct entity_group_arena *G, int groupid, int begin, int end) {
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		int v = G->g[mid]->groupid;
+		if (v == groupid)
+			return mid;
+		if (v < groupid)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+	// insert at begin
+	if (G->n >= G->cap) {
+		if (G->g == NULL) {
+			G->cap = DEFAULT_GROUP_SIZE;
+			G->g = (struct entity_group **)malloc(G->cap * sizeof(struct entity_group *));
+		} else {
+			G->cap = G->cap * 3 / 2;
+			struct entity_group ** g = (struct entity_group **)malloc(G->cap * sizeof(struct entity_group *));
+			memcpy(g, G->g, (begin-1) * sizeof(struct entity_group *));
+			memcpy(g+begin+1, G->g + begin, (G->n - begin) * sizeof(struct entity_group *));
+			free(G->g);
+			G->g = g;
+		}
+	} else {
+		memmove(G->g+begin+1, G->g+begin, (G->n - begin) * sizeof(struct entity_group *));
+	}
+	++G->n;
+	struct entity_group *group = (struct entity_group *)malloc(sizeof(struct entity_group));
+	memset(group, 0, sizeof(*group));
+	group->groupid = groupid;
+
+	G->g[begin] = group;
+
+	return begin;
+}
+
+static struct entity_group *
+find_group(struct entity_group_arena *G, int groupid) {
+	int h = (2654435769 * (uint32_t)groupid) >> (32 - ENTITY_GROUP_CACHE_BITS);
+	int index;
+	if (h >= G->n) {
+		index = insert_group(G, groupid, 0, G->n);
+	} else {
+		struct entity_group *g = G->g[G->cache[h]];
+		if (g->groupid == groupid) {
+			return g;
+		} else if (g->groupid < groupid) {
+			index = insert_group(G, groupid, h+1, G->n);
+		} else {
+			index = insert_group(G, groupid, 0, h);
+		}
+	}
+
+	// cache miss
+	G->cache[h] = index;
+	return G->g[index];
+}
+
+int
+entity_group_add(struct entity_group_arena *G, int groupid, uint64_t eid) {
+	struct entity_group *g = find_group(G, groupid);
+	if (eid <= g->last) {
+		return 0;
+	} else {
+		add_eid(g, eid);
+		return 1;
+	}
+}
+
+struct tag_index_context {
+	struct entity_group *group[GROUP_COMBINE];
+	struct entity_iterator iter[GROUP_COMBINE];
+	uint64_t lastid;
+	int n;
+	int pos;
+	int group_pos[GROUP_COMBINE];
+	int index[GROUP_COMBINE];
+};
+
+static int
+tag_index(struct entity_world *w, struct tag_index_context *ctx) {
+	int i;
+	uint64_t min_id = ctx->iter[ctx->index[0]].eid;
+	int j = 0;
+	for (i=1;i<ctx->n;i++) {
+		uint64_t eid = ctx->iter[ctx->index[i]].eid;
+		if (eid < min_id) {
+			min_id = eid;
+			j = i;
+		}
+	}
+	int ii = ctx->index[j];
+	uint64_t diff = min_id - ctx->lastid + 1;
+	int index = entity_id_find_guessrange(&w->eid, min_id, ctx->pos, ctx->pos + diff);
+	if (index >= 0) {
+		int last_pos = ctx->iter[ii].last_pos;
+		int len = ctx->iter[ii].pos - last_pos;
+		if (ctx->group_pos[ii] != last_pos) {
+			memmove(ctx->group[ii]->s + ctx->group_pos[ii], ctx->group[ii]->s + last_pos, len);
+		}
+		ctx->group_pos[ii] += len;
+		ctx->pos = index + 1;
+		ctx->lastid = min_id;
+	}
+	if (!foreach_end(ctx->group[ii], &ctx->iter[ii])) {
+		// This group is end, remove j from index
+		ctx->group[ii]->n = ctx->group_pos[ii];
+		--ctx->n;
+		memmove(ctx->index+j, ctx->index+j+1, (ctx->n - j) * sizeof(int));
 	}
 	return index;
 }
 
-static inline int
-read_group(lua_State *L, struct component_pool *g, int index, int groupid) {
-	if (lua_rawgeti(L, index, groupid) == LUA_TNIL) {
-		lua_pop(L, 1);
-		return -1;
-	}
-	if (lua_isinteger(L, -1)) {
-		int r = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-		int realid = find_groupid(g, r, groupid);
-		if (realid != r) {
-			r = realid;
-			lua_pushinteger(L, r);
-			lua_rawseti(L, index, groupid);
-		}
-		return r;
-	}
-	return luaL_error(L, "Invalid group");
-}
-
 static inline void
-write_group(lua_State *L, int index, int groupid, int n) {
-	lua_pushinteger(L, n);
-	lua_rawseti(L, index, groupid);
-}
-
-// 1: world
-// 2: group table
-// 3: groupid component id
-// 4: groupstruct component id
-// 5: uint64 uid
-int
-ecs_group_update(lua_State *L) {
-	struct entity_world *w = getW(L);
-	int gid = check_cid(L, w, 3);
-
-	struct component_pool *c = &w->c[gid];
-	if (c->n == 0) {
-		lua_settop(L, 5); // returns uid
-		return 1; // no new group id
-	}
-	if (c->stride != sizeof(uint32_t)) {
-		return luaL_error(L, "Invalid group id componet");
-	}
-	uint32_t *group = (uint32_t *)c->buffer;
-
-	luaL_checktype(L, 2, LUA_TTABLE);
-	int sid = check_cid(L, w, 4);
-	uint64_t uid = (uint64_t)luaL_checkinteger(L, 5);
-
-	struct component_pool *g = &w->c[sid];
-	if (g->stride != sizeof(struct group))
-		return luaL_error(L, "Invalid group struct");
-
+dump_(struct entity_group_arena *G) {
 	int i;
-	for (i = 0; i < c->n; i++) {
-		// insert group
-		int index = read_group(L, g, 2, group[i]);
-		//		printf("Group %d group = %d index = %d\n", i, group[i], index);
-		int n = ecs_add_component_id_(w, sid, c->id[i]);
-		assert(n>=0);
-		struct group *gs = (struct group *)get_ptr(g, n);
-		gs->uid = ++uid;
-		gs->group = group[i];
-		if (index < 0) {
-			gs->lastid = 0;
-			gs->next = 0;
-		} else {
-			struct group *last = (struct group *)get_ptr(g, index);
-			gs->lastid = last->uid;
-			gs->next = n - index;
-			assert(gs->next > 0);
+	for (i=0;i<G->n;i++) {
+		struct entity_group *g = G->g[i];
+		printf("Group %d:\n", g->groupid);
+		struct entity_iterator iter;
+		for (foreach_begin(g, &iter); foreach_end(g, &iter);) {
+			printf("\t%llu\n", iter.eid);
 		}
-		write_group(L, 2, group[i], n);
 	}
-
-	// clear groupid component
-	c->n = 0;
-
-	lua_pushinteger(L, uid + c->n);
-
-	return 1;
 }
-
-// 1: world
-// 2: iterator
-// 2: groupstruct component id
-int
-ecs_group_id(lua_State *L) {
-	struct entity_world *w = getW(L);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	int idx = get_integer(L, 2, 1, "index") - 1;
-	int mainkey = get_integer(L, 2, 2, "mainkey");
-	int cid = luaL_checkinteger(L, 3);
-	int index = entity_sibling_index_(w, mainkey, idx, cid);
-	if (index <= 0) {
-		return luaL_error(L, "Invalid iterator");
-	}
-	struct component_pool *c = &w->c[cid];
-	struct group *g = (struct group *)get_ptr(c, index - 1);
-	lua_pushinteger(L, g->group);
-	lua_pushinteger(L, g->uid);
-	return 2;
-}
-
-static inline int
-next_groupid(struct group *group, int index) {
-	if (group[index].next == 0)
-		return -1;
-	int nextindex = index - group[index].next;
-	if (nextindex < 0)
-		nextindex = 0;
-	uint64_t lastid = group[index].lastid;
-	uint32_t groupid = group[index].group;
-	struct group *n = &group[nextindex];
-	if (lastid == n->uid)
-		return nextindex;
-	// case 1: lastid is removed (entity with the same group is removed)
-	// case 2: lastid is exist, but position is changed (entity between lastid and current id is removed)
-	int i;
-	if (lastid > n->uid) {
-		int possible_index = -1;
-		// lookup forward for lastid
-		for (i = nextindex + 1; i < index; i++) {
-			if (group[i].uid == lastid) {
-				// case 2, found lastid
-				group[index].next = index - i;
-				return i;
-			}
-			if (group[i].group == groupid) {
-				possible_index = i;
-			}
-			if (group[i].uid > lastid && possible_index >= 0)
-				break;
-		}
-		if (possible_index >= 0) {
-			// case 1: fix the linklist
-			group[index].lastid = group[possible_index].uid;
-			group[index].next = index - possible_index;
-			return possible_index;
-		}
-	}
-	// lookup backward
-	int possible_index = -1;
-	for (i = nextindex; i >= 0; i--) {
-		if (group[i].uid == lastid) {
-			group[index].next = index - i;
-			return i;
-		}
-		if (group[i].group == groupid) {
-			possible_index = i;
-		}
-		if (group[i].uid < lastid && possible_index >= 0) {
-			break;
-		}
-	}
-	if (possible_index >= 0) {
-		group[index].lastid = group[possible_index].uid;
-		group[index].next = index - possible_index;
-		return possible_index;
-	} else {
-		group[index].next = 0;
-	}
-	return -1;
-}
-
-// debug use
-// 1: world
-// 2: group table
-// 3: groupstruct component id
-// 4: group id
-// 5: check
-int
-ecs_group_fetch(lua_State *L) {
-	struct entity_world *w = getW(L);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	int sid = check_cid(L, w, 3);
-	struct component_pool *g = &w->c[sid];
-	struct group *group = (struct group *)g->buffer;
-	int groupid = luaL_checkinteger(L, 4);
-	lua_newtable(L);
-	int n = 1;
-	if (lua_toboolean(L, 5)) {
-		int i;
-		for (i = 0; i < g->n; i++) {
-			if (group[i].group == groupid) {
-				lua_pushinteger(L, group[i].uid);
-				lua_rawseti(L, -2, n++);
-			}
-		}
-	} else {
-		int index = read_group(L, g, 2, groupid);
-		while (index >= 0) {
-			lua_pushinteger(L, group[index].uid);
-			lua_rawseti(L, -2, n++);
-			index = next_groupid(group, index);
-		}
-	}
-	return 1;
-}
-
-#define MAX_GROUPS 256
-
-struct group_enable {
-	int groupid;
-	int index;
-};
 
 static void
-group_enable_insert(struct group_enable *array, int n, int groupid, int index) {
+enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
+	struct tag_index_context ctx;
+	ctx.n = 0;
+	ctx.pos = 0;
+	ctx.lastid = 0;
 	int i;
-	for (i = n - 1; i >= 0; i--) {
-		if (index > array[i].index) {
-			array[i + 1].groupid = groupid;
-			array[i + 1].index = index;
-			return;
+	for (i=0;i<n;i++) {
+		ctx.group[i] = find_group(&w->group, groupid[i]);
+		foreach_begin(ctx.group[i], &ctx.iter[i]);
+		if (foreach_end(ctx.group[i], &ctx.iter[i])) {
+			ctx.index[ctx.n++] = i;
 		}
-		array[i + 1] = array[i];
+		ctx.group_pos[i] = 0;
 	}
-	array[0].groupid = groupid;
-	array[0].index = index;
+	entity_clear_type_(w, tagid);
+	while (ctx.n > 0) {
+		int index = tag_index(w, &ctx);
+		if (index >= 0)
+			ecs_add_component_id_(w, tagid, make_index_(index));
+	}
 }
 
-// 1: world
-// 2: group table
-// 3: groupstruct component id
-// 4: tags id
-// 5-: group id
-int
-ecs_group_enable(lua_State *L) {
-	const int groupid_index = 5;
-	struct group_enable tmp[MAX_GROUPS];
-	struct group_enable *array = tmp;
-	int groupn = lua_gettop(L) - (groupid_index - 1);
-	struct entity_world *w = getW(L);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	int sid = check_cid(L, w, 3);
-	struct component_pool *g = &w->c[sid];
-	struct group *group = (struct group *)g->buffer;
-	if (groupn > MAX_GROUPS) {
-		array = (struct group_enable *)lua_newuserdatauv(L, groupn * sizeof(struct group_enable), 0);
+void
+entity_group_enable(struct entity_world *w, int tagid, int n, int groupid[]) {
+	int *p = groupid;
+	while (n > GROUP_COMBINE) {
+		enable_(w, tagid, GROUP_COMBINE, p);
+		p += GROUP_COMBINE;
+		n -= GROUP_COMBINE;
 	}
+	if (n > 0)
+		enable_(w, tagid, n, p);
+}
+
+
+#ifdef TEST_GROUP_CODEC
+
+static void
+test_add_item() {
+	struct entity_group g;
+	memset(&g, 0, sizeof(g));
+	uint64_t eid = 1;
 	int i;
-	int n = 0;
-	for (i = 0; i < groupn; i++) {
-		int groupid = luaL_checkinteger(L, groupid_index + i);
-		int index = read_group(L, g, 2, groupid);
-		if (index >= 0) {
-			group_enable_insert(array, n, groupid, index);
-			++n;
-		}
+	for (i=0;i<10;i++) {
+		add_eid(&g, eid);
+		eid += i*2;
 	}
-	int tagid = check_cid(L, w, 4);
-	struct component_pool *tag = &w->c[tagid];
-	if (tag->stride != STRIDE_TAG) {
-		return luaL_error(L, "Invalid tag");
+
+	eid = 1;
+	struct entity_iterator iter;
+	i = 0;
+	for (foreach_begin(&g, &iter); foreach_end(&g, &iter);) {
+		assert(iter.eid == eid);
+		eid += i*2;
+		++i;
 	}
-	tag->n = 0;
-	while (n > 0) {
-		int index = array[n - 1].index;
-		assert(index >= 0);
-		ecs_add_component_id_(w, tagid, g->id[index]);
-		index = next_groupid(group, index);
-		if (index >= 0) {
-			group_enable_insert(array, n - 1, array[n - 1].groupid, index);
-		} else {
-			--n;
-		}
+}
+
+static void
+test_group_add() {
+	struct entity_group_arena g;
+	memset(&g, 0, sizeof(g));
+	int groupid = 10000;
+	int i;
+	for (i=0;i<100000;i++) {
+		entity_group_add(&g, groupid, i);
+		groupid -= 3;
 	}
-	n = tag->n;
-	int last = n - 1;
-	for (i = 0; i < n / 2; i++) {
-		entity_index_t tmp = tag->id[i];
-		tag->id[i] = tag->id[last];
-		tag->id[last] = tmp;
-		--last;
+
+	groupid = 10000;
+	for (i=0;i<100000;i++) {
+		struct entity_group * group = find_group(&g, groupid);
+		struct entity_iterator iter;
+		foreach_begin(group, &iter);
+		foreach_end(group, &iter);
+		assert(iter.eid == i);
+		groupid -= 3;
 	}
+}
+
+int
+main() {
+	test_add_item();
+	test_group_add();
 	return 0;
 }
 
-int
-lgroup_methods(lua_State *L) { 
-		luaL_Reg m[] = {
-		{ "_group_update", ecs_group_update },
-		{ "_group_fetch", ecs_group_fetch },
-		{ "_group_enable", ecs_group_enable },
-		{ "_group_id", ecs_group_id },
-		{ NULL, NULL },
-	};
-	luaL_newlib(L, m);
-
-	return 1;
-}
+#endif

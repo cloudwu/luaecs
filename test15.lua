@@ -4,47 +4,41 @@ local ecs = require "ecs"
 local w = ecs.world()
 
 w:register {
-  name = "id",
-  type = "int64",
+	name = "id",
+	type = "int",
+}
+
+w:register {
+	name = "group",
+	type = "int"
 }
 
 w:register {
 	name = "visible"
 }
 
-w:group_init "group"
-
-
 for i = 1, 100 do
-	w:new {
+	local eid = w:new {
 		id = i,
-		group = i%4,
+		group = i % 5
 	}
+	w:group_add(i % 5, eid)
 end
 
-w:group_update()
 w:update()
 
-for v in w:select "id:in" do
-	if v.id % 10 == 0 then
-		print("REMOVE", v.id)
+for v in w:select "id:in group:in" do
+	if v.id % 3 == 0 then
+		print("REMOVE", v.id, v.group)
 		w:remove(v)
 	end
 end
 
 w:update()
 
-w:group_check()
-local g = w:group_fetch(0)
-for _,uid in ipairs(g) do
-	print("GROUP0", uid)
-end
-
 -- enable all entities where group == 0 or group == 1
-w:group_enable("visible", 0,1)
+w:group_enable("visible", 0,2)
 
-for v in w:select "visible id:in" do
-	local gid = w:group_id(v)
-	assert(gid == 0 or gid == 1)
-	print(v.id)
+for v in w:select "visible id:in group:in" do
+	print(v.id, v.group)
 end

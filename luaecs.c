@@ -979,6 +979,7 @@ static void
 update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
 	int mainkey = iter->k[0].id;
 	if (mainkey < 0) {
+		assert(mainkey == ENTITYID_TAG);
 		update_iter(L, world_index, lua_index, iter, idx, mainkey, 1);
 		return;
 	}
@@ -1125,7 +1126,9 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 	for (i = 0; i < iter->nkey; i++) {
 		struct group_key *k = &iter->k[i];
 		if (k->id == ENTITYID_TAG) {
-			lua_pushinteger(L, iter->world->eid.id[index[i]]);
+			unsigned int idx = index[i] - 1;
+			uint64_t eid = iter->world->eid.id[idx];
+			lua_pushinteger(L, eid);
 			lua_setfield(L, obj_index, "eid");
 		} else if (!(k->attrib & COMPONENT_FILTER)) {
 			struct component_pool *c = &iter->world->c[k->id];

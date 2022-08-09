@@ -116,7 +116,7 @@ ecs_template_instance_component(lua_State *L) {
 			return luaL_error(L, "Missing lua table for %d", cid);
 		}
 		lua_pushvalue(L, 4);
-		lua_rawseti(L, -2, index + 1);
+		lua_rawseti(L, -2, ecs_get_eid(w, cid, index));
 	} else {
 		size_t sz;
 		void *s;

@@ -149,8 +149,10 @@ write_id_(lua_State *L, struct file_writer *w, entity_index_t *id, int n, uint32
 	entity_index_t buffer[1024];
 	int i;
 	for (i = 0; i < n; i++) {
-		last_id = index_(id[i]) - last_id;
-		buffer[i] = make_index_(last_id);
+		uint32_t t = index_(id[i]);
+		uint32_t diff = t - last_id;
+		last_id = t;
+		buffer[i] = make_index_(diff);
 	}
 	size_t r = fwrite(buffer, sizeof(entity_index_t), n, w->f);
 	if (r != n) {
@@ -184,8 +186,9 @@ write_eid_(lua_State *L, struct file_writer *w, const uint64_t *id, int n, uint6
 	uint64_t buffer[1024];
 	int i;
 	for (i = 0; i < n; i++) {
-		last_id = id[i] - last_id - 1;
-		buffer[i] = last_id;
+		uint64_t diff = id[i] - last_id - 1;
+		last_id = id[i];
+		buffer[i] = diff;
 	}
 	size_t r = fwrite(buffer, sizeof(uint64_t), n, w->f);
 	if (r != n) {

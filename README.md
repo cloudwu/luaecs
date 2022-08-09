@@ -255,3 +255,10 @@ end
 > w:singleton(typename, pattern, iterator) -- Read the first component with the pattern.
 
 > w:filter(tagname, pattern) -- Enable tags marching the pattern
+
+Access Components from C side
+======
+
+1. Create a context by `w:context { component1, component2, ... }` for C. Export the components C concerned.
+2. Define C structs of compinents in C.
+3. Use APIs in `luaecs.h`

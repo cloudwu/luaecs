@@ -486,7 +486,7 @@ do
 	local _serialize = template_methods._serialize
 	local _serialize_lua = template_methods._serialize_lua
 
-	function M:template(obj, serifunc)
+	function M:template(obj)
 		local buf = {}
 		local i = 1
 		local typenames = context[self].typenames

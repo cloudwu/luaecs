@@ -260,5 +260,50 @@ Access Components from C side
 ======
 
 1. Create a context by `w:context { component1, component2, ... }` for C. Export the components C concerned.
-2. Define C structs of compinents in C.
+2. Define C structs of components in C.
 3. Use APIs in `luaecs.h`
+
+> `void * entity_iter(struct ecs_context *ctx, cid_t cid, int index)`
+> `void * entity_sibling(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id)`
+
+```C
+struct component *v;
+int i;
+// iterate all the components with COMPONENT_ID. COMPONENT_ID is the index of context (base 0) or component id from lua MAKE_COMPONENT_ID(cid)
+for (i = 0; (v = (struct component *)entity_iter(ctx, COMPONENT_ID, i)); i++) {
+	// Read the component2 associate with component (the same entity)
+	struct component2 * c2 = (struct component2 *)entity_sibling(ctx, COMPONENT_ID, i, COMPONENT_ID2);
+}
+```
+
+> `int entity_sibling_id(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id)`
+
+The same with entity_sibling, but returns an id (base 1). 0 : not exist.
+
+> `void * entity_add_sibling(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id, const void *buffer)`
+
+> `int entity_new(struct ecs_context *ctx, cid_t cid, const void *buffer)`
+
+Create an entity with one component
+
+> `void entity_remove(struct ecs_context *ctx, cid_t cid, int index)`
+
+> `void entity_enable_tag(struct ecs_context *ctx, cid_t cid, int index, cid_t tag_id)`
+
+> `void entity_disable_tag(struct ecs_context *ctx, cid_t cid, int index, cid_t tag_id)`
+
+> `int entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L)`
+> `int entity_sibling_lua(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id, void *L)`
+
+Get lua component
+
+
+
+
+
+
+
+
+
+
+Read the component associate with cid,

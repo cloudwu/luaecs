@@ -1704,7 +1704,7 @@ laccess(lua_State *L) {
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
 	int idx = entity_id_find(&w->eid, eid);
 	if (idx < 0)
-		return luaL_error(L, "eid %x not found", idx);
+		return luaL_error(L, "eid %d not found", idx);
 	struct group_iter *iter = lua_touserdata(L, 3);
 	int value_index = 4;
 	if (iter->nkey > 1)

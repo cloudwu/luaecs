@@ -978,8 +978,13 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 static void
 update_last_index(lua_State *L, int world_index, int lua_index, struct group_iter *iter, int idx) {
 	int mainkey = iter->k[0].id;
-	struct component_pool *c = &iter->world->c[mainkey];
+	if (mainkey < 0) {
+		update_iter(L, world_index, lua_index, iter, idx, mainkey, 1);
+		return;
+	}
+
 	int disable_mainkey = 0;
+	struct component_pool *c = &iter->world->c[mainkey];
 	if (!(iter->k[0].attrib & COMPONENT_FILTER)) {
 		if (c->stride == STRIDE_TAG) {
 			// The mainkey is a tag, delay disable
@@ -1076,7 +1081,7 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned in
 			index[j] = 0;
 		} else if (!is_temporary(k->attrib)) {
 			if (k->id == ENTITYID_TAG) {
-				uint32_t x = index_(iter->world->c[mainkey].id[idx]);
+				uint32_t x = (mainkey < 0) ? idx : index_(iter->world->c[mainkey].id[idx]);
 				index[j] = x;
 			} else {
 				index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
@@ -1191,7 +1196,7 @@ lreadid(lua_State *L) {
 		return 0;
 	}
 	struct entity_world *w = getW(L);
-	entity_index_t index = w->c[mainkey].id[idx];
+	entity_index_t index = (mainkey < 0) ? make_index_(idx) : w->c[mainkey].id[idx];
 	lua_pushinteger(L, (lua_Integer)ENTITY_EID(w, index));
 	return 1;
 }

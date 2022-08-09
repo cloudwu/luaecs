@@ -1081,16 +1081,11 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned in
 			}
 			index[j] = 0;
 		} else if (!is_temporary(k->attrib)) {
-			if (k->id == ENTITYID_TAG) {
-				uint32_t x = (mainkey < 0) ? idx : index_(iter->world->c[mainkey].id[idx]);
-				index[j] = x;
-			} else {
-				index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-				if (index[j] == 0) {
-					if (!(k->attrib & COMPONENT_OPTIONAL)) {
-						// required. try next
-						return 0;
-					}
+			index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
+			if (index[j] == 0) {
+				if (!(k->attrib & COMPONENT_OPTIONAL)) {
+					// required. try next
+					return 0;
 				}
 			}
 		} else {

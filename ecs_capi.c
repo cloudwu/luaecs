@@ -64,12 +64,17 @@ int
 entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_id) {
 	entity_index_t eid;
 	if (cid < 0) {
+		assert(cid == ENTITYID_TAG);
 		eid =  make_index_(index);
 	} else {
 		struct component_pool *c = &w->c[cid];
 		if (index < 0 || index >= c->n)
 			return 0;
 		eid = c->id[index];
+	}
+	if (silbling_id < 0) {
+		assert(silbling_id == ENTITYID_TAG);
+		return index_(eid) + 1;
 	}
 	struct component_pool *c = &w->c[silbling_id];
 	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);

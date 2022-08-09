@@ -320,14 +320,9 @@ local function _new_entity(self, eid, obj)
 	end
 end
 
-function M:new(obj, eid)
+function M:new(obj)
 --	dump(obj)
-	local index
-	if eid then
-		index = self:_indexentity(eid)
-	else
-		eid, index = self:_newentity()
-	end
+	local eid, index = self:_newentity()
 	if obj then
 		_new_entity(self, index, obj)
 	end
@@ -514,26 +509,6 @@ do
 		end
 		return template_methods._template_create(self, buf)
 	end
-end
-
-function M:group_init(groupname)
-	self:register {
-		name = groupname,
-		type = "int",
-	}
-	local gsname = groupname .. "_"
-	self:register {
-		name = gsname,
-		"uid:int64",
-		"lastid:int64",
-		"group:int",
-		"next:int",
-	}
-	local ctx = context[self]
-	ctx.group_id = ctx.typenames[groupname].id
-	ctx.group_struct = ctx.typenames[gsname].id
-	ctx.uid = 0
-	ctx.group = {}
 end
 
 function M:group_enable(tagname, ...)

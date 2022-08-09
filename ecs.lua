@@ -335,8 +335,8 @@ function M:new(obj, eid)
 end
 
 local template_methods = ecs._template_methods()
-function M:template_instance(temp, obj)
-	local eid = self:_newentity()
+function M:template_instance(eid, temp, obj)
+	local index = self:_indexentity(eid)
 	local ctx = context[self]
 	local offset = 0
 	local cid, arg1, arg2
@@ -345,7 +345,7 @@ function M:template_instance(temp, obj)
 		if not cid then
 			break
 		end
-		local id = self:_addcomponent(eid, cid)
+		local id = self:_addcomponent(index, cid)
 		local tname = ctx.typeidtoname[cid]
 		local tc = ctx.typenames[tname]
 		if tc.unmarshal then
@@ -359,7 +359,7 @@ function M:template_instance(temp, obj)
 		end
 	end
 	if obj then
-		_new_entity(self, eid, obj)
+		_new_entity(self, index, obj)
 	end
 end
 

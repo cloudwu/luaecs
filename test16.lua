@@ -39,8 +39,8 @@ local t = w:template {
 	name = "noname",
 }
 
-w:template_instance(t, { id = 1 })
-w:template_instance(t, { id = 2 })
+w:template_instance(w:new(), t, { id = 1 })
+w:template_instance(w:new(), t, { id = 2 })
 
 for v in w:select "id:in value:in name:in" do
 	print(v.id, v.value, v.name)

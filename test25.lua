@@ -7,11 +7,10 @@ w:register {
 	type = "lua",
 }
 
-local id = w:new()
+local eid = w:new()
 
-w:add(id, {
+w:import(eid, {
 	string = "Hello"
 })
 
-assert(t == id)
-assert(w:access(id, "string") == "Hello")
+assert(w:access(eid, "string") == "Hello")

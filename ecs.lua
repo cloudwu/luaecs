@@ -334,6 +334,12 @@ function M:new(obj, eid)
 	return eid
 end
 
+function M:import(eid, obj)
+	local index = self:_indexentity(eid)
+	_new_entity(self, index, obj)
+	return eid
+end
+
 local template_methods = ecs._template_methods()
 function M:template_instance(eid, temp, obj)
 	local index = self:_indexentity(eid)

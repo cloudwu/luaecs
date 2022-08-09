@@ -221,7 +221,6 @@ lwrite_section(lua_State *L) {
 		s->offset = 0;
 	} else {
 		s->offset = get_length(&w->c[w->n - 1]);
-		printf("offset = %d\n", (int)s->offset);
 	}
 
 	int cid = luaL_checkinteger(L, 3);

@@ -138,8 +138,8 @@ ecs_reserve_component_(struct component_pool *pool, int cid, int cap) {
 	if (pool->n == 0) {
 		if (cap > pool->cap) {
 			free_buffers(pool);
+			pool->cap = cap;
 		}
-		pool->cap = cap;
 		if (pool->id == NULL) {
 			init_buffers(pool);
 		}

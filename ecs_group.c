@@ -134,7 +134,7 @@ insert_group(struct entity_group_arena *G, int groupid, int begin, int end) {
 		} else {
 			G->cap = G->cap * 3 / 2;
 			struct entity_group ** g = (struct entity_group **)malloc(G->cap * sizeof(struct entity_group *));
-			memcpy(g, G->g, (begin-1) * sizeof(struct entity_group *));
+			memcpy(g, G->g, begin * sizeof(struct entity_group *));
 			memcpy(g+begin+1, G->g + begin, (G->n - begin) * sizeof(struct entity_group *));
 			free(G->g);
 			G->g = g;
@@ -154,7 +154,7 @@ insert_group(struct entity_group_arena *G, int groupid, int begin, int end) {
 
 static struct entity_group *
 find_group(struct entity_group_arena *G, int groupid) {
-	int h = (2654435769 * (uint32_t)groupid) >> (32 - ENTITY_GROUP_CACHE_BITS);
+	int h = (uint32_t)(2654435769 * (uint32_t)groupid) >> (32 - ENTITY_GROUP_CACHE_BITS);
 	int index;
 	if (h >= G->n) {
 		index = insert_group(G, groupid, 0, G->n);

@@ -42,3 +42,14 @@ w:group_enable("visible", 0,2)
 for v in w:select "visible id:in group:in" do
 	print(v.id, v.group)
 end
+
+local eid = w:new { id = 42 }
+
+w:group_add (1000, eid)
+w:group_add (1001, eid)
+
+w:group_enable("visible", 1000, 1001)
+
+for v in w:select "visible id:in" do
+	print(v.id)
+end

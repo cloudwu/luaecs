@@ -1743,12 +1743,13 @@ laccess(lua_State *L) {
 		if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 			luaL_error(L, "Missing lua table for .%s", k->name);
 		}
+		uint64_t eid = ecs_get_eid(w, k->id, index-1);
 		if (output) {
 			lua_pushvalue(L, value_index);
-			lua_rawseti(L, -2, index);
+			lua_rawseti(L, -2, eid);
 			return 0;
 		} else {
-			lua_rawgeti(L, -1, index);
+			lua_rawgeti(L, -1, eid);
 			return 1;
 		}
 	}

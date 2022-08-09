@@ -83,7 +83,7 @@ ecs_persistence_generate_eid(lua_State *L) {
 	}
 	maxid++;
 	ecs_reserve_eid_(w, maxid);
-	w->eid.n = maxid;
+	w->eid.last_id = w->eid.n = maxid;
 	for (i=0;i<maxid;i++) {
 		w->eid.id[i] = (uint64_t)i+1;
 	}
@@ -105,6 +105,7 @@ ecs_persistence_readcomponent(lua_State *L) {
 		ecs_reserve_eid_(w, n);
 		read_section_eid(L, reader, w->eid.id, offset, n);
 		w->eid.n = n;
+		w->eid.last_id = (n > 0) ? w->eid.id[n-1] : 0;
 		lua_pushinteger(L, n);
 		return 1;
 	} else {

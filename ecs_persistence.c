@@ -60,7 +60,7 @@ read_section_eid(lua_State *L, struct file_reader *reader, uint64_t *eid, size_t
 	int i;
 	uint64_t last_id = (uint64_t)-1;
 	for (i = 0; i < n; i++) {
-		last_id += eid[i];
+		last_id += eid[i] + 1;
 		eid[i] = last_id;
 	}
 }
@@ -81,10 +81,11 @@ ecs_persistence_generate_eid(lua_State *L) {
 	if (maxid < 0) {
 		return 0;
 	}
+	maxid++;
 	ecs_reserve_eid_(w, maxid);
 	w->eid.n = maxid;
 	for (i=0;i<maxid;i++) {
-		w->eid.id[i] = (uint64_t)i;
+		w->eid.id[i] = (uint64_t)i+1;
 	}
 	return 0;
 }

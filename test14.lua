@@ -27,6 +27,12 @@ w:new {
   tag = true,
 }
 
+
+for v in w:select "value:in eid:in tag" do
+	print(v.value, v.eid)
+end
+
+
 local writer = ecs.writer "temp.bin"
 writer:write(w, w:component_id "eid")
 writer:write(w, w:component_id "value")
@@ -62,3 +68,7 @@ end
 
 -- You can use generate_eid instead of reading eid from file
 w:generate_eid()
+
+for v in w:select "value:in eid:in tag" do
+	print(v.value, v.eid)
+end

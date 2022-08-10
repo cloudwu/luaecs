@@ -53,3 +53,8 @@ w:group_enable("visible", 1000, 1001)
 for v in w:select "visible id:in" do
 	print(v.id)
 end
+
+local g = w:group_get(0)
+for _, eid in ipairs(g) do
+	print("GROUP0", eid)
+end

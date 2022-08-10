@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <lua.h>
+#include <lauxlib.h>
 
 #include "ecs_internal.h"
 #include "ecs_capi.h"
@@ -275,6 +277,18 @@ entity_group_enable_(struct entity_world *w, int tagid, int n, int groupid[]) {
 	}
 	if (n > 0)
 		enable_(w, tagid, n, p);
+}
+
+void
+entity_group_id_(struct entity_group_arena *G, int groupid, lua_State *L) {
+	struct entity_group	*g = find_group(G, groupid);
+	lua_createtable(L, g->n, 0);
+	struct entity_iterator iter;
+	int i = 0;
+	for (foreach_begin(g, &iter); foreach_end(g, &iter);) {
+		lua_pushinteger(L, iter.eid);
+		lua_rawseti(L, -2, ++i);
+	}
 }
 
 

@@ -1812,6 +1812,14 @@ lgroup_enable(lua_State *L) {
 }
 
 static int
+lgroup_get(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int groupid = luaL_checkinteger(L, 2);
+	entity_group_id_(&w->group, groupid, L);
+	return 1;
+}
+
+static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
@@ -1836,6 +1844,7 @@ lmethods(lua_State *L) {
 		{ "__gc", ldeinit_world },
 		{ "group_add", lgroup_add },
 		{ "_group_enable", lgroup_enable },
+		{ "group_get", lgroup_get },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

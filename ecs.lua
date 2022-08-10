@@ -173,7 +173,7 @@ local function cache_world(obj, k)
 	return c
 end
 
-local context = setmetatable({}, { __index = cache_world })
+local context = setmetatable({}, { __index = cache_world, __mode = "k" })
 local typeid = {
 	int = assert(ecs._TYPEINT),
 	float = assert(ecs._TYPEFLOAT),

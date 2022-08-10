@@ -1543,7 +1543,7 @@ lindex_entity(lua_State *L) {
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
 	int index = entity_id_find(&w->eid, eid);
 	if (index < 0)
-		return luaL_error(L, "Missing entity %x", eid);
+		return luaL_error(L, "Missing entity %d", eid);
 	lua_pushinteger(L, index);
 	return 1;
 }
@@ -1564,7 +1564,7 @@ lremove(lua_State *L) {
 		// It's eid
 		int index = entity_id_find(&w->eid, lua_tointeger(L, 2));
 		if (index < 0)
-			return luaL_error(L, "No eid %x", lua_tointeger(L, 2));
+			return luaL_error(L, "No eid %d", lua_tointeger(L, 2));
 		entity_remove_(w, ENTITYID_TAG, index);
 	} else {
 		luaL_checktype(L, 2, LUA_TTABLE);

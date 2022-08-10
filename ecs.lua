@@ -58,10 +58,6 @@ local persistence_methods = ecs._persistence_methods()
 ecs.writer = persistence_methods.writer
 ecs.reader = persistence_methods.reader
 
-local index_methods = ecs._index_methods()
-
-local DEFAULT_BLACKLIST
-
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
@@ -69,18 +65,7 @@ local function cache_world(obj, k)
 		id = 0,
 		select = {},
 		ref = {},
-		index_meta = {},
-		blacklist = DEFAULT_BLACKLIST,
 	}
-
-	do
-		local c_select = c.select
-		local access_index = index_methods._access_index
-		c.index_meta.__index = index_methods._cache_index
-		c.index_meta.__call = function (self, id, pat_string, ...)
-			return access_index(self, id, c_select[pat_string], ...)
-		end
-	end
 
 	local function gen_ref_pat(key)
 		local typenames = c.typenames
@@ -188,7 +173,7 @@ local function cache_world(obj, k)
 	return c
 end
 
-local context = setmetatable({}, { __index = cache_world })
+local context = setmetatable({}, { __index = cache_world, __mode = "k" })
 local typeid = {
 	int = assert(ecs._TYPEINT),
 	float = assert(ecs._TYPEFLOAT),
@@ -226,7 +211,6 @@ local TYPENAME = {
 }
 
 -- make metatable
-local group_methods = ecs._group_methods()
 local M = ecs._methods()
 M.__index = M
 
@@ -338,13 +322,22 @@ end
 
 function M:new(obj)
 --	dump(obj)
-	local eid = self:_newentity()
-	_new_entity(self, eid, obj)
+	local eid, index = self:_newentity()
+	if obj then
+		_new_entity(self, index, obj)
+	end
+	return eid
+end
+
+function M:import(eid, obj)
+	local index = self:_indexentity(eid)
+	_new_entity(self, index, obj)
+	return eid
 end
 
 local template_methods = ecs._template_methods()
-function M:template_instance(temp, obj)
-	local eid = self:_newentity()
+function M:template_instance(eid, temp, obj)
+	local index = self:_indexentity(eid)
 	local ctx = context[self]
 	local offset = 0
 	local cid, arg1, arg2
@@ -353,7 +346,7 @@ function M:template_instance(temp, obj)
 		if not cid then
 			break
 		end
-		local id = self:_addcomponent(eid, cid)
+		local id = self:_addcomponent(index, cid)
 		local tname = ctx.typeidtoname[cid]
 		local tc = ctx.typenames[tname]
 		if tc.unmarshal then
@@ -367,16 +360,7 @@ function M:template_instance(temp, obj)
 		end
 	end
 	if obj then
-		_new_entity(self, eid, obj)
-	end
-end
-
-DEFAULT_BLACKLIST = M._clone_blacklist { ecs._REMOVED }
-
-function M:clone(iter, obj)
-	local eid = self:_clone(iter, context[self].blacklist)
-	if obj then
-		_new_entity(self, eid, obj)
+		_new_entity(self, index, obj)
 	end
 end
 
@@ -398,9 +382,28 @@ function M:select(pat)
 end
 
 do
+	local access = M._access
+	function M:access(eid, pat, ...)
+		return access(self, eid, context[self].select[pat], ...)
+	end
+end
+
+do
 	local _count = M._count
 	function M:count(pat)
 		return _count(context[self].select[pat])
+	end
+end
+
+do
+	local EID <const> = ecs._EID
+	local get_index = M._indexentity
+
+	function M:fetch(eid, iter)
+		iter = iter or {}
+		iter[1] = get_index(self, eid) + 1
+		iter[2] = EID
+		return iter
 	end
 end
 
@@ -428,22 +431,16 @@ end
 
 function M:clearall()
 	for _, tc in pairs(context[self].typenames) do
-		self:_clear(assert(tc.id))
+		local id = assert(tc.id)
+		if id >= 0 then
+			self:_clear(id)
+		end
 	end
-	persistence_methods._resetmaxid(self)
 end
 
 function M:dumpid(name)
 	local typenames = context[self].typenames
 	return self:_dumpid(typenames[name].id)
-end
-
-function M:make_index(name, size)
-	local c = context[self]
-	local t = assert(c.typenames[name])
-	local id = t.id
-	local type = t[1][1]
-	return index_methods._make_index(self, id, type, size or 1024, c.index_meta)
 end
 
 function M:component_id(name)
@@ -455,6 +452,8 @@ function M:read_component(reader, name, offset, stride, n)
 	local t = assert(context[self].typenames[name])
 	return persistence_methods._readcomponent(self, reader, t.id, offset, stride, n)
 end
+
+M.generate_eid = persistence_methods.generate_eid
 
 do
 	local _object = M._object
@@ -487,7 +486,7 @@ do
 	local _serialize = template_methods._serialize
 	local _serialize_lua = template_methods._serialize_lua
 
-	function M:template(obj, serifunc)
+	function M:template(obj)
 		local buf = {}
 		local i = 1
 		local typenames = context[self].typenames
@@ -512,56 +511,10 @@ do
 	end
 end
 
-function M:group_init(groupname)
-	self:register {
-		name = groupname,
-		type = "int",
-	}
-	local gsname = groupname .. "_"
-	self:register {
-		name = gsname,
-		"uid:int64",
-		"lastid:int64",
-		"group:int",
-		"next:int",
-	}
-	local ctx = context[self]
-	ctx.group_id = ctx.typenames[groupname].id
-	ctx.group_struct = ctx.typenames[gsname].id
-	ctx.uid = 0
-	ctx.group = {}
-	-- Add group_struct to blacklist
-	ctx.blacklist = self._clone_blacklist ( { ctx.group_struct } , ctx.blacklist )
-end
-
-function M:group_id(iter)
-	local ctx = context[self]
-	return group_methods._group_id(self, iter,ctx.group_struct)
-end
-
--- debug use
-function M:group_fetch(groupid)
-	local ctx = context[self]
-	return group_methods._group_fetch(self, ctx.group, ctx.group_struct, groupid)
-end
-
-function M:group_check()
-	local ctx = context[self]
-	for k in pairs(ctx.group) do
-		assert(	#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, true) ==
-			#group_methods._group_fetch(self, ctx.group, ctx.group_struct, k, false) )
-	end
-end
-
-function M:group_update()
-	local ctx = context[self]
-	ctx.uid = group_methods._group_update(self, ctx.group, ctx.group_id, ctx.group_struct, ctx.uid)
-end
-
 function M:group_enable(tagname, ...)
 	local ctx = context[self]
 	local tagid = ctx.typenames[tagname].id
-	group_methods._group_enable(self, ctx.group, ctx.group_struct,tagid,...)
+	self:_group_enable(tagid, ...)
 end
 
 function M:remove_update(tagname)
@@ -595,6 +548,12 @@ function ecs.world()
 	context[w].typenames.REMOVED = {
 		name = "REMOVED",
 		id = ecs._REMOVED,
+		size = 0,
+		tag = true,
+	}
+	context[w].typenames.eid = {
+		name = "eid",
+		id = ecs._EID,
 		size = 0,
 		tag = true,
 	}

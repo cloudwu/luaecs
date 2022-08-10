@@ -5,9 +5,11 @@ LUA_INC=-I /e/opensource/lua/src
 LUA_LIB=-L /usr/local/bin -llua54
 
 CFLAGS=-O2 -Wall
-SHARED=--shared
+SHARED=--shared -fPIC
 
-ecs.dll : luaecs.c ecs_group.c ecs_persistence.c ecs_template.c ecs_index.c ecs_capi.c
+all : ecs.dll
+
+ecs.dll : luaecs.c ecs_group.c ecs_persistence.c ecs_template.c ecs_capi.c ecs_entityid.c
 	gcc $(CFLAGS) $(SHARED) -DTEST_LUAECS -o $@ $^ $(LUA_INC) $(LUA_LIB)
 
 clean :

@@ -33,15 +33,17 @@ w:register {
 	unmarshal = deseri,
 }
 
+w:new()	-- skip eid
+
 local t = w:template {
 	tag = true,
 	value = 42,
 	name = "noname",
 }
 
-w:template_instance(t, { id = 1 })
-w:template_instance(t, { id = 2 })
+w:template_instance(w:new(), t, { id = 1 })
+w:template_instance(w:new(), t, { id = 2 })
 
-for v in w:select "id:in value:in name:in" do
-	print(v.id, v.value, v.name)
+for v in w:select "eid:in id:in value:in name:in" do
+	print(v.eid, v.id, v.value, v.name)
 end

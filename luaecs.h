@@ -20,6 +20,7 @@ struct ecs_capi {
 	void (*enable_tag)(struct entity_world *w, int cid, int index, int tag_id);
 	void (*disable_tag)(struct entity_world *w, int cid, int index, int tag_id);
 	int (*get_lua)(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
+	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 };
 
 struct ecs_context {
@@ -122,6 +123,12 @@ entity_sibling_lua(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_
 	} else {
 		return ctx->api->get_lua(ctx->world, sid, id - 1, ctx->L, 1, L);
 	}
+}
+
+static inline void
+entity_group_enable(struct  ecs_context *ctx, int tagid, int n, int groupid[]) {
+	int id = real_id_(ctx, tagid);
+	return ctx->api->group_enable(ctx->world, id, n, groupid);
 }
 
 #endif

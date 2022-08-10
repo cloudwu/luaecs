@@ -65,7 +65,7 @@ lcount_memory(lua_State *L) {
 	// count eid
 	size_t sz = sizeof(*w);
 	sz += entity_id_memsize(&w->eid);
-	sz += entity_group_memsize(&w->group);
+	sz += entity_group_memsize_(&w->group);
 	int i;
 	size_t msz = sz;
 	for (i = 0; i < MAX_COMPONENT; i++) {
@@ -556,6 +556,7 @@ lcontext(lua_State *L) {
 		entity_enable_tag_,
 		entity_disable_tag_,
 		entity_get_lua_,
+		entity_group_enable_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;
@@ -590,7 +591,7 @@ lnew_world(lua_State *L) {
 static int
 ldeinit_world(lua_State *L) {
 	struct entity_world *w = lua_touserdata(L, 1);
-	entity_group_deinit(&w->group);
+	entity_group_deinit_(&w->group);
 	entity_id_deinit(&w->eid);
 	int i;
 	for (i=0;i<MAX_COMPONENT;i++) {
@@ -1185,21 +1186,6 @@ lsync(lua_State *L) {
 }
 
 static int
-lreadid(lua_State *L) {
-	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
-	luaL_checktype(L, 3, LUA_TTABLE);
-	int idx = get_integer(L, 3, 1, "index") - 1;
-	int mainkey = get_integer(L, 3, 2, "mainkey");
-	if (entity_iter_(iter->world, mainkey, idx) == NULL) {
-		return 0;
-	}
-	struct entity_world *w = getW(L);
-	entity_index_t index = (mainkey < 0) ? make_index_(idx) : w->c[mainkey].id[idx];
-	lua_pushinteger(L, (lua_Integer)ENTITY_EID(w, index));
-	return 1;
-}
-
-static int
 lread(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
 	luaL_checktype(L, 3, LUA_TTABLE);
@@ -1777,7 +1763,7 @@ lgroup_add(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int groupid = luaL_checkinteger(L, 2);
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 3);
-	if (!entity_group_add(&w->group, groupid, eid)) {
+	if (!entity_group_add_(&w->group, groupid, eid)) {
 		return luaL_error(L, "group add fail");
 	}
 	return 0;
@@ -1792,7 +1778,7 @@ enable_(lua_State *L, struct entity_world *w, int tagid, int from, int n) {
 	for (i=0;i<n;i++) {
 		groupid[i] = luaL_checkinteger(L, from+i);
 	}
-	entity_group_enable(w, tagid, n, groupid);
+	entity_group_enable_(w, tagid, n, groupid);
 }
 
 // 1: world
@@ -1823,7 +1809,7 @@ lmethods(lua_State *L) {
 		{ "_newentity", lnew_entity },
 		{ "_indexentity", lindex_entity },
 		{ "_addcomponent", ladd_component },
-		{ "update", lupdate },
+		{ "_update", lupdate },
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
@@ -1833,7 +1819,6 @@ lmethods(lua_State *L) {
 		{ "_sync", lsync },
 		{ "_read", lread },
 		{ "_dumpid", ldumpid },
-		{ "_readid", lreadid },
 		{ "_count", lcount },
 		{ "_filter", lfilter },
 		{ "_access", laccess },

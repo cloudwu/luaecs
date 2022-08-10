@@ -395,33 +395,28 @@ do
 	end
 end
 
-do
-	local EID <const> = ecs._EID
-	local get_index = M._indexentity
-
-	function M:fetch(eid, iter)
-		iter = iter or {}
-		iter[1] = get_index(self, eid) + 1
-		iter[2] = EID
-		return iter
-	end
-end
-
 function M:sync(pat, iter)
 	local p = context[self].select[pat]
 	self:_sync(p, iter)
 	return iter
 end
 
-function M:readall(iter)
-	local p = context[self].all
-	self:_sync(p, iter)
-	return iter
-end
+do
+	local EID <const> = ecs._EID
+	local get_index = M._indexentity
 
-function M:readid(iter)
-	local p = context[self].all
-	return self:_readid(p, iter)
+	function M:readall(iter)
+		if type(iter) == "number" then
+			-- eid
+			iter = {
+				get_index(self, iter) + 1,
+				EID,
+			}
+		end
+		local p = context[self].all
+		self:_sync(p, iter)
+		return iter
+	end
 end
 
 function M:clear(name)
@@ -517,9 +512,12 @@ function M:group_enable(tagname, ...)
 	self:_group_enable(tagid, ...)
 end
 
-function M:remove_update(tagname)
-	local t = assert(context[self].typenames[tagname])
-	self:update(t.id)
+function M:update(tagname)
+	local id
+	if tagname then
+		id = assert(context[self].typenames[tagname]).id
+	end
+	self:_update(id)
 end
 
 function M:type(name)

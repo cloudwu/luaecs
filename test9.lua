@@ -37,7 +37,6 @@ w:new {
 }
 
 for v in w:select "mark" do
-	print("Id = ", w:readid(v))
 	w:readall(v)
 	for k,v in pairs(v) do
 		print(k,v)

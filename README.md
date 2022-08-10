@@ -226,8 +226,6 @@ You can also use `w:generate_eid()` instead of reading eid from file
 Other APIs
 =====
 
-> w:fetch(eid)  -- returns an iterator of entity with eid
-
 > w:exist(eid)	-- Check if the entity with eid exist
 
 > w:sync(pattern, iter)  -- read/write an iterator
@@ -295,15 +293,4 @@ Create an entity with one component
 > `int entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L)`
 > `int entity_sibling_lua(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id, void *L)`
 
-Get lua component
-
-
-
-
-
-
-
-
-
-
-Read the component associate with cid,
+> `void entity_group_enable(struct ecs_context *ctx, int tagid, int n, int groupid[])`

@@ -27,7 +27,7 @@ struct entity_group {
 };
 
 void
-entity_group_deinit(struct entity_group_arena *G) {
+entity_group_deinit_(struct entity_group_arena *G) {
 	int i;
 	for (i=0;i<G->n;i++) {
 		free(G->g[i]);
@@ -36,7 +36,7 @@ entity_group_deinit(struct entity_group_arena *G) {
 }
 
 size_t
-entity_group_memsize(struct entity_group_arena *G) {
+entity_group_memsize_(struct entity_group_arena *G) {
 	size_t sz = G->cap * sizeof(struct entity_group *);
 	int i;
 	for (i=0;i<G->n;i++) {
@@ -175,7 +175,7 @@ find_group(struct entity_group_arena *G, int groupid) {
 }
 
 int
-entity_group_add(struct entity_group_arena *G, int groupid, uint64_t eid) {
+entity_group_add_(struct entity_group_arena *G, int groupid, uint64_t eid) {
 	struct entity_group *g = find_group(G, groupid);
 	if (eid <= g->last) {
 		return 0;
@@ -266,7 +266,7 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 }
 
 void
-entity_group_enable(struct entity_world *w, int tagid, int n, int groupid[]) {
+entity_group_enable_(struct entity_world *w, int tagid, int n, int groupid[]) {
 	int *p = groupid;
 	while (n > GROUP_COMBINE) {
 		enable_(w, tagid, GROUP_COMBINE, p);

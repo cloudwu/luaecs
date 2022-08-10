@@ -7,6 +7,7 @@
 typedef unsigned int cid_t;
 
 #define MAKE_COMPONENT_ID(id) (cid_t)(0x80000000 | (id))
+#define COMPONENT_EID 0xffffffff
 
 struct entity_world;
 
@@ -34,6 +35,8 @@ struct ecs_context {
 static inline int
 real_id_(struct ecs_context *ctx, cid_t cid) {
 	if (cid & 0x80000000) {
+		if (cid == COMPONENT_EID)
+			return -1;
 		int index = cid & 0x7fffffff;
 		assert(index >= 0 && index <= ctx->max_id);
 		return ctx->cid[index];

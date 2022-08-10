@@ -1651,7 +1651,18 @@ lobject(lua_State *L) {
 static int
 ldumpid(lua_State *L) {
 	struct entity_world *w = getW(L);
-	int cid = check_cid(L, w, 2);
+	int cid = luaL_checkinteger(L, 2);
+	if (cid == ENTITYID_TAG) {
+		int n = w->eid.n;
+		lua_createtable(L, n, 0);
+		int i;
+		for (i = 0; i<n ; i++) {
+			lua_pushinteger(L, w->eid.id[i]);
+			lua_rawseti(L, -2, i+1);
+		}
+		return 1;
+	}
+	check_cid_valid(L, w, cid);
 	struct component_pool *c = &w->c[cid];
 	lua_createtable(L, c->n, 0);
 	int i;

@@ -49,5 +49,8 @@ for idx, id in ipairs(ids) do
 	print(idx, id)
 end
 
+local eid = w:dumpid "eid"
 
-
+for idx, id in ipairs(ids) do
+	print("EID", idx, id)
+end

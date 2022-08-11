@@ -3,6 +3,12 @@ local ecs = require "ecs"
 
 local w = ecs.world()
 
+local function ADD(groupid, eid)
+	w:group_add(groupid, eid)
+	local t = w:group_get(groupid)
+	assert(eid == t[#t])
+end
+
 w:register {
 	name = "id",
 	type = "int",
@@ -25,7 +31,7 @@ for i = 1, 100 do
 	for i = 1, 4000 do
 		w:new()
 	end
-	w:group_add(i % 5, eid)
+	ADD(i % 5, eid)
 end
 
 w:update()
@@ -48,8 +54,8 @@ end
 
 local eid = w:new { id = 42 }
 
-w:group_add (1000, eid)
-w:group_add (1001, eid)
+ADD (1000, eid)
+ADD (1001, eid)
 
 w:group_enable("visible", 1000, 1001)
 
@@ -73,7 +79,7 @@ for i = 1, 1000 do
 		w:new()
 	end
 	e[eid] = group
-	w:group_add(group, eid)
+	ADD(group, eid)
 end
 
 -- Random remove
@@ -143,8 +149,8 @@ test(2000, 2001, 2005)
 w:update()
 
 local eid = { w:new(), w:new() }
-w:group_add(3000, eid[1])
-w:group_add(3000, eid[2])
+ADD(3000, eid[1])
+ADD(3000, eid[2])
 
 w:group_enable("TEST", 3000)
 
@@ -161,7 +167,7 @@ eid[2] = w:new()
 
 w:update()
 
-w:group_add(3000, eid[2])
+ADD(3000, eid[2])
 
 w:group_enable("TEST", 3000)
 

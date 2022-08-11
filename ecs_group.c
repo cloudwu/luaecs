@@ -16,9 +16,11 @@
 
 struct entity_iterator {
 	int last_pos;
-	int pos;
-	uint64_t eid;
+	int decode_pos;
+	int encode_pos;
+	int n;
 	uint64_t last;
+	uint64_t eid;
 };
 
 struct entity_group {
@@ -81,12 +83,13 @@ add_eid(struct entity_group *g, uint64_t eid) {
 static inline void
 foreach_begin(struct entity_group *g, struct entity_iterator *iter) {
 	memset(iter, 0, sizeof(*iter));
+	iter->n = g->n;
 }
 
 static inline void
 decode_eid(struct entity_group *g, struct entity_iterator *iter) {
 	uint8_t *s = g->s;
-	int i = iter->pos++;
+	int i = iter->decode_pos++;
 	if (s[i] < 128) {
 		iter->eid += s[i] + 1;
 		return;
@@ -95,11 +98,11 @@ decode_eid(struct entity_group *g, struct entity_iterator *iter) {
 	uint64_t diff = s[i] & 0x7f;
 	for (;;) {
 		++i;
-		assert(i < g->n);
+		assert(i < iter->n);
 		if (s[i] < 128) {
 			diff |= s[i] << shift;
 			iter->eid += diff + 1;
-			iter->pos = i + 1;
+			iter->decode_pos = i + 1;
 			return;
 		} else {
 			diff |= (s[i] & 0x7f) << shift;
@@ -110,9 +113,10 @@ decode_eid(struct entity_group *g, struct entity_iterator *iter) {
 
 static int
 foreach_end(struct entity_group *g, struct entity_iterator *iter) {
-	if (iter->pos >= g->n)
+	if (iter->decode_pos >= iter->n)
 		return 0;
-	iter->last_pos = iter->pos;
+	iter->last_pos = iter->decode_pos;
+	iter->last = iter->eid;
 	decode_eid(g, iter);
 	return 1;
 }
@@ -194,7 +198,6 @@ struct tag_index_context {
 	uint64_t lastid;
 	int n;
 	int pos;
-	int group_pos[GROUP_COMBINE];
 	int index[GROUP_COMBINE];
 };
 
@@ -211,22 +214,26 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 		}
 	}
 	int ii = ctx->index[j];
-	uint64_t diff = min_id - ctx->iter[ii].last + 1;
+	struct entity_iterator * iter = &ctx->iter[ii];
+	struct entity_group *group = ctx->group[ii];
+	uint64_t diff = min_id - iter->eid + 1;
 	int index = entity_id_find_guessrange(&w->eid, min_id, ctx->pos, ctx->pos + diff);
+	int need_encode = iter->encode_pos != iter->last_pos;
 	if (index >= 0) {
-		int last_pos = ctx->iter[ii].last_pos;
-		int len = ctx->iter[ii].pos - last_pos;
-		if (ctx->group_pos[ii] != last_pos) {
-			memmove(ctx->group[ii]->s + ctx->group_pos[ii], ctx->group[ii]->s + last_pos, len);
+		if (need_encode) {
+			// previous eid removed, encode current eid
+			add_eid(group, min_id);
+			iter->encode_pos = group->n;
+		} else {
+			iter->encode_pos = ctx->iter[ii].decode_pos;
 		}
-		ctx->group_pos[ii] += len;
 		ctx->pos = index + 1;
-		ctx->iter[ii].last = min_id;
+	} else if (!need_encode) {
+		group->n = ctx->iter[ii].last_pos;
+		group->last = ctx->iter[ii].last;
 	}
-	if (!foreach_end(ctx->group[ii], &ctx->iter[ii])) {
+	if (!foreach_end(group, iter)) {
 		// This group is end, remove j from index
-		ctx->group[ii]->n = ctx->group_pos[ii];
-		ctx->group[ii]->last = ctx->iter[ii].last;
 		--ctx->n;
 		memmove(ctx->index+j, ctx->index+j+1, (ctx->n - j) * sizeof(int));
 	}
@@ -258,7 +265,6 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 		if (foreach_end(ctx.group[i], &ctx.iter[i])) {
 			ctx.index[ctx.n++] = i;
 		}
-		ctx.group_pos[i] = 0;
 	}
 	entity_clear_type_(w, tagid);
 	while (ctx.n > 0) {
@@ -290,6 +296,7 @@ entity_group_id_(struct entity_group_arena *G, int groupid, lua_State *L) {
 		lua_pushinteger(L, iter.eid);
 		lua_rawseti(L, -2, ++i);
 	}
+	assert(iter.eid == g->last);
 }
 
 

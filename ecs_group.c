@@ -217,7 +217,6 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 	struct entity_iterator * iter = &ctx->iter[ii];
 	struct entity_group *group = ctx->group[ii];
 	uint64_t diff = min_id - ctx->lastid + 1;
-	ctx->lastid = min_id;
 	int index = entity_id_find_guessrange(&w->eid, min_id, ctx->pos, ctx->pos + diff);
 	int need_encode = iter->encode_pos != iter->last_pos;
 	if (index >= 0) {
@@ -228,6 +227,7 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 		} else {
 			iter->encode_pos = ctx->iter[ii].decode_pos;
 		}
+		ctx->lastid = min_id;
 		ctx->pos = index + 1;
 	} else if (!need_encode) {
 		group->n = ctx->iter[ii].last_pos;

@@ -213,6 +213,7 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 	uint64_t diff = min_id - ctx->lastid + 1;
 	int index = entity_id_find_guessrange(&w->eid, min_id, ctx->pos, ctx->pos + diff);
 	if (index >= 0) {
+		ctx->group[ii]->last = min_id;
 		int last_pos = ctx->iter[ii].last_pos;
 		int len = ctx->iter[ii].pos - last_pos;
 		if (ctx->group_pos[ii] != last_pos) {

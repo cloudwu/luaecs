@@ -22,6 +22,9 @@ for i = 1, 100 do
 		id = i,
 		group = i % 5
 	}
+	for i = 1, 4000 do
+		w:new()
+	end
 	w:group_add(i % 5, eid)
 end
 
@@ -66,6 +69,9 @@ local e = {}
 for i = 1, 1000 do
 	local eid = w:new()
 	local group = math.random(2000, 2010)
+	for j = 1, math.random(1, 1000) do
+		w:new()
+	end
 	e[eid] = group
 	w:group_add(group, eid)
 end
@@ -80,10 +86,17 @@ end
 w:update()
 
 local function same_array(a, b)
+	local function errstr()
+		return table.concat(a, ",") .. "\n" .. table.concat(b, ",")
+	end
 	local n = #a
-	assert(n == #b)
+	if n ~= #b then
+		error(errstr())
+	end
 	for i = 1, n do
-		assert(a[i] == b[i])
+		if a[i] ~= b[i] then
+			error(errstr())
+		end
 	end
 end
 
@@ -126,3 +139,39 @@ local function print_group(gid)
 end
 
 test(2000, 2001, 2005)
+
+w:update()
+
+local eid = { w:new(), w:new() }
+w:group_add(3000, eid[1])
+w:group_add(3000, eid[2])
+
+w:group_enable("TEST", 3000)
+
+local r = {}
+for v in w:select "TEST eid:in" do
+	table.insert(r, v.eid)
+end
+
+same_array(eid, r)
+
+w:remove(eid[2])
+
+eid[2] = w:new()
+
+w:update()
+
+w:group_add(3000, eid[2])
+
+w:group_enable("TEST", 3000)
+
+
+local r = {}
+for v in w:select "TEST eid:in" do
+	table.insert(r, v.eid)
+end
+
+same_array(eid, r)
+
+
+

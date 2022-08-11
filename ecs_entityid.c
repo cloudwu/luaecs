@@ -34,11 +34,11 @@ entity_id_find_guessrange(struct entity_id *e, uint64_t eid, int begin, int end)
 		return find_eid_(e, eid, begin, e->n);
 	} else {
 		uint64_t end_id = e->id[end];
-		if (eid > end_id)
-			return find_eid_(e, eid, end+1, e->n);
 		if (eid == end_id)
 			return end;
-		return find_eid_(e, eid, begin, end-1);
+		if (eid > end_id)
+			return find_eid_(e, eid, end+1, e->n);
+		return find_eid_(e, eid, begin, end);
 	}
 }
 

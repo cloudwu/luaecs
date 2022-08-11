@@ -18,6 +18,7 @@ struct entity_iterator {
 	int last_pos;
 	int pos;
 	uint64_t eid;
+	uint64_t last;
 };
 
 struct entity_group {
@@ -210,10 +211,9 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 		}
 	}
 	int ii = ctx->index[j];
-	uint64_t diff = min_id - ctx->lastid + 1;
+	uint64_t diff = min_id - ctx->iter[ii].last + 1;
 	int index = entity_id_find_guessrange(&w->eid, min_id, ctx->pos, ctx->pos + diff);
 	if (index >= 0) {
-		ctx->group[ii]->last = min_id;
 		int last_pos = ctx->iter[ii].last_pos;
 		int len = ctx->iter[ii].pos - last_pos;
 		if (ctx->group_pos[ii] != last_pos) {
@@ -221,11 +221,12 @@ tag_index(struct entity_world *w, struct tag_index_context *ctx) {
 		}
 		ctx->group_pos[ii] += len;
 		ctx->pos = index + 1;
-		ctx->lastid = min_id;
+		ctx->iter[ii].last = min_id;
 	}
 	if (!foreach_end(ctx->group[ii], &ctx->iter[ii])) {
 		// This group is end, remove j from index
 		ctx->group[ii]->n = ctx->group_pos[ii];
+		ctx->group[ii]->last = ctx->iter[ii].last;
 		--ctx->n;
 		memmove(ctx->index+j, ctx->index+j+1, (ctx->n - j) * sizeof(int));
 	}
@@ -250,7 +251,6 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 	struct tag_index_context ctx;
 	ctx.n = 0;
 	ctx.pos = 0;
-	ctx.lastid = 0;
 	int i;
 	for (i=0;i<n;i++) {
 		ctx.group[i] = find_group(&w->group, groupid[i]);

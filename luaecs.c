@@ -632,6 +632,15 @@ check_type(lua_State *L) {
 }
 
 static void
+get_name(lua_State *L, char * name, int index) {
+	size_t sz;
+	const char * s = lua_tolstring(L, index, &sz);
+	if (sz >= MAX_COMPONENT_NAME)
+		luaL_error(L, "string '%s' is too long", s);
+	memcpy(name, s, sz+1);
+}
+
+static void
 get_field(lua_State *L, int i, struct group_field *f) {
 	if (lua_geti(L, -1, 1) != LUA_TNUMBER) {
 		luaL_error(L, "Invalid field %d [1] type", i);
@@ -641,7 +650,7 @@ get_field(lua_State *L, int i, struct group_field *f) {
 	if (lua_geti(L, -1, 2) != LUA_TSTRING) {
 		luaL_error(L, "Invalid field %d [2] key", i);
 	}
-	f->key = lua_tostring(L, -1);
+	get_name(L, f->key, -1);
 	lua_pop(L, 1);
 
 	if (lua_geti(L, -1, 3) != LUA_TNUMBER) {
@@ -660,27 +669,27 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 	switch (f->type) {
 	case TYPE_INT:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (int)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (int)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(int *)ptr = lua_tointeger(L, -1);
 		break;
 	case TYPE_FLOAT:
 		if (luat != LUA_TNUMBER)
-			luaL_error(L, "Invalid .%s type %s (float)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (float)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(float *)ptr = lua_tonumber(L, -1);
 		break;
 	case TYPE_BOOL:
 		if (luat != LUA_TBOOLEAN)
-			luaL_error(L, "Invalid .%s type %s (bool)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (bool)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(unsigned char *)ptr = lua_toboolean(L, -1);
 		break;
 	case TYPE_INT64:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (int64)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (int64)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(int64_t *)ptr = lua_tointeger(L, -1);
 		break;
 	case TYPE_DWORD:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint32)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint32)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		else {
 			int64_t v = lua_tointeger(L, -1);
 			if (v < 0 || v > 0xffffffff) {
@@ -691,7 +700,7 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 		break;
 	case TYPE_WORD:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint16)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint16)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		else {
 			int v = lua_tointeger(L, -1);
 			if (v < 0 || v > 0xffff) {
@@ -702,7 +711,7 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 		break;
 	case TYPE_BYTE:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint8)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint8)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		else {
 			int v = lua_tointeger(L, -1);
 			if (v < 0 || v > 255) {
@@ -713,12 +722,12 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 		break;
 	case TYPE_DOUBLE:
 		if (luat != LUA_TNUMBER)
-			luaL_error(L, "Invalid .%s type %s (double)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (double)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(double *)ptr = lua_tonumber(L, -1);
 		break;
 	case TYPE_USERDATA:
 		if (luat != LUA_TLIGHTUSERDATA)
-			luaL_error(L, "Invalid .%s type %s (pointer)", f->key ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (pointer)", f->key[0] ? f->key : "*", lua_typename(L, luat));
 		*(void **)ptr = lua_touserdata(L, -1);
 		break;
 	}
@@ -732,7 +741,7 @@ write_value_check(lua_State *L, struct group_field *f, const char *buffer, const
 	char tmp[sizeof(void *)];
 	write_value(L, &tmp_f, tmp);
 	if (memcmp(buffer + f->offset, tmp, sizeof_type[f->type]) != 0) {
-		if (f->key) {
+		if (f->key[0]) {
 			luaL_error(L, "[%s.%s] changes", name, f->key);
 		} else {
 			luaL_error(L, "[%s] changes", name);
@@ -853,7 +862,7 @@ get_write_component(lua_State *L, int lua_index, const char *name, struct group_
 			// lua object
 			return 1;
 		}
-		if (f->key == NULL) {
+		if (f->key[0] == 0) {
 			// value type
 			return 1;
 		}
@@ -863,7 +872,7 @@ get_write_component(lua_State *L, int lua_index, const char *name, struct group_
 
 void
 ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *buffer) {
-	if (f->key == NULL) {
+	if (f->key[0] == 0) {
 		write_value(L, f, buffer);
 	} else {
 		write_component(L, n, f, -1, (char *)buffer);
@@ -873,7 +882,7 @@ ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *bu
 
 static void
 write_component_object_check(lua_State *L, int n, struct group_field *f, const void *buffer, const char *name) {
-	if (f->key == NULL) {
+	if (f->key[0] == 0) {
 		write_value_check(L, f, buffer, name);
 	} else {
 		write_component_check(L, n, f, -1, (char *)buffer, name);
@@ -1050,7 +1059,7 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 		lua_setfield(L, lua_index, name);
 		return;
 	}
-	if (f->key == NULL) {
+	if (f->key[0] == 0) {
 		// value type
 		read_value(L, f, buffer);
 		lua_setfield(L, lua_index, name);
@@ -1383,7 +1392,7 @@ is_value(lua_State *L, struct group_field *f) {
 		lua_pop(L, 1);
 		return 0;
 	case LUA_TNUMBER:
-		f->key = NULL;
+		f->key[0] = 0;
 		f->offset = 0;
 		f->type = check_type(L);
 		return 1;
@@ -1407,7 +1416,7 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct grou
 	if (lua_getfield(L, -1, "name") != LUA_TSTRING) {
 		return luaL_error(L, "Invalid component name");
 	}
-	key->name = lua_tostring(L, -1);
+	get_name(L, key->name, -1);
 	lua_pop(L, 1);
 	int attrib = 0;
 	if (check_boolean(L, "r")) {
@@ -1578,7 +1587,7 @@ lremove(lua_State *L) {
 void
 ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer) {
 	struct group_field *f = iter->f;
-	if (f->key == NULL) {
+	if (f->key[0] == 0) {
 		// value type
 		read_value(L, f, buffer);
 	} else {

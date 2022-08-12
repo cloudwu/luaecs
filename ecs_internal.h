@@ -10,6 +10,7 @@
 #include "ecs_entityindex.h"
 #include "ecs_entityid.h"
 
+#define MAX_COMPONENT_NAME 32
 #define MAX_COMPONENT 256
 #define ENTITY_REMOVED 0
 #define ENTITYID_TAG -1
@@ -45,13 +46,13 @@ struct entity_world {
 };
 
 struct group_field {
-	const char *key;
+	char key[MAX_COMPONENT_NAME];
 	int offset;
 	int type;
 };
 
 struct group_key {
-	const char *name;
+	char name[MAX_COMPONENT_NAME];
 	int id;
 	int field_n;
 	int attrib;

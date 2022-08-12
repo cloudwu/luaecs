@@ -31,6 +31,8 @@ end
 
 for v in w:select "A:in" do
 	add_AB(v)
+	w:submit(v)
+	break
 end
 
 for v in w:select "C:in" do

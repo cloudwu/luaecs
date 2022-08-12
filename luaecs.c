@@ -1213,6 +1213,37 @@ lread(lua_State *L) {
 	return 1;
 }
 
+static inline void
+submit_index(lua_State *L, int world_index, int iter_index, int i, int check) {
+	if (lua_rawgeti(L, iter_index, 3) != LUA_TUSERDATA) {
+		luaL_error(L, "Invalid iterator");
+	}
+	struct group_iter * update_iter = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	if (check) {
+		check_update(L, world_index, iter_index, update_iter, i);
+	}
+	if (!update_iter->readonly) {
+		update_last_index(L, world_index, iter_index, update_iter, i);
+	}
+}
+
+static int
+lsubmit(lua_State *L) {
+	int world_index = 1;
+	int iter_index = 2;
+	luaL_checktype(L, iter_index, LUA_TTABLE);
+	if (lua_rawgeti(L, iter_index, 1) != LUA_TNUMBER) {
+		return luaL_error(L, "Invalid group iterator");
+	}
+	int i = lua_tointeger(L, -1);
+	if (i < 1)
+		return luaL_error(L, "Invalid iterator index %d", i);
+	lua_pop(L, 1);
+	submit_index(L, world_index, iter_index, i - 1, 0);
+	return 0;
+}
+
 static inline int
 leach_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1);
@@ -1234,17 +1265,7 @@ leach_group_(lua_State *L, int check) {
 	int mainkey = iter->k[0].id;
 
 	if (i > 0) {
-		if (lua_rawgeti(L, 2, 3) != LUA_TUSERDATA) {
-			return luaL_error(L, "Invalid iterator");
-		}
-		struct group_iter * update_iter = lua_touserdata(L, -1);
-		lua_pop(L, 1);
-		if (check) {
-			check_update(L, world_index, 2, update_iter, i - 1);
-		}
-		if (!update_iter->readonly) {
-			update_last_index(L, world_index, 2, update_iter, i - 1);
-		}
+		submit_index(L, world_index, 2, i-1, check);
 	}
 	for (;;) {
 		int idx = i++;
@@ -1850,6 +1871,7 @@ lmethods(lua_State *L) {
 		{ "_groupiter", lgroupiter },
 		{ "exist", lexist },
 		{ "remove", lremove },
+		{ "submit", lsubmit },
 		{ "_object", lobject },
 		{ "_sync", lsync },
 		{ "_read", lread },

@@ -1234,11 +1234,16 @@ leach_group_(lua_State *L, int check) {
 	int mainkey = iter->k[0].id;
 
 	if (i > 0) {
-		if (check) {
-			check_update(L, world_index, 2, iter, i - 1);
+		if (lua_rawgeti(L, 2, 3) != LUA_TUSERDATA) {
+			return luaL_error(L, "Invalid iterator");
 		}
-		if (!iter->readonly) {
-			update_last_index(L, world_index, 2, iter, i - 1);
+		struct group_iter * update_iter = lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		if (check) {
+			check_update(L, world_index, 2, update_iter, i - 1);
+		}
+		if (!update_iter->readonly) {
+			update_last_index(L, world_index, 2, update_iter, i - 1);
 		}
 	}
 	for (;;) {
@@ -1356,6 +1361,8 @@ lpairs_group_(lua_State *L, int check) {
 	lua_rawseti(L, -2, 1);
 	lua_pushinteger(L, iter->k[0].id); // mainkey
 	lua_rawseti(L, -2, 2);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 3);	// pattern
 	return 3;
 }
 

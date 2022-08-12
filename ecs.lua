@@ -64,6 +64,7 @@ local function cache_world(obj, k)
 		typeidtoname = {},
 		id = 0,
 		select = {},
+		extend = {},
 		ref = {},
 	}
 
@@ -149,13 +150,109 @@ local function cache_world(obj, k)
 
 	local function cache_select(cache, pat)
 		local pat_desc = gen_select_pat(pat)
-		cache[pat] = k:_groupiter(pat_desc)
-		return cache[pat]
+		local p = k:_groupiter(pat_desc)
+		cache[pat] = p
+		cache[p] = pat
+		return p
 	end
 
 	setmetatable(c.select, {
 		__mode = "kv",
 		__index = cache_select,
+		})
+
+	local function merge_pattern(origin, ext)
+		local input = ""
+		local merge = ""
+		local function add_input(name, opt)
+			input = input .. " " .. name .. opt .. "in"
+		end
+		local function add_merge(name, opt, inout)
+			merge = merge .. " " .. name .. opt .. inout
+		end
+		for name, opt, inout in ext:gmatch "([_%w]+)([:?])(%l+)" do
+			local ori_opt, ori_inout
+			-- find last
+			for p1,p2 in origin:gmatch (name .. "([:?])(%l+)") do
+				if p1 == name then
+					ori_opt = p1
+					ori_inout = p2
+				end
+			end
+			if inout == "in" then
+				if (not ori_opt or ori_inout == "out")
+					or (opt == ":" and ori_opt == "?") then
+					add_input(name, opt)
+					add_merge(name, opt , "in")
+				end
+			elseif inout == "out" then
+				if not ori_opt or ori_inout == "in" then
+					add_merge(name, opt , "out")
+				end
+			elseif inout == "update" then
+				if opt == ":" and ori_opt == "?" then
+					add_input(name, ":")
+					add_merge(name, ":", "update")
+				elseif ori_opt == nil then
+					add_input(name, opt)
+					add_merge(name, opt, "update")
+				else
+					if ori_inout == "out" then
+						add_input(name, opt)
+					end
+					if ori_inout ~= "update" then
+						add_merge(name, opt, "update")
+					end
+				end
+			else
+				assert (inout == "new")
+				if ori_name then
+					assert(ori_inout == "new")
+				else
+					add_merge(name, opt, "new")
+				end
+			end
+		end
+
+		if input == "" then
+			input = nil
+		else
+			input = c.select[input]
+		end
+
+		if merge == "" then
+			merge = c.select[origin]
+		else
+			merge = c.select[origin .. " " .. merge]
+		end
+
+		return input, merge
+	end
+
+	local function cache_extend_pattern(cache, expat)
+		local input, merge = merge_pattern(cache.__pattern , expat)
+		local diff = {
+			input = input,
+			merge = merge,
+		}
+		cache[expat] = diff
+		return diff
+	end
+
+	local extend_meta = {
+		__mode = "kv",
+		__index = cache_extend_pattern,
+	}
+
+	local function cache_extend(cache, pat)
+		local r = setmetatable({ __pattern = c.select[pat] }, extend_meta)
+		cache[pat] = r
+		return r
+	end
+
+	setmetatable(c.extend, {
+		__mode = "kv",
+		__index = cache_extend,
 		})
 
 	local function cache_ref(cache, pat)
@@ -399,6 +496,15 @@ function M:sync(pat, iter)
 	local p = context[self].select[pat]
 	self:_sync(p, iter)
 	return iter
+end
+
+function M:extend(iter, expat)
+	local ctx = context[self]
+	local diff = ctx.extend[iter[3]][expat]
+	if diff.input then
+		self:_sync(diff.input, iter)
+	end
+	iter[3] = assert(diff.merge)
 end
 
 do

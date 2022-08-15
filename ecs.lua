@@ -502,7 +502,7 @@ function M:extend(iter, expat)
 	local ctx = context[self]
 	local diff = ctx.extend[iter[3]][expat]
 	if diff.input then
-		self:_sync(diff.input, iter)
+		self:_read(diff.input, iter)
 	end
 	iter[3] = assert(diff.merge)
 end

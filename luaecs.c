@@ -1268,7 +1268,6 @@ leach_group_(lua_State *L, int check) {
 	if (i > 0) {
 		if (submit_index(L, world_index, 2, i-1, check) != iter) {
 			// iterator extended, restore it
-			printf("RESTORE\n");
 			lua_pushvalue(L, 1);
 			lua_rawseti(L, 2, 3);
 		}

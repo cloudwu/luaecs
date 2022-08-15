@@ -22,12 +22,12 @@ w:new {
 
 
 for v in w:select "mark" do
-	w:sync("value?in", v)
-	print(v.value)
+	w:extend(v, "value?in")
+	print("VALUE=", v.value)
 end
 
 for v in w:select "mark" do
-	print(pcall(w.sync, w, "value:in", v))
+	print(pcall(w.extend, w, v, "value:in"))
 end
 
 for v in w:select "value:in mark?in" do
@@ -36,8 +36,8 @@ end
 
 for v in w:select "mark value" do
 	-- disable mark with value
+	w:extend(v, "mark:out")
 	v.mark = false
-	w:sync("mark:out", v)
 end
 
 for v in w:select "value:in mark?in" do

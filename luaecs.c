@@ -1203,7 +1203,7 @@ lread(lua_State *L) {
 	unsigned int index[MAX_COMPONENT];
 	int r = query_index(iter, 0, mainkey, idx, index);
 	if (r <= 0) {
-		return 0;
+		return luaL_error(L, "Can't read pattern");
 	}
 
 	if (!iter->readonly) {

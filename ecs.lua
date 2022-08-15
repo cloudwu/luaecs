@@ -654,10 +654,19 @@ end
 
 do
 	local cfetch = M._fetch
-	function M:fetch(eid)
+	function M:fetch(eid, pat)
 		local iter = cfetch(self, eid)
 		if iter then
-			iter[3] =context[self].select.eid
+			local ctx = context[self]
+			if pat then
+				local diff = ctx.extend[ctx.select.eid][pat]
+				if diff.input then
+					self:_read(diff.input, iter)
+				end
+				iter[3] = diff.merge
+			else
+				iter[3] = ctx.select.eid
+			end
 		end
 		return iter
 	end

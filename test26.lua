@@ -19,5 +19,5 @@ for v in w:select "eid A?in B?in" do
 	print(v.A, v.B)
 end
 
-local v = w:sync("A:in", w:fetch(A))
+local v = w:fetch(A, "A:in")
 assert(v.A == 1)

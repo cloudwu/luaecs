@@ -31,7 +31,7 @@ w:register {
 	end
 }
 
-w:new {
+local eid = w:new {
 	size = "42x24",
 	id = 100,
 }
@@ -41,7 +41,7 @@ local t = w:template {
 	id = 42,
 }
 
-w:template_instance(t)
+w:template_instance(w:new(), t)
 
 for v in w:select "size:in id:in" do
 	print(v.size.x, v.size.y, v.id)

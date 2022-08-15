@@ -452,7 +452,7 @@ function M:template_instance(eid, temp, obj)
 		if tc.unmarshal then
 			local v = tc.unmarshal( arg1, arg2 )
 			if template_methods._template_instance_component(self, cid, id, v) then
-				cobject(tname, v, id)
+				cobject(ctx.ref[tname], v, id)
 			end
 		elseif not tc.tag then
 			assert(tc.size > 0, "Missing unmarshal function for lua object")

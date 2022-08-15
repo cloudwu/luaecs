@@ -1411,16 +1411,19 @@ lfirst(lua_State *L) {
 	if (r <= 0) {
 		return 0;
 	}
-	lua_settop(L, 2);
-	lua_createtable(L, 3, iter->nkey);
-	lua_pushinteger(L, 1);
-	lua_rawseti(L, -2, 1);
-	lua_pushinteger(L, mainkey);
-	lua_rawseti(L, -2, 2);
-	lua_pushvalue(L, 2);	// pattern
-	lua_rawseti(L, -2, 3);
+	if (lua_type(L, 3) == LUA_TTABLE) {
+		luaL_checktype(L, 3, LUA_TTABLE);
+		lua_pushinteger(L, 1);
+		lua_rawseti(L, 3, 1);
+		lua_pushinteger(L, mainkey);
+		lua_rawseti(L, 3, 2);
+		lua_pushvalue(L, 2);	// pattern
+		lua_rawseti(L, 3, 3);
 
-	read_iter(L, 1, 3, iter, index);
+		read_iter(L, 1, 3, iter, index);
+	} else {
+		lua_pushboolean(L, 1);
+	}
 	return 1;
 }
 

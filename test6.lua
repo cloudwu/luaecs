@@ -64,5 +64,4 @@ assert(v.t.a == true)
 v.flag = false
 w:submit(v)
 
-local v = w:first "t:in flag?in"
-assert(not v.flag)
+assert(not w:check "t:in flag")

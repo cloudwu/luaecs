@@ -584,6 +584,10 @@ do
 	local cfirst = M._first
 
 	function M:first(pattern)
+		return cfirst(self, context[self].select[pattern], {})
+	end
+
+	function M:check(pattern)
 		return cfirst(self, context[self].select[pattern])
 	end
 end

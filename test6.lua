@@ -20,13 +20,14 @@ w:new {
 }
 
 local function print_v()
-	local v = w:singleton("t", "t:in")
+	local v = w:first "t:in"
 	print(".a = ",v.t.a)
 	print(".b = ",v.t.b)
-	local v = w:singleton "t"
-	w:sync("t:in", v)
+	local v = w:first "t"
+	w:extend(v, "t:in")
 	print(".a = ", v.t.a)
 	print(".a = ", v.t.b)
+
 end
 
 local ctx = w:context { "t" }
@@ -41,11 +42,11 @@ test.testuserdata(ctx)
 
 print_v()
 
-local v = w:singleton("t", "flag t:in")
+local v = w:first "flag t:in"
 assert(v == nil)
 
 -- remove singleton of t
-local v = w:singleton "t"
+local v = w:first "t"
 w:remove(v)
 w:update()
 
@@ -58,5 +59,10 @@ w:new {
 	flag = true,
 }
 
-local v = w:singleton("t", "flag t:in")
+local v = w:first "flag:update t:in"
 assert(v.t.a == true)
+v.flag = false
+w:submit(v)
+
+local v = w:first "t:in flag?in"
+assert(not v.flag)

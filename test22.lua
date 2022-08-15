@@ -23,7 +23,7 @@ end
 
 foo()
 
-local v = w:singleton("size","size:in")
+local v = w:first "size:in"
 assert(v.size.x == 42)
 
 ecs.check_select(true)

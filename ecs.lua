@@ -584,6 +584,14 @@ do
 end
 
 do
+	local cfirst = M._first
+
+	function M:first(pattern)
+		return cfirst(self, context[self].select[pattern])
+	end
+end
+
+do
 	local _serialize = template_methods._serialize
 	local _serialize_lua = template_methods._serialize_lua
 

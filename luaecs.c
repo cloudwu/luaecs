@@ -1361,7 +1361,7 @@ lpairs_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1);
 	lua_pushcfunction(L, check ? leach_group_check : leach_group_nocheck);
 	lua_pushvalue(L, 1);
-	lua_createtable(L, 2, iter->nkey);
+	lua_createtable(L, 3, iter->nkey);
 	int i;
 	int opt = 0;
 	struct group_field *f = iter->f;
@@ -1401,6 +1401,28 @@ lpairs_group(lua_State *L) {
 static inline int
 lpairs_group_check(lua_State *L) {
 	return lpairs_group_(L, 1);
+}
+
+static int
+lfirst(lua_State *L) {
+	struct group_iter *iter = lua_touserdata(L, 2);
+	int mainkey = iter->k[0].id;
+	unsigned int index[MAX_COMPONENT];
+	int r = query_index(iter, 0, mainkey, 0, index);
+	if (r <= 0) {
+		return 0;
+	}
+	lua_settop(L, 2);
+	lua_createtable(L, 3, iter->nkey);
+	lua_pushinteger(L, 1);
+	lua_rawseti(L, -2, 1);
+	lua_pushinteger(L, mainkey);
+	lua_rawseti(L, -2, 2);
+	lua_pushvalue(L, 2);	// pattern
+	lua_rawseti(L, -2, 3);
+
+	read_iter(L, 1, 3, iter, index);
+	return 1;
 }
 
 static int
@@ -1898,6 +1920,7 @@ lmethods(lua_State *L) {
 		{ "_object", lobject },
 		{ "_sync", lsync },
 		{ "_read", lread },
+		{ "_first", lfirst },
 		{ "_dumpid", ldumpid },
 		{ "_count", lcount },
 		{ "_filter", lfilter },

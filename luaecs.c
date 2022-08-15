@@ -1213,7 +1213,7 @@ lread(lua_State *L) {
 	return 1;
 }
 
-static inline void
+static inline struct group_iter *
 submit_index(lua_State *L, int world_index, int iter_index, int i, int check) {
 	if (lua_rawgeti(L, iter_index, 3) != LUA_TUSERDATA) {
 		luaL_error(L, "Invalid iterator");
@@ -1226,6 +1226,7 @@ submit_index(lua_State *L, int world_index, int iter_index, int i, int check) {
 	if (!update_iter->readonly) {
 		update_last_index(L, world_index, iter_index, update_iter, i);
 	}
+	return update_iter;
 }
 
 static int
@@ -1265,7 +1266,12 @@ leach_group_(lua_State *L, int check) {
 	int mainkey = iter->k[0].id;
 
 	if (i > 0) {
-		submit_index(L, world_index, 2, i-1, check);
+		if (submit_index(L, world_index, 2, i-1, check) != iter) {
+			// iterator extended, restore it
+			printf("RESTORE\n");
+			lua_pushvalue(L, 1);
+			lua_rawseti(L, 2, 3);
+		}
 	}
 	for (;;) {
 		int idx = i++;

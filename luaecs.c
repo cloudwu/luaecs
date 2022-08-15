@@ -1595,6 +1595,22 @@ lexist(lua_State *L) {
 }
 
 static int
+lfetch(lua_State *L) {
+	struct entity_world *w = getW(L);
+	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
+	int index = entity_id_find(&w->eid, eid);
+	if (index < 0) {
+		return 0;
+	}
+	lua_createtable(L, 3, 0);
+	lua_pushinteger(L, index + 1);
+	lua_rawseti(L, -2, 1);
+	lua_pushinteger(L, ENTITYID_TAG);
+	lua_rawseti(L, -2, 2);
+	return 1;
+}
+
+static int
 lremove(lua_State *L) {
 	struct entity_world *w = getW(L);
 	if (lua_isinteger(L, 2)) {
@@ -1869,6 +1885,7 @@ lmethods(lua_State *L) {
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
+		{ "_fetch", lfetch },
 		{ "exist", lexist },
 		{ "remove", lremove },
 		{ "submit", lsubmit },

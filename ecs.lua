@@ -647,6 +647,17 @@ do
 	end
 end
 
+do
+	local cfetch = M._fetch
+	function M:fetch(eid)
+		local iter = cfetch(self, eid)
+		if iter then
+			iter[3] =context[self].select.eid
+		end
+		return iter
+	end
+end
+
 function ecs.world()
 	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {

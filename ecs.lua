@@ -523,7 +523,7 @@ do
 			}
 		end
 		local p = context[self].all
-		self:_sync(p, iter)
+		self:_read(p, iter)
 		return iter
 	end
 end

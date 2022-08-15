@@ -228,20 +228,6 @@ Other APIs
 
 > w:exist(eid)	-- Check if the entity with eid exist
 
-> w:sync(pattern, iter)  -- read/write an iterator
-```lua
--- select the entities with visible tag
-for v in w:select "visible" do
-	-- Read value component
-	w:sync("value:in", v)
-	if v.value == 42 then
-		v.value = 0
-		-- Write value component
-		w:sync("value:out", v)
-	end
-end
-```
-
 > w:clear(typename) -- delete component (typename) from all the entities
 
 >  w:clearall() -- delete all the entities
@@ -250,7 +236,7 @@ end
 
 > w:type(typename) -- returns "tag", "lua" or "c"
 
-> w:singleton(typename, pattern, iterator) -- Read the first component with the pattern.
+> w:first(pattern) -- Read the first component with the pattern.
 
 > w:filter(tagname, pattern) -- Enable tags marching the pattern
 

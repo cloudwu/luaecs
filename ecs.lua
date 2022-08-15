@@ -401,8 +401,11 @@ local function dump(obj)
 	end
 end
 
+local cobject = M._object
 local function _new_entity(self, eid, obj)
-	local typenames = context[self].typenames
+	local ctx = context[self]
+	local typenames = ctx.typenames
+	local ref = ctx.ref
 	for k,v in pairs(obj) do
 		local tc = typenames[k]
 		if not tc then
@@ -413,7 +416,7 @@ local function _new_entity(self, eid, obj)
 		if init then
 			v = init(v)
 		end
-		self:object(k, id, v)
+		cobject(ref[k], v, id)
 	end
 end
 
@@ -449,7 +452,7 @@ function M:template_instance(eid, temp, obj)
 		if tc.unmarshal then
 			local v = tc.unmarshal( arg1, arg2 )
 			if template_methods._template_instance_component(self, cid, id, v) then
-				self:object(tname, id, v)
+				cobject(tname, v, id)
 			end
 		elseif not tc.tag then
 			assert(tc.size > 0, "Missing unmarshal function for lua object")
@@ -557,12 +560,6 @@ end
 M.generate_eid = persistence_methods.generate_eid
 
 do
-	local _object = M._object
-	function M:object(name, refid, v)
-		local pat = context[self].ref[name]
-		return _object(pat, v, refid)
-	end
-
 	function M:singleton(name, pattern, iter)
 		local typenames = context[self].typenames
 		if iter == nil then

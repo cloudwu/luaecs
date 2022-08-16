@@ -177,7 +177,6 @@ local function cache_world(obj, k)
 		local pat_desc = gen_select_pat(pat)
 		local p = k:_groupiter(pat_desc)
 		cache[pat] = p
-		cache[p] = pat
 		return p
 	end
 
@@ -186,66 +185,9 @@ local function cache_world(obj, k)
 		__index = cache_select,
 		})
 
-	local function merge_pattern(origin, ext)
-		local input
-		local merge
-		local function add_input(name, opt)
-			if input then
-				input = input .. " " .. name .. opt .. "in"
-			else
-				input = name .. opt .. "in"
-			end
-		end
-		local function add_merge(name, opt, inout)
-			if merge then
-				merge = merge .. " " .. name .. opt .. inout
-			else
-				merge = name .. opt .. inout
-			end
-		end
-
-		for name, opt, inout in ext:gmatch "([_%w]+)([:?])(%l+)" do
-			local ori_opt, ori_input, ori_output = get_inout(origin, name)
-
-			if ori_opt == nil then
-				-- new key
-				if inout ~= "out" then
-					-- read key
-					add_input(name, opt)
-				end
-				add_merge(name, opt, inout)
-			elseif ori_opt == opt or ori_opt == ":" then
-				if inout ~= "in" and ori_output == false then
-					-- need output
-					add_merge(name, ori_opt, inout)
-				end
-			else
-				assert(ori_opt == "?" and opt == ":")
-				if inout ~= "out" then
-					add_input(name, ":")
-				end
-				if inout ~= "in" and ori_output == false then
-					-- must output
-					add_merge(name, ":", inout)
-				end
-			end
-		end
-
-		if input then
-			input = c.select[input]
-		end
-
-		if merge then
-			merge = c.select[origin .. " " .. merge]
-		else
-			merge = c.select[origin]
-		end
-
-		return input, merge
-	end
-
+	local cmerge = k._mergeiter
 	local function cache_extend_pattern(cache, expat)
-		local input, merge = merge_pattern(cache.__pattern , expat)
+		local input, merge = cmerge(cache.__pattern , c.select[expat])
 		local diff = {
 			input = input,
 			merge = merge,
@@ -260,7 +202,7 @@ local function cache_world(obj, k)
 	}
 
 	local function cache_extend(cache, pat)
-		local r = setmetatable({ __pattern = c.select[pat] }, extend_meta)
+		local r = setmetatable({ __pattern = pat }, extend_meta)
 		cache[pat] = r
 		return r
 	end

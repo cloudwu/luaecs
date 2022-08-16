@@ -1196,7 +1196,7 @@ lsync(lua_State *L) {
 
 static int
 lread(lua_State *L) {
-	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
+	struct group_iter *iter = (struct group_iter *)lua_touserdata(L, 2);
 	luaL_checktype(L, 3, LUA_TTABLE);
 	int idx = get_integer(L, 3, 1, "index") - 1;
 	int mainkey = get_integer(L, 3, 2, "mainkey");
@@ -1546,6 +1546,203 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct grou
 }
 
 static int
+need_input(struct group_iter *iter, struct group_key *key) {
+	int i;
+	if (!(key->attrib & COMPONENT_IN))
+		return 0;
+	if (key->attrib & COMPONENT_OPTIONAL) {
+		for (i=0;i<iter->nkey;i++) {
+			struct group_key * okey = &iter->k[i];
+			if (key->id == okey->id && !(okey->attrib & COMPONENT_FILTER))
+				return 0;
+		}
+		return 1;
+	}
+	// must input
+
+	for (i=0;i<iter->nkey;i++) {
+		struct group_key * okey = &iter->k[i];
+		if (key->id == okey->id && !(okey->attrib & COMPONENT_FILTER) && !(okey->attrib & COMPONENT_OPTIONAL))
+			return 0;
+	}
+	return 1;
+}
+
+static struct group_iter *
+create_group_iter(lua_State *L, int nkey, int field_n) {
+	size_t header_size = sizeof(struct group_iter) + sizeof(struct group_key) * (nkey - 1);
+	const int align_size = sizeof(void *);
+	// align
+	header_size = (header_size + align_size - 1) & ~(align_size - 1);
+	size_t size = header_size + field_n * sizeof(struct group_field);
+	struct group_iter *iter = (struct group_iter *)lua_newuserdatauv(L, size, 1);
+	// refer world
+	iter->nkey = nkey;
+	iter->readonly = 1;
+	struct group_field *f = (struct group_field *)((char *)iter + header_size);
+	iter->nkey = nkey;
+	iter->f = f;
+	iter->readonly = 1;
+	return iter;
+}
+
+static int
+generate_diff(lua_State *L, struct group_iter *origin, struct group_iter *ext) {
+	int field_n = 0;
+	int n = 0;
+	int i;
+	for (i=0;i<ext->nkey;i++) {
+		if (need_input(origin, &ext->k[i])) {
+			++n;
+			field_n += ext->k[i].field_n;
+		}
+	}
+	if (n == 0) {
+		return 0;
+	}
+	if (origin->world != ext->world)
+		luaL_error(L, "Different world");
+	struct group_iter *iter = create_group_iter(L, n, field_n);
+	iter->world = origin->world;
+	struct group_field *f = iter->f;
+	struct group_key *key = &iter->k[0];
+	int field = 0;
+	for (i=0;i<ext->nkey;i++) {
+		int fn = ext->k[i].field_n;
+		if (need_input(origin, &ext->k[i])) {
+			*key = ext->k[i];
+			++key;
+			memcpy(f, ext->f+field, fn * sizeof(struct group_field));
+			f += fn;
+		}
+		field += fn;
+	}
+	assert(key == &iter->k[n]);
+	assert(f == &iter->f[field_n]);
+	return 1;
+}
+
+static int
+merge_key(struct group_iter *origin, struct group_key *key) {
+	struct group_key * okey = NULL;
+	int i;
+	for (i=0;i<origin->nkey;i++) {
+		if (origin->k[i].id == key->id) {
+			okey = &origin->k[i];
+			break;
+		}
+	}
+	if (okey == NULL) {
+		// new key
+		return 1;
+	}
+	if (key->attrib & COMPONENT_IN) {
+		if (!(okey->attrib & COMPONENT_IN))
+			return 0;
+	}
+	if (key->attrib & COMPONENT_OUT) {
+		if (!(okey->attrib & COMPONENT_OUT))
+			return 0;
+	}
+
+	// do not need change
+	return -1;
+}
+
+static int
+generate_merge(lua_State *L, struct group_iter *origin, struct group_iter *ext) {
+	int field_n = 0;
+	int n = 0;
+	int i;
+	int dirty = 0;
+	for (i=0;i<ext->nkey;i++) {
+		int m = merge_key(origin, &ext->k[i]);
+		if (m >= 0) {
+			dirty = 1;
+			if (m > 0) {
+				++n;
+				field_n += ext->k[i].field_n;
+			}
+		}
+	}
+	if (!dirty) {
+		return 0;
+	}
+	int origin_field_n = 0;
+	for (i=0;i<origin->nkey;i++) {
+		origin_field_n += origin->k[i].field_n;
+	}
+	struct group_iter *iter = create_group_iter(L, n+origin->nkey, field_n + origin_field_n);
+	iter->world = origin->world;
+	iter->readonly = origin->readonly;
+	if (!ext->readonly) {
+		iter->readonly = 0;
+	}
+
+	for (i=0;i<origin->nkey;i++) {
+		iter->k[i] = origin->k[i];
+	}
+	memcpy(iter->f, origin->f, origin_field_n * sizeof(struct group_field));
+
+	struct group_key *key = &iter->k[origin->nkey];
+	struct group_field *f = &iter->f[origin_field_n];
+
+	int field = 0;
+	for (i=0;i<ext->nkey;i++) {
+		int m = merge_key(origin, &ext->k[i]);
+		int fn = ext->k[i].field_n;
+		if (m > 0) {
+			*key = ext->k[i];
+			++key;
+			memcpy(f, ext->f+field, fn * sizeof(struct group_field));
+			f += fn;
+		} else if (m == 0) {
+			int j;
+			struct group_key *okey = NULL;
+			int keyid = ext->k[i].id;
+			for (j=0;j<origin->nkey;j++) {
+				if (iter->k[j].id == keyid) {
+					okey = &iter->k[j];
+					break;
+				}
+			}
+			assert(okey);
+			if (is_temporary(ext->k[i].attrib) && !is_temporary(okey->attrib))
+				luaL_error(L, "Change temporary");
+			okey->attrib |= ext->k[i].attrib & (COMPONENT_IN | COMPONENT_OUT);
+		}
+		field += fn;
+	}
+	assert(key == &iter->k[n+origin->nkey]);
+	assert(f == &iter->f[field_n+origin_field_n]);
+	return 1;
+}
+
+// merge 2 struct group_iter
+// diff : input iter
+// merge : for submit
+static int
+lmergeiter(lua_State *L) {
+	struct group_iter * origin = (struct group_iter *)lua_touserdata(L, 1);
+	struct group_iter * ext = (struct group_iter *)lua_touserdata(L, 2);
+	if (generate_diff(L, origin, ext)) {
+		lua_getiuservalue(L, 1, 1);
+		lua_setiuservalue(L, -2, 1);
+	} else {
+		lua_pushnil(L);
+	}
+
+	if (generate_merge(L, origin, ext)) {
+		lua_getiuservalue(L, 1, 1);
+		lua_setiuservalue(L, -2, 1);
+	} else {
+		lua_pushvalue(L, 1);
+	}
+
+	return 2;
+}
+
+static int
 lgroupiter(lua_State *L) {
 	struct entity_world *w = getW(L);
 	luaL_checktype(L, 2, LUA_TTABLE);
@@ -1572,20 +1769,11 @@ lgroupiter(lua_State *L) {
 		field_n += n;
 		lua_pop(L, 1);
 	}
-	size_t header_size = sizeof(struct group_iter) + sizeof(struct group_key) * (nkey - 1);
-	const int align_size = sizeof(void *);
-	// align
-	header_size = (header_size + align_size - 1) & ~(align_size - 1);
-	size_t size = header_size + field_n * sizeof(struct group_field);
-	struct group_iter *iter = (struct group_iter *)lua_newuserdatauv(L, size, 1);
-	// refer world
+	struct group_iter *iter = create_group_iter(L, nkey, field_n);
 	lua_pushvalue(L, 1);
 	lua_setiuservalue(L, -2, 1);
-	iter->nkey = nkey;
 	iter->world = w;
-	iter->readonly = 1;
-	struct group_field *f = (struct group_field *)((char *)iter + header_size);
-	iter->f = f;
+	struct group_field *f = iter->f;
 	for (i = 0; i < nkey; i++) {
 		lua_geti(L, 2, i + 1);
 		int n = get_key(w, L, &iter->k[i], f);
@@ -1939,6 +2127,7 @@ lmethods(lua_State *L) {
 		{ "_clear", lclear_type },
 		{ "_context", lcontext },
 		{ "_groupiter", lgroupiter },
+		{ "_mergeiter", lmergeiter },
 		{ "_fetch", lfetch },
 		{ "exist", lexist },
 		{ "remove", lremove },

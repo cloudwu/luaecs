@@ -63,8 +63,8 @@ local function get_inout(pat, name)
 	local optional
 	local input
 	local output
-	for opt, inout in pat:gmatch (name .. "([:?])(%l+)") do
-		if inout == "update" or inout == "in" or inout == "out" then
+	for space, opt, inout in pat:gmatch ("(%s?)" .. name .. "([:?])(%l+)") do
+		if space == " " and (inout == "update" or inout == "in" or inout == "out") then
 			if inout == "in" then
 				input = true
 			else
@@ -187,13 +187,21 @@ local function cache_world(obj, k)
 		})
 
 	local function merge_pattern(origin, ext)
-		local input = ""
-		local merge = ""
+		local input
+		local merge
 		local function add_input(name, opt)
-			input = input .. " " .. name .. opt .. "in"
+			if input then
+				input = input .. " " .. name .. opt .. "in"
+			else
+				input = name .. opt .. "in"
+			end
 		end
 		local function add_merge(name, opt, inout)
-			merge = merge .. " " .. name .. opt .. inout
+			if merge then
+				merge = merge .. " " .. name .. opt .. inout
+			else
+				merge = name .. opt .. inout
+			end
 		end
 
 		for name, opt, inout in ext:gmatch "([_%w]+)([:?])(%l+)" do
@@ -203,7 +211,7 @@ local function cache_world(obj, k)
 				-- new key
 				if inout ~= "out" then
 					-- read key
-					add_input(name, opt, "in")
+					add_input(name, opt)
 				end
 				add_merge(name, opt, inout)
 			elseif ori_opt == opt or ori_opt == ":" then
@@ -214,7 +222,7 @@ local function cache_world(obj, k)
 			else
 				assert(ori_opt == "?" and opt == ":")
 				if inout ~= "out" then
-					add_input(name, ":", "in")
+					add_input(name, ":")
 				end
 				if inout ~= "in" and ori_output == false then
 					-- must output
@@ -223,16 +231,14 @@ local function cache_world(obj, k)
 			end
 		end
 
-		if input == "" then
-			input = nil
-		else
+		if input then
 			input = c.select[input]
 		end
 
-		if merge == "" then
-			merge = c.select[origin]
-		else
+		if merge then
 			merge = c.select[origin .. " " .. merge]
+		else
+			merge = c.select[origin]
 		end
 
 		return input, merge

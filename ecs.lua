@@ -58,6 +58,31 @@ local persistence_methods = ecs._persistence_methods()
 ecs.writer = persistence_methods.writer
 ecs.reader = persistence_methods.reader
 
+
+local function get_inout(pat, name)
+	local optional
+	local input
+	local output
+	for opt, inout in pat:gmatch (name .. "([:?])(%l+)") do
+		if inout == "update" or inout == "in" or inout == "out" then
+			if inout == "in" then
+				input = true
+			else
+				output = true
+				if inout == "update" then
+					input = true
+				end
+			end
+			if opt == ":" then
+				optional = ":"
+			elseif opt == "?" and optional == nil then
+				optional = "?"
+			end
+		end
+	end
+	return optional, input, output
+end
+
 local function cache_world(obj, k)
 	local c = {
 		typenames = {},
@@ -170,46 +195,30 @@ local function cache_world(obj, k)
 		local function add_merge(name, opt, inout)
 			merge = merge .. " " .. name .. opt .. inout
 		end
+
 		for name, opt, inout in ext:gmatch "([_%w]+)([:?])(%l+)" do
-			local ori_opt, ori_inout
-			-- find last
-			for p1,p2 in origin:gmatch (name .. "([:?])(%l+)") do
-				if p1 == name then
-					ori_opt = p1
-					ori_inout = p2
+			local ori_opt, ori_input, ori_output = get_inout(origin, name)
+
+			if ori_opt == nil then
+				-- new key
+				if inout ~= "out" then
+					-- read key
+					add_input(name, opt, "in")
 				end
-			end
-			if inout == "in" then
-				if (not ori_opt or ori_inout == "out")
-					or (opt == ":" and ori_opt == "?") then
-					add_input(name, opt)
-					add_merge(name, opt , "in")
-				end
-			elseif inout == "out" then
-				if not ori_opt or ori_inout == "in" then
-					add_merge(name, opt , "out")
-				end
-			elseif inout == "update" then
-				if opt == ":" and ori_opt == "?" then
-					add_input(name, ":")
-					add_merge(name, ":", "update")
-				elseif ori_opt == nil then
-					add_input(name, opt)
-					add_merge(name, opt, "update")
-				else
-					if ori_inout == "out" then
-						add_input(name, opt)
-					end
-					if ori_inout ~= "update" then
-						add_merge(name, opt, "update")
-					end
+				add_merge(name, opt, inout)
+			elseif ori_opt == opt or ori_opt == ":" then
+				if inout ~= "in" and ori_output == false then
+					-- need output
+					add_merge(name, ori_opt, inout)
 				end
 			else
-				assert (inout == "new")
-				if ori_name then
-					assert(ori_inout == "new")
-				else
-					add_merge(name, opt, "new")
+				assert(ori_opt == "?" and opt == ":")
+				if inout ~= "out" then
+					add_input(name, ":", "in")
+				end
+				if inout ~= "in" and ori_output == false then
+					-- must output
+					add_merge(name, ":", inout)
 				end
 			end
 		end

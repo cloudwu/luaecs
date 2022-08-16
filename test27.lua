@@ -40,9 +40,15 @@ local function add_AB(v)
 	v.C = v.A + v.B
 end
 
+local function read_C(v)
+	w:extend(v, "C:in")
+	return v.C
+end
+
 for v in w:select "A:in mark?in" do
 	if v.mark then
 		add_AB(v)
+		print("C=", read_C(v))
 	end
 end
 

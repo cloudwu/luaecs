@@ -1245,6 +1245,30 @@ lsubmit(lua_State *L) {
 	return 0;
 }
 
+static int
+lsubmit_confirm(lua_State *L) {
+	lsubmit(L);
+	lua_pushboolean(L, 1);
+	lua_rawseti(L, 2, 4);
+	return 0;
+}
+
+static int
+lsubmit_check(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	if (lua_rawgeti(L, 1, 3) != LUA_TUSERDATA) {
+		luaL_error(L, "Invalid iterator");
+	}
+	struct group_iter * update_iter = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	if (!update_iter->readonly) {
+		if (lua_rawgeti(L, 1, 4) == LUA_TNIL) {
+			return luaL_error(L, "The iterator has not submited");
+		}
+	}
+	return 0;
+}
+
 static inline int
 leach_group_(lua_State *L, int check) {
 	struct group_iter *iter = lua_touserdata(L, 1);
@@ -1919,6 +1943,8 @@ lmethods(lua_State *L) {
 		{ "exist", lexist },
 		{ "remove", lremove },
 		{ "submit", lsubmit },
+		{ "submit_confirm", lsubmit_confirm },
+		{ "submit_check", lsubmit_check },
 		{ "_object", lobject },
 		{ "_sync", lsync },
 		{ "_read", lread },

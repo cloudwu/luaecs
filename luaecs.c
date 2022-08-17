@@ -1325,7 +1325,7 @@ create_key_cache(lua_State *L, struct group_key *k, struct group_field *f) {
 		|| (k->attrib & COMPONENT_FILTER)) { // existence or ref
 		return;
 	}
-	if (k->field_n == 1 && f[0].key == NULL) {
+	if (k->field_n == 1 && f[0].key[0] == 0) {
 		// value type
 		switch (f[0].type) {
 		case TYPE_INT:

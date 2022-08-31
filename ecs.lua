@@ -328,7 +328,7 @@ do	-- newtype
 			c.size = typeclass.size
 			c.raw = true
 		elseif c.size > 0 then
-			align_struct(c, c[1][1])
+			align_struct(c)
 		else
 			-- size == 0, one value
 			if ttype then

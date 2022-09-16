@@ -183,7 +183,7 @@ add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
 		}
 	} else if (pool->n >= pool->cap) {
 		// expand pool
-		pool->cap = cap * 3 / 2;
+		pool->cap = cap * 3 / 2 + 1;
 		void *buffer = pool->buffer;
 		entity_index_t *id = pool->id;
 		init_buffers(pool);

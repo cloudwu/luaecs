@@ -103,7 +103,7 @@ entity_id_alloc(struct entity_id *e, uint64_t *eid) {
 			e->cap = ENTITY_INIT_SIZE;
 			e->id = (uint64_t *)malloc(e->cap * sizeof(uint64_t));
 		} else {
-		int newcap = e->cap * 3 / 2;
+		int newcap = e->cap * 3 / 2 + 1;
 			e->id = (uint64_t *)realloc(e->id, newcap * sizeof(uint64_t));
 			e->cap = newcap;
 		}

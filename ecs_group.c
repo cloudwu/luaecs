@@ -57,7 +57,7 @@ add_byte(struct entity_group *g, uint8_t b) {
 			g->cap = DEFAULT_GROUP_SIZE;
 			g->s = (uint8_t *)malloc(DEFAULT_GROUP_SIZE);
 		} else {
-			int newcap = g->cap * 3 / 2;
+			int newcap = g->cap * 3 / 2 + 1;
 			g->s = (uint8_t *)realloc(g->s, newcap);
 			g->cap = newcap;
 		}
@@ -139,7 +139,7 @@ insert_group(struct entity_group_arena *G, int groupid, int begin, int end) {
 			G->cap = DEFAULT_GROUP_SIZE;
 			G->g = (struct entity_group **)malloc(G->cap * sizeof(struct entity_group *));
 		} else {
-			G->cap = G->cap * 3 / 2;
+			G->cap = G->cap * 3 / 2 + 1;
 			struct entity_group ** g = (struct entity_group **)malloc(G->cap * sizeof(struct entity_group *));
 			memcpy(g, G->g, begin * sizeof(struct entity_group *));
 			memcpy(g+begin+1, G->g + begin, (G->n - begin) * sizeof(struct entity_group *));

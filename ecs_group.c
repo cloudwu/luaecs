@@ -254,7 +254,7 @@ dump_(struct entity_group_arena *G) {
 	}
 }
 
-static void
+static inline void
 enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 	struct tag_index_context ctx;
 	ctx.n = 0;
@@ -268,7 +268,6 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 			ctx.index[ctx.n++] = i;
 		}
 	}
-	entity_clear_type_(w, tagid);
 	while (ctx.n > 0) {
 		int index = tag_index(w, &ctx);
 		if (index >= 0)
@@ -278,14 +277,8 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 
 void
 entity_group_enable_(struct entity_world *w, int tagid, int n, int groupid[]) {
-	int *p = groupid;
-	while (n > GROUP_COMBINE) {
-		enable_(w, tagid, GROUP_COMBINE, p);
-		p += GROUP_COMBINE;
-		n -= GROUP_COMBINE;
-	}
-	if (n > 0)
-		enable_(w, tagid, n, p);
+	assert(n <= GROUP_COMBINE);
+	enable_(w, tagid, n, groupid);
 }
 
 void

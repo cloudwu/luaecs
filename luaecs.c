@@ -2070,7 +2070,6 @@ static int
 lgroup_enable(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int tagid = check_tagid(L, w, 2);
-	entity_clear_type_(w, tagid);
 	int top = lua_gettop(L);
 	int from = 3;
 	int n = top - from + 1;

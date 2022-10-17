@@ -268,7 +268,6 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 			ctx.index[ctx.n++] = i;
 		}
 	}
-	entity_clear_type_(w, tagid);
 	while (ctx.n > 0) {
 		int index = tag_index(w, &ctx);
 		if (index >= 0)
@@ -278,6 +277,7 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 
 void
 entity_group_enable_(struct entity_world *w, int tagid, int n, int groupid[]) {
+	entity_clear_type_(w, tagid);
 	int *p = groupid;
 	while (n > GROUP_COMBINE) {
 		enable_(w, tagid, GROUP_COMBINE, p);

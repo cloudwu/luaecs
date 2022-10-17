@@ -2053,16 +2053,6 @@ lgroup_add(lua_State *L) {
 
 #define MAXGROUP 1024
 
-static void
-enable_(lua_State *L, struct entity_world *w, int tagid, int from, int n) {
-	int groupid[MAXGROUP];
-	int i;
-	for (i=0;i<n;i++) {
-		groupid[i] = luaL_checkinteger(L, from+i);
-	}
-	entity_group_enable_(w, tagid, n, groupid);
-}
-
 // 1: world
 // 2: tagid
 // 3...: groupids
@@ -2073,12 +2063,16 @@ lgroup_enable(lua_State *L) {
 	int top = lua_gettop(L);
 	int from = 3;
 	int n = top - from + 1;
-	while (n > MAXGROUP) {
-		enable_(L, w, tagid, from, MAXGROUP);
-		n -= MAXGROUP;
-		from += MAXGROUP;
+	if (n > MAXGROUP) {
+		return luaL_error(L, "Too many groups (%d > %d)", n, MAXGROUP);
 	}
-	enable_(L, w, tagid, from, n);
+
+	int groupid[MAXGROUP];
+	int i;
+	for (i=0;i<n;i++) {
+		groupid[i] = luaL_checkinteger(L, from+i);
+	}
+	entity_group_enable_(w, tagid, n, groupid);
 	return 0;
 }
 

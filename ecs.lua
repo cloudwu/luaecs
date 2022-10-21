@@ -452,12 +452,6 @@ do
 	end
 end
 
-function M:sync(pat, iter)
-	local p = context[self].select[pat]
-	self:_sync(p, iter)
-	return iter
-end
-
 function M:extend(iter, expat)
 	local ctx = context[self]
 	local diff = ctx.extend[iter[3]][expat]
@@ -515,27 +509,6 @@ function M:read_component(reader, name, offset, stride, n)
 end
 
 M.generate_eid = persistence_methods.generate_eid
-
-do
-	function M:singleton(name, pattern, iter)
-		local typenames = context[self].typenames
-		if iter == nil then
-			iter = { 1, typenames[name].id }
-			if pattern then
-				local p = context[self].select[pattern]
-				return self:_read(p, iter)
-			else
-				return iter
-			end
-		else
-			iter[1] = 1
-			iter[2] = typenames[name].id
-			local p = context[self].select[pattern]
-			self:_sync(p, iter)
-		end
-		return iter
-	end
-end
 
 do
 	local cfirst = M._first

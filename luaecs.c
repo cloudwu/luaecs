@@ -1106,25 +1106,6 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned in
 }
 
 static void
-check_index(lua_State *L, struct group_iter *iter, int mainkey, int idx) {
-	int i;
-	for (i = 0; i < iter->nkey; i++) {
-		struct group_key *k = &iter->k[i];
-		if (k->attrib & COMPONENT_ABSENT) {
-			if (entity_sibling_index_(iter->world, mainkey, idx, k->id)) {
-				luaL_error(L, ".%s should be absent", k->name);
-			}
-		} else if (!is_temporary(k->attrib)) {
-			if (entity_sibling_index_(iter->world, mainkey, idx, k->id) == 0) {
-				if (!(k->attrib & COMPONENT_OPTIONAL)) {
-					luaL_error(L, ".%s not found", k->name);
-				}
-			}
-		}
-	}
-}
-
-static void
 read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter, unsigned int index[MAX_COMPONENT]) {
 	struct group_field *f = iter->f;
 	int i;
@@ -1166,32 +1147,6 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 		}
 		f += k->field_n;
 	}
-}
-
-static int
-lsync(lua_State *L) {
-	struct group_iter *iter = luaL_checkudata(L, 2, "ENTITY_GROUPITER");
-	luaL_checktype(L, 3, LUA_TTABLE);
-	int idx = get_integer(L, 3, 1, "index") - 1;
-	int mainkey = get_integer(L, 3, 2, "mainkey");
-	unsigned int index[MAX_COMPONENT];
-	int r = query_index(iter, 0, mainkey, idx, index);
-	if (r <= 0) {
-		if (r < 0) {
-			return luaL_error(L, "Invalid iterator of mainkey (%d)", mainkey);
-		} else {
-			check_index(L, iter, mainkey, idx); // raise error
-			return 0;
-		}
-	}
-
-	if (!iter->readonly) {
-		if (update_iter(L, 1, 3, iter, idx, mainkey, 0)) {
-			entity_disable_tag_(iter->world, mainkey, idx, mainkey);
-		}
-	}
-	read_iter(L, 1, 3, iter, index);
-	return 0;
 }
 
 static int
@@ -2103,7 +2058,6 @@ lmethods(lua_State *L) {
 		{ "remove", lremove },
 		{ "submit", lsubmit },
 		{ "_object", lobject },
-		{ "_sync", lsync },
 		{ "_read", lread },
 		{ "_first", lfirst },
 		{ "_dumpid", ldumpid },

@@ -522,9 +522,14 @@ lclear_type(lua_State *L) {
 
 static int
 add_sibling_index_(lua_State *L, struct entity_world *w, int cid, int index, int slibling_id) {
-	struct component_pool *c = &w->c[cid];
-	assert(index >= 0 && index < c->n);
-	entity_index_t eid = c->id[index];
+	entity_index_t eid;
+	if (cid < 0) {
+		eid = make_index_(index);
+	} else {
+		struct component_pool *c = &w->c[cid];
+		assert(index >= 0 && index < c->n);
+		eid = c->id[index];
+	}
 	return ecs_add_component_id_(w, slibling_id, eid);
 }
 

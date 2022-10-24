@@ -404,6 +404,9 @@ function M:template_instance(eid, temp, obj)
 			break
 		end
 		local id = self:_addcomponent(index, cid)
+		if obj[tname] then 
+			goto continue
+		end
 		local tname = ctx.typeidtoname[cid]
 		local tc = ctx.typenames[tname]
 		if tc.unmarshal then
@@ -415,6 +418,7 @@ function M:template_instance(eid, temp, obj)
 			assert(tc.size > 0, "Missing unmarshal function for lua object")
 			template_methods._template_instance_component(self, cid, id, arg1, arg2)
 		end
+		::continue::
 	end
 	if obj then
 		_new_entity(self, index, obj)

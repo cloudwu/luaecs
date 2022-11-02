@@ -871,7 +871,7 @@ get_write_component(lua_State *L, int lua_index, const char *name, struct group_
 			// value type
 			return 1;
 		}
-		return luaL_error(L, "Invalid iterator type %s", lua_typename(L, lua_type(L, -1)));
+		return luaL_error(L, "Invalid iterator type %s for .%s", lua_typename(L, lua_type(L, -1)), name);
 	}
 }
 
@@ -1041,7 +1041,7 @@ check_update(lua_State *L, int world_index, int lua_index, struct group_iter *it
 		struct group_key *k = &iter->k[i];
 		if (!(k->attrib & COMPONENT_FILTER)) {
 			struct component_pool *c = &iter->world->c[k->id];
-			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN)) {
+			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN) && k->id != ENTITYID_TAG) {
 				// readonly C component, check it
 				if (get_write_component(L, lua_index, k->name, f, c)) {
 					int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);

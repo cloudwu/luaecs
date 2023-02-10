@@ -44,6 +44,14 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 	return get_ptr(c, index);
 }
 
+int
+entity_count_(struct entity_world *w, int cid) {
+	if (cid < 0)
+		return w->eid.n;
+	struct component_pool *c = &w->c[cid];
+	return c->n;
+}
+
 void
 entity_clear_type_(struct entity_world *w, int cid) {
 	struct component_pool *c = &w->c[cid];

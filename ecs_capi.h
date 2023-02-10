@@ -14,5 +14,6 @@ void entity_remove_(struct entity_world *w, int cid, int index);
 void entity_enable_tag_(struct entity_world *w, int cid, int index, int tag_id);
 void entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id);
 int entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
+int entity_count_(struct entity_world *w, int cid);
 
 #endif

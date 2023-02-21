@@ -23,6 +23,7 @@ struct ecs_capi {
 	int (*get_lua)(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
 	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 	int (*count)(struct entity_world *w, int cid);
+	int (*index)(struct entity_world *w, void *eid);
 };
 
 struct ecs_context {
@@ -139,6 +140,11 @@ static inline int
 entity_count(struct ecs_context *ctx, int cid) {
 	int id = real_id_(ctx, cid);
 	return ctx->api->count(ctx->world, id);
+}
+
+static inline int
+entity_index(struct ecs_context *ctx, void *eid) {
+	return ctx->api->index(ctx->world, eid);
 }
 
 #endif

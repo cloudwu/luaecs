@@ -563,6 +563,7 @@ lcontext(lua_State *L) {
 		entity_get_lua_,
 		entity_group_enable_,
 		entity_count_,
+		entity_index_,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;

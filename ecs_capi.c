@@ -243,3 +243,11 @@ entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_
 	lua_pop(wL, 1);
 	return t;
 }
+
+int
+entity_index_(struct entity_world *w, void *eid_) {
+	uint64_t eid = (uint64_t)eid_;
+	int index = entity_id_find(&w->eid, eid);
+	return index;
+}
+

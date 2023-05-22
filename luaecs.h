@@ -15,6 +15,7 @@ struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index);
 	void (*clear_type)(struct entity_world *w, int cid);
 	int (*sibling_id)(struct entity_world *w, int cid, int index, int slibling_id);
+	int (*sibling_id_hint)(struct entity_world *w, int cid, int index, int slibling_id, int hint);
 	void *(*add_sibling)(struct entity_world *w, int cid, int index, int slibling_id, const void *buffer);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
 	void (*remove)(struct entity_world *w, int cid, int index);
@@ -64,6 +65,13 @@ entity_sibling_id(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_i
 	int mid = real_id_(ctx, cid);
 	int sid = real_id_(ctx, sibling_id);
 	return ctx->api->sibling_id(ctx->world, mid, index, sid);
+}
+
+static inline int
+entity_sibling_id_hint(struct ecs_context *ctx, cid_t cid, int index, cid_t sibling_id, int hint) {
+	int mid = real_id_(ctx, cid);
+	int sid = real_id_(ctx, sibling_id);
+	return ctx->api->sibling_id_hint(ctx->world, mid, index, sid, hint);
 }
 
 static inline void *

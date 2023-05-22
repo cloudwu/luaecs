@@ -8,6 +8,7 @@ struct entity_world;
 void *entity_iter_(struct entity_world *w, int cid, int index);
 void entity_clear_type_(struct entity_world *w, int cid);
 int entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_id);
+int entity_sibling_index_hint_(struct entity_world *w, int cid, int index, int silbling_id, int hint);
 void *entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id, const void *buffer);
 int entity_new_(struct entity_world *w, int cid, const void *buffer);
 void entity_remove_(struct entity_world *w, int cid, int index);

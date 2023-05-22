@@ -555,6 +555,7 @@ lcontext(lua_State *L) {
 		entity_iter_,
 		entity_clear_type_,
 		entity_sibling_index_,
+		entity_sibling_index_hint_,
 		entity_add_sibling_,
 		entity_new_,
 		entity_remove_,

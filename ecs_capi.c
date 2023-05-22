@@ -94,6 +94,21 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_i
 	return 0;
 }
 
+int
+entity_sibling_index_hint_(struct entity_world *w, int cid, int index, int silbling_id, int hint) {
+	assert(cid >= 0 && silbling_id >=0);
+	struct component_pool *c = &w->c[cid];
+	if (index < 0 || index >= c->n)
+		return 0;
+	entity_index_t eid = c->id[index];
+	c = &w->c[silbling_id];
+	int result_index = ecs_lookup_component_(c, eid, hint);
+	if (result_index >= 0) {
+		return result_index + 1;
+	}
+	return 0;
+}
+
 static void *
 add_component_(struct entity_world *w, int cid, entity_index_t eid, const void *buffer) {
 	int index = ecs_add_component_id_(w, cid, eid);

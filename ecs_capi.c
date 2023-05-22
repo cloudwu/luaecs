@@ -163,8 +163,9 @@ insert_id(struct entity_world *w, int cid, entity_index_t eindex) {
 	int to = c->n;
 	const uint64_t *map = w->eid.id;
 	uint64_t eid = map[index_(eindex)];
+	// a common use is inserting tag continuously, so the first checkpoint is (to - 1)
+	int mid = to - 1;
 	while (from < to) {
-		int mid = (from + to) / 2;
 		entity_index_t aa_index = c->id[mid];
 		uint64_t aa = map[index_(aa_index)];
 		if (aa == eid)
@@ -174,6 +175,7 @@ insert_id(struct entity_world *w, int cid, entity_index_t eindex) {
 		} else {
 			to = mid;
 		}
+		mid = (from + to) / 2;
 	}
 	// insert eid at [from]
 	if (from < c->n - 1) {

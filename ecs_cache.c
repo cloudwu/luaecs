@@ -67,11 +67,15 @@ void*
 ecs_cache_fetch(struct ecs_cache *c, int index, int cid) {
 	if (index >= c->n)
 		return NULL;
+	struct component_pool * mp = &c->w->c[c->mainkey];
 	struct component_pool * cp = &c->w->c[cid];
 	int offset = c->keys[cid];
 	assert(offset >= 0);
 	entity_index_t *hint = c->index + index * c->keys_n + offset;
 	uint32_t pos = index_(*hint);
+	if (pos < cp->n && ENTITY_INDEX_CMP(mp->id[index], cp->id[pos]) == 0) {
+		return get_ptr(cp, pos);
+	}
 	int id = entity_sibling_index_hint_(c->w, c->mainkey, index, cid, pos) - 1;
 	if (id < 0)
 		return NULL;

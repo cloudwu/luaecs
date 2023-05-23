@@ -87,6 +87,33 @@ lsiblinglua(lua_State *L) {
 	return 0;
 }
 
+static int
+lcache(lua_State *L) {
+	struct ecs_context *ctx = lua_touserdata(L, 1);
+	int index[2] = {
+		TAG_MARK,
+		COMPONENT_ID,
+	};
+
+	struct ecs_cache *c = entity_cache_create(ctx, index, 2);
+	
+	int n = entity_cache_sync(ctx, c);
+	int i;
+	lua_createtable(L, n, 0);
+	for (i=0;i<n;i++) {
+		int * v = (int *)entity_cache_fetch(ctx, c, i, COMPONENT_ID);
+		if (v) {
+			lua_pushinteger(L, *v);
+		} else {
+			lua_pushboolean(L, 0);
+		}
+		lua_rawseti(L, -2, i+1);
+	}
+	entity_cache_release(ctx, c);
+
+	return 1;
+}
+
 LUAMOD_API int
 luaopen_ecs_ctest(lua_State *L) {
 	luaL_checkversion(L);
@@ -96,6 +123,7 @@ luaopen_ecs_ctest(lua_State *L) {
 		{ "testuserdata", ltestuserdata },
 		{ "getlua", lgetlua },
 		{ "siblinglua", lsiblinglua },
+		{ "cache", lcache },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

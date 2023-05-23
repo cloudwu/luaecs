@@ -2,6 +2,7 @@
 #define ecs_entity_index_h
 
 #include <string.h>
+#include <stdint.h>
 
 #define MAX_ENTITY 0xffffff 
 

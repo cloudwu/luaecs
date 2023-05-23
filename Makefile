@@ -9,7 +9,7 @@ SHARED=--shared -fPIC
 
 all : ecs.dll
 
-ecs.dll : luaecs.c ecs_group.c ecs_persistence.c ecs_template.c ecs_capi.c ecs_entityid.c
+ecs.dll : luaecs.c ecs_group.c ecs_persistence.c ecs_template.c ecs_capi.c ecs_entityid.c ecs_cache.c
 	gcc $(CFLAGS) $(SHARED) -DTEST_LUAECS -o $@ $^ $(LUA_INC) $(LUA_LIB)
 
 clean :

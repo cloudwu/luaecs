@@ -15,6 +15,7 @@
 #include "ecs_persistence.h"
 #include "ecs_template.h"
 #include "ecs_capi.h"
+#include "ecs_cache.h"
 
 static void
 init_component_pool(struct entity_world *w, int index, int stride, int opt_size) {
@@ -565,6 +566,10 @@ lcontext(lua_State *L) {
 		entity_group_enable_,
 		entity_count_,
 		entity_index_,
+		ecs_cache_create,
+		ecs_cache_release,
+		ecs_cache_fetch,
+		ecs_cache_sync,
 	};
 	ctx->api = &c_api;
 	ctx->cid[0] = ENTITY_REMOVED;

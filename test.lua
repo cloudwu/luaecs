@@ -164,6 +164,18 @@ w:update()
 
 -- test c object
 
+for v in w:select "id mark?out" do
+	v.mark = true
+end
+
+for v in w:select "mark id?in" do
+	print("Mark id =", v.id)
+end
+
+local mark_id = test.cache(context)
+for _, v in ipairs(mark_id) do
+	print("Cache mark id = ", v)
+end
 
 print "mark:update object:in"
 

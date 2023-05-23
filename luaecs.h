@@ -10,6 +10,7 @@ typedef unsigned int cid_t;
 #define COMPONENT_EID 0xffffffff
 
 struct entity_world;
+struct ecs_cache;
 
 struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index);
@@ -25,6 +26,10 @@ struct ecs_capi {
 	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 	int (*count)(struct entity_world *w, int cid);
 	int (*index)(struct entity_world *w, void *eid);
+	struct ecs_cache * (*cache_create)(struct entity_world *w, int keys[], int n);
+	void (*cache_release)(struct ecs_cache *);
+	void* (*cache_fetch)(struct ecs_cache *, int index, int cid);
+	int (*cache_sync)(struct ecs_cache *);
 };
 
 struct ecs_context {
@@ -153,6 +158,32 @@ entity_count(struct ecs_context *ctx, int cid) {
 static inline int
 entity_index(struct ecs_context *ctx, void *eid) {
 	return ctx->api->index(ctx->world, eid);
+}
+
+
+static inline struct ecs_cache *
+entity_cache_create(struct ecs_context *ctx, int keys[], int n) {
+	int i;
+	for (i=0;i<n;i++) {
+		keys[i] = real_id_(ctx, keys[i]);
+	}
+	return ctx->api->cache_create(ctx->world, keys, n);
+}
+
+static inline void
+entity_cache_release(struct ecs_context *ctx, struct ecs_cache *c) {
+	ctx->api->cache_release(c);
+}
+
+static inline void *
+entity_cache_fetch(struct ecs_context *ctx, struct ecs_cache *c, int index, int cid) {
+	int id = real_id_(ctx, cid);
+	return ctx->api->cache_fetch(c, index, id);
+}
+
+static inline int
+entity_cache_sync(struct ecs_context *ctx, struct ecs_cache *c) {
+	return ctx->api->cache_sync(c);
 }
 
 #endif

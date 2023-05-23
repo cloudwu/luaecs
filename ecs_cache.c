@@ -52,6 +52,7 @@ int
 ecs_cache_sync(struct ecs_cache *c) {
 	struct entity_world *w = c->w;
 	struct component_pool *mainkey = &w->c[c->mainkey];
+	entity_trim(w, c->mainkey);
 	int n = mainkey->n;
 	if (n > c->cap) {
 		size_t sz = c->keys_n * mainkey->cap * sizeof(entity_index_t);
@@ -68,6 +69,9 @@ ecs_cache_fetch(struct ecs_cache *c, int index, int cid) {
 	if (index >= c->n)
 		return NULL;
 	struct component_pool * mp = &c->w->c[c->mainkey];
+	if (cid == c->mainkey) {
+		return get_ptr(mp, index);
+	}
 	struct component_pool * cp = &c->w->c[cid];
 	int offset = c->keys[cid];
 	assert(offset >= 0);

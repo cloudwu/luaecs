@@ -59,8 +59,8 @@ ecs_cache_sync(struct ecs_cache *c) {
 		free(c->index);
 		c->index = (entity_index_t *)malloc(sz);
 		c->cap = mainkey->cap;
-		c->n = n;
 	}
+	c->n = n;
 	return n;
 }
 

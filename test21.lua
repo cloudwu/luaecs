@@ -28,6 +28,9 @@ w:register {
 		local v = tonumber(s)
 		return v
 --		return string.pack("i", v)
+	end,
+	demarshal = function(s)
+		print ("ID = ", s)
 	end
 }
 
@@ -46,3 +49,6 @@ w:template_instance(w:new(), t)
 for v in w:select "size:in id:in" do
 	print(v.size.x, v.size.y, v.id)
 end
+
+w:template_destruct(t)
+

@@ -314,6 +314,7 @@ do	-- newtype
 			init = typeclass.init,
 			marshal = typeclass.marshal,
 			unmarshal = typeclass.unmarshal,
+			demarshal = typeclass.demarshal,
 		}
 		for i, v in ipairs(typeclass) do
 			c[i] = align(c, parse(v))
@@ -418,6 +419,24 @@ function M:template_instance(eid, temp, obj)
 	end
 	if obj then
 		_new_entity(self, index, obj)
+	end
+end
+
+function M:template_destruct(temp)
+	local ctx = context[self]
+	local offset = 0
+	local cid, arg1, arg2
+	while true do
+		cid, offset, arg1, arg2 = template_methods._template_extract(temp, offset)
+		if not cid then
+			break
+		end
+		local tname = ctx.typeidtoname[cid]
+		local tc = ctx.typenames[tname]
+		local demarshal = tc.demarshal
+		if demarshal then
+			demarshal( arg1, arg2 )
+		end
 	end
 end
 

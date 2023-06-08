@@ -168,13 +168,13 @@ for v in w:select "id mark?out" do
 	v.mark = true
 end
 
-for v in w:select "mark id?in" do
-	print("Mark id =", v.id)
+for v in w:select "mark id?in eid:in" do
+	print("Mark id =", v.id, v.eid)
 end
 
-local mark_id = test.cache(context)
-for _, v in ipairs(mark_id) do
-	print("Cache mark id = ", v)
+local mark_id, mark_eid = test.cache(context)
+for idx, v in ipairs(mark_id) do
+	print("Cache mark id = ", v, mark_eid[idx])
 end
 
 print "mark:update object:in"

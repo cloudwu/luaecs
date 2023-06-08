@@ -24,14 +24,17 @@ ecs_cache_create(struct entity_world *w, int keys[], int n) {
 	struct ecs_cache * c = (struct ecs_cache *)malloc(sizeof(*c));
 	c->mainkey = keys[0];
 	c->keys_n = n - 1;
+	assert(c->mainkey >= 0);
 	int i;
 	for (i=0;i<MAX_COMPONENT;i++) {
 		c->keys[i] = -1;
 	}
 	for (i=1;i<n;i++) {
 		int cid = keys[i];
-		assert(cid >= 0 && cid < MAX_COMPONENT);
-		c->keys[cid] = i-1;
+		if (cid >= 0) {	// ignore EID_TAG
+			assert(cid < MAX_COMPONENT);
+			c->keys[cid] = i-1;
+		}
 	}
 	c->n = 0;
 	c->cap = 0;
@@ -71,6 +74,10 @@ ecs_cache_fetch(struct ecs_cache *c, int index, int cid) {
 	struct component_pool * mp = &c->w->c[c->mainkey];
 	if (cid == c->mainkey) {
 		return get_ptr(mp, index);
+	} else if (cid == ENTITYID_TAG) {
+		int id = entity_sibling_index_(c->w, c->mainkey, index, cid);
+		assert(id > 0);
+		return (void *)c->w->eid.id[id-1];
 	}
 	struct component_pool * cp = &c->w->c[cid];
 	int offset = c->keys[cid];

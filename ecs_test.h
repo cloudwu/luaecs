@@ -90,12 +90,13 @@ lsiblinglua(lua_State *L) {
 static int
 lcache(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
-	int index[2] = {
+	int index[3] = {
 		TAG_MARK,
 		COMPONENT_ID,
+		COMPONENT_EID,
 	};
 
-	struct ecs_cache *c = entity_cache_create(ctx, index, 2);
+	struct ecs_cache *c = entity_cache_create(ctx, index, 3);
 	
 	int n = entity_cache_sync(ctx, c);
 	int i;
@@ -109,9 +110,16 @@ lcache(lua_State *L) {
 		}
 		lua_rawseti(L, -2, i+1);
 	}
+	lua_createtable(L, n, 0);
+	for (i=0;i<n;i++) {
+		int64_t v = (int64_t)entity_cache_fetch(ctx, c, i, COMPONENT_EID);
+		lua_pushinteger(L, v);
+		lua_rawseti(L, -2, i+1);
+	}
+
 	entity_cache_release(ctx, c);
 
-	return 1;
+	return 2;
 }
 
 LUAMOD_API int

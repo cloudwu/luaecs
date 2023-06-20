@@ -193,8 +193,11 @@ add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
 	int cmp;
 	if (index > 0 && (cmp = ENTITY_INDEX_CMP(pool->id[index-1], eid)) >= 0) {
 		do {
-			if (cmp == 0)
+			if (cmp == 0) {
+				if (pool->stride == STRIDE_TAG)
+					return index - 1;
 				return -1;
+			}
 			--index;
 		} while (index > 0 && (cmp = ENTITY_INDEX_CMP(pool->id[index-1], eid)) >= 0);
 		// move [index, pool->n) -> [index+1, pool->n]

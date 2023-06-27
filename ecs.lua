@@ -378,6 +378,12 @@ local function _new_entity(self, eid, obj)
 	end
 end
 
+function M:object(name, id, v)
+	local ctx = context[self]
+	local pat = ctx.ref[name]
+	return cobject(pat, v, id)
+end
+
 function M:new(obj)
 --	dump(obj)
 	local eid, index = self:_newentity()

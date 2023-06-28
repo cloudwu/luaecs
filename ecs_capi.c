@@ -22,11 +22,14 @@ remove_dup(struct component_pool *c, int index) {
 }
 
 void *
-entity_iter_(struct entity_world *w, int cid, int index) {
+entity_iter_(struct entity_world *w, int cid, int index, struct ecs_token *output) {
 	if (cid < 0) {
 		assert(cid == ENTITYID_TAG);
 		if (index >= w->eid.n)
 			return NULL;
+		if (output) {
+			output->id = index;
+		}
 		return (void *)w->eid.id[index];
 	}
 	struct component_pool *c = &w->c[cid];
@@ -39,7 +42,13 @@ entity_iter_(struct entity_world *w, int cid, int index) {
 		if (index < c->n - 1 && ENTITY_INDEX_CMP(eid , c->id[index + 1])==0) {
 			remove_dup(c, index + 1);
 		}
+		if (output) {
+			output->id = (int)index_(eid);
+		}
 		return DUMMY_PTR;
+	}
+	if (output) {
+		output->id = (int)index_(c->id[index]);
 	}
 	return get_ptr(c, index);
 }
@@ -74,34 +83,12 @@ entity_clear_type_(struct entity_world *w, int cid) {
 	c->n = 0;
 }
 
-static inline entity_index_t
-get_index_(struct entity_world *w, int cid, int index) {
-	if (cid < 0) {
-		return make_index_(index);
-	} else {
-		struct component_pool *c = &w->c[cid];
-		assert(index >= 0 && index < c->n);
-		return c->id[index];
-	}
-}
-
 int
-entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_id) {
-	entity_index_t eid;
-	if (cid < 0) {
-		assert(cid == ENTITYID_TAG);
-		eid =  make_index_(index);
-	} else {
-		struct component_pool *c = &w->c[cid];
-		if (index < 0 || index >= c->n)
-			return 0;
-		eid = c->id[index];
-	}
-	if (silbling_id < 0) {
-		assert(silbling_id == ENTITYID_TAG);
-		return index_(eid) + 1;
-	}
-	struct component_pool *c = &w->c[silbling_id];
+entity_component_index_(struct entity_world *w, struct ecs_token t, int cid) {
+	if (cid < 0)
+		return t.id + 1;
+	entity_index_t eid = make_index_(t.id);
+	struct component_pool *c = &w->c[cid];
 	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
@@ -111,13 +98,9 @@ entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_i
 }
 
 int
-entity_sibling_index_hint_(struct entity_world *w, int cid, int index, int silbling_id, int hint) {
-	assert(cid >= 0 && silbling_id >=0);
+entity_component_index_hint_(struct entity_world *w, struct ecs_token t, int cid, int hint) {
+	entity_index_t eid = make_index_(t.id);
 	struct component_pool *c = &w->c[cid];
-	if (index < 0 || index >= c->n)
-		return 0;
-	entity_index_t eid = c->id[index];
-	c = &w->c[silbling_id];
 	int result_index = ecs_lookup_component_(c, eid, hint);
 	if (result_index >= 0) {
 		return result_index + 1;
@@ -140,10 +123,10 @@ add_component_(struct entity_world *w, int cid, entity_index_t eid, const void *
 }
 
 void *
-entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id, const void *buffer) {
-	entity_index_t eid = get_index_(w, cid, index);
+entity_component_add_(struct entity_world *w, struct ecs_token t, int cid, const void *buffer) {
+	entity_index_t eid = make_index_(t.id);
 	// todo: pcall add_component_
-	return add_component_(w, silbling_id, eid, buffer);
+	return add_component_(w, cid, eid, buffer);
 }
 
 int
@@ -167,8 +150,8 @@ entity_new_(struct entity_world *w, int cid, const void *buffer) {
 }
 
 void
-entity_remove_(struct entity_world *w, int cid, int index) {
-	entity_enable_tag_(w, cid, index, ENTITY_REMOVED);
+entity_remove_(struct entity_world *w, struct ecs_token t) {
+	entity_enable_tag_(w, t, ENTITY_REMOVED);
 }
 
 static void
@@ -209,8 +192,8 @@ insert_id(struct entity_world *w, int cid, entity_index_t eindex) {
 }
 
 void
-entity_enable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
-	entity_index_t eid = get_index_(w, cid, index);
+entity_enable_tag_(struct entity_world *w, struct ecs_token t, int tag_id) {
+	entity_index_t eid = make_index_(t.id);
 	insert_id(w, tag_id, eid);
 }
 
@@ -223,15 +206,10 @@ replace_id(struct component_pool *c, int from, int to, entity_index_t eid) {
 }
 
 void
-entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id) {
+entity_disable_tag_(struct entity_world *w, int tag_id, int index) {
 	struct component_pool *c = &w->c[tag_id];
-	entity_index_t eid = get_index_(w, cid, index);
-	if (cid != tag_id) {
-		index = ecs_lookup_component_(c, eid, c->last_lookup);
-		if (index < 0)
-			return;
-		c->last_lookup = index;
-	}
+	assert(index >= 0 && index < c->n);
+	entity_index_t eid = c->id[index];
 	assert(c->stride == STRIDE_TAG);
 	int from, to;
 	// find next tag. You may disable subsquent tags in iteration.

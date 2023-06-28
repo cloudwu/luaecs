@@ -72,12 +72,12 @@ ecs_cache_fetch(struct ecs_cache *c, int index, int cid) {
 	if (index >= c->n)
 		return NULL;
 	struct component_pool * mp = &c->w->c[c->mainkey];
+	assert(index < mp->n);
 	if (cid == c->mainkey) {
 		return get_ptr(mp, index);
 	} else if (cid == ENTITYID_TAG) {
-		int id = entity_sibling_index_(c->w, c->mainkey, index, cid);
-		assert(id > 0);
-		return (void *)c->w->eid.id[id-1];
+		int id = (int)index_(mp->id[index]);
+		return (void *)c->w->eid.id[id];
 	}
 	struct component_pool * cp = &c->w->c[cid];
 	int offset = c->keys[cid];
@@ -87,7 +87,9 @@ ecs_cache_fetch(struct ecs_cache *c, int index, int cid) {
 	if (pos < cp->n && ENTITY_INDEX_CMP(mp->id[index], cp->id[pos]) == 0) {
 		return get_ptr(cp, pos);
 	}
-	int id = entity_sibling_index_hint_(c->w, c->mainkey, index, cid, pos) - 1;
+	struct ecs_token token;
+	token.id = (int)index_(mp->id[index]);
+	int id = entity_component_index_hint_(c->w, token, cid, pos) - 1;
 	if (id < 0)
 		return NULL;
 	if (id != pos) {

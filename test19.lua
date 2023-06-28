@@ -31,7 +31,7 @@ for v in w:select "id:in tag:absent" do
 	print ("REMOVE", v.id)
 end
 
-w:remove_update "tag"	-- remove all the entities with tag
+w:update "tag"	-- remove all the entities with tag
 
 for v in w:select "id:in" do
 	print (v.id)

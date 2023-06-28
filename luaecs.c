@@ -1279,6 +1279,17 @@ lcount(lua_State *L) {
 	int mainkey = iter->k[0].id;
 	int count = 0;
 	int i;
+	if (iter->nkey == 1) {
+		if (mainkey < 0) {
+			lua_pushinteger(L, iter->world->eid.n);
+			return 1;
+		}
+		struct component_pool *c = &iter->world->c[mainkey];
+		if (c->stride != STRIDE_TAG) {
+			lua_pushinteger(L, c->n);
+			return 1;
+		}
+	}
 	for (i = 0;; ++i) {
 		int ret = query_index(iter, 1, mainkey, i, index);
 		if (ret < 0)

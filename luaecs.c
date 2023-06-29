@@ -525,16 +525,9 @@ lclear_type(lua_State *L) {
 }
 
 static int
-add_sibling_index_(lua_State *L, struct entity_world *w, int cid, int index, int slibling_id) {
-	entity_index_t eid;
-	if (cid < 0) {
-		eid = make_index_(index);
-	} else {
-		struct component_pool *c = &w->c[cid];
-		assert(index >= 0 && index < c->n);
-		eid = c->id[index];
-	}
-	return ecs_add_component_id_(w, slibling_id, eid);
+add_component_index_(lua_State *L, struct entity_world *w, struct ecs_token t, int cid) {
+	entity_index_t eid = make_index_(t.id);
+	return ecs_add_component_id_(w, cid, eid);
 }
 
 static int
@@ -558,9 +551,9 @@ lcontext(lua_State *L) {
 	static struct ecs_capi c_api = {
 		entity_iter_,
 		entity_clear_type_,
-		entity_sibling_index_,
-		entity_sibling_index_hint_,
-		entity_add_sibling_,
+		entity_component_index_,
+		entity_component_index_hint_,
+		entity_component_add_,
 		entity_new_,
 		entity_remove_,
 		entity_enable_tag_,
@@ -572,6 +565,7 @@ lcontext(lua_State *L) {
 		ecs_cache_create,
 		ecs_cache_release,
 		ecs_cache_fetch,
+		ecs_cache_fetch_index,
 		ecs_cache_sync,
 	};
 	ctx->api = &c_api;
@@ -932,6 +926,10 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 	for (i = 0; i < skip; i++) {
 		f += iter->k[i].field_n;
 	}
+	struct ecs_token token;
+	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL)
+		return luaL_error(L, "Invalid token");
+
 	for (i = skip; i < iter->nkey; i++) {
 		struct group_key *k = &iter->k[i];
 		if (!(k->attrib & COMPONENT_FILTER)) {
@@ -944,12 +942,15 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 						break;
 					case LUA_TBOOLEAN:
 						if (lua_toboolean(L, -1)) {
-							entity_enable_tag_(iter->world, mainkey, idx, k->id);
+							entity_enable_tag_(iter->world, token, k->id);
 						} else {
 							if (k->id == mainkey)
 								disable_mainkey = 1;
-							else
-								entity_disable_tag_(iter->world, mainkey, idx, k->id);
+							else {
+								int idx = entity_component_index_(iter->world, token, k->id);
+								if (idx >= 0)
+									entity_disable_tag_(iter->world, k->id, idx);
+							}
 						}
 						if (!(k->attrib & COMPONENT_IN)) {
 							// reset tag
@@ -964,26 +965,26 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-				if (index == 0) {
-					luaL_error(L, "Can't find sibling %s of %s", k->name, iter->k[0].name);
+				int index = entity_component_index_(iter->world, token, k->id);
+				if (index < 0) {
+					luaL_error(L, "Can't find component %s of %s", k->name, iter->k[0].name);
 				}
 				if (c->stride == STRIDE_LUA) {
 					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
 					lua_insert(L, -2);
-					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index-1));
+					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index));
 				} else {
-					void *buffer = get_ptr(c, index - 1);
+					void *buffer = get_ptr(c, index);
 					ecs_write_component_object_(L, k->field_n, f, buffer);
 				}
 			} else if (is_temporary(k->attrib)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
 				if (c->stride == STRIDE_LUA) {
-					int index = add_sibling_index_(L, iter->world, mainkey, idx, k->id);
+					int index = add_component_index_(L, iter->world, token, k->id);
 					if (index < 0) {
-						luaL_error(L, "sibling %d exist", k->id);
+						luaL_error(L, "component %d exist", k->id);
 					}
 					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
@@ -991,7 +992,7 @@ update_iter(lua_State *L, int world_index, int lua_index, struct group_iter *ite
 					lua_insert(L, -2);
 					lua_rawseti(L, -2, ecs_get_eid(iter->world, k->id, index));
 				} else {
-					void *buffer = entity_add_sibling_(iter->world, mainkey, idx, k->id, NULL);
+					void *buffer = entity_component_add_(iter->world, token, k->id, NULL);
 					ecs_write_component_object_(L, k->field_n, f, buffer);
 				}
 			}
@@ -1039,7 +1040,7 @@ update_last_index(lua_State *L, int world_index, int lua_index, struct group_ite
 	update_iter(L, world_index, lua_index, iter, idx, mainkey, 1);
 
 	if (disable_mainkey) {
-		entity_disable_tag_(iter->world, mainkey, idx, mainkey);
+		entity_disable_tag_(iter->world, mainkey, idx);
 	}
 }
 
@@ -1055,10 +1056,13 @@ check_update(lua_State *L, int world_index, int lua_index, struct group_iter *it
 			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN) && k->id != ENTITYID_TAG) {
 				// readonly C component, check it
 				if (get_write_component(L, lua_index, k->name, f, c)) {
-					int index = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-					if (index > 0) {
-						void *buffer = get_ptr(c, index - 1);
-						write_component_object_check(L, k->field_n, f, buffer, k->name);
+					struct ecs_token token;
+					if (entity_iter_(iter->world, mainkey, idx, &token)) {
+						int index = entity_component_index_(iter->world, token, k->id);
+						if (index >= 0) {
+							void *buffer = get_ptr(c, index);
+							write_component_object_check(L, k->field_n, f, buffer, k->name);
+						}
 					}
 				}
 			}
@@ -1093,42 +1097,43 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 
 // -1 : end ; 0 : next ; 1 : succ
 static int
-query_index(struct group_iter *iter, int skip, int mainkey, int idx, unsigned int index[MAX_COMPONENT]) {
-	if (entity_iter_(iter->world, mainkey, idx) == NULL) {
+query_index(struct group_iter *iter, int skip, int mainkey, int idx, int index[MAX_COMPONENT]) {
+	struct ecs_token token;
+	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL) {
 		return -1;
 	}
 	int j;
 	for (j = skip; j < iter->nkey; j++) {
 		struct group_key *k = &iter->k[j];
 		if (k->attrib & COMPONENT_ABSENT) {
-			if (entity_sibling_index_(iter->world, mainkey, idx, k->id)) {
+			if (entity_component_index_(iter->world, token, k->id) >= 0) {
 				// exist. try next
 				return 0;
 			}
-			index[j] = 0;
+			index[j] = -1;
 		} else if (!is_temporary(k->attrib)) {
-			index[j] = entity_sibling_index_(iter->world, mainkey, idx, k->id);
-			if (index[j] == 0) {
+			index[j] = entity_component_index_(iter->world, token, k->id);
+			if (index[j] < 0) {
 				if (!(k->attrib & COMPONENT_OPTIONAL)) {
 					// required. try next
 					return 0;
 				}
 			}
 		} else {
-			index[j] = 0;
+			index[j] = -1;
 		}
 	}
 	return 1;
 }
 
 static void
-read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter, unsigned int index[MAX_COMPONENT]) {
+read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter, int index[MAX_COMPONENT]) {
 	struct group_field *f = iter->f;
 	int i;
 	for (i = 0; i < iter->nkey; i++) {
 		struct group_key *k = &iter->k[i];
 		if (k->id == ENTITYID_TAG) {
-			unsigned int idx = index[i] - 1;
+			int idx = index[i];
 			uint64_t eid = iter->world->eid.id[idx];
 			lua_pushinteger(L, eid);
 			lua_setfield(L, obj_index, "eid");
@@ -1136,12 +1141,11 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 			struct component_pool *c = &iter->world->c[k->id];
 			if (c->stride == STRIDE_LUA) {
 				// lua object component
-				if (index[i]) {
+				if (index[i] >= 0) {
 					if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 						luaL_error(L, "Missing lua table for %d", k->id);
 					}
-
-					lua_rawgeti(L, -1, ecs_get_eid(iter->world, k->id, index[i]-1));
+					lua_rawgeti(L, -1, ecs_get_eid(iter->world, k->id, index[i]));
 					lua_setfield(L, obj_index, k->name);
 					lua_pop(L, 1);
 				} else {
@@ -1149,14 +1153,14 @@ read_iter(lua_State *L, int world_index, int obj_index, struct group_iter *iter,
 					lua_setfield(L, obj_index, k->name);
 				}
 			} else if (k->attrib & COMPONENT_IN) {
-				if (index[i]) {
-					void *ptr = get_ptr(c, index[i] - 1);
+				if (index[i] >= 0) {
+					void *ptr = get_ptr(c, index[i]);
 					read_component_in_field(L, obj_index, k->name, k->field_n, f, ptr);
 				} else {
 					lua_pushnil(L);
 					lua_setfield(L, obj_index, k->name);
 				}
-			} else if (index[i] == 0 && !is_temporary(k->attrib)) {
+			} else if (index[i] < 0 && !is_temporary(k->attrib)) {
 				lua_pushnil(L);
 				lua_setfield(L, obj_index, k->name);
 			}
@@ -1171,7 +1175,7 @@ lread(lua_State *L) {
 	luaL_checktype(L, 3, LUA_TTABLE);
 	int idx = get_integer(L, 3, 1, "index") - 1;
 	int mainkey = get_integer(L, 3, 2, "mainkey");
-	unsigned int index[MAX_COMPONENT];
+	int index[MAX_COMPONENT];
 	int r = query_index(iter, 0, mainkey, idx, index);
 	if (r <= 0) {
 		return luaL_error(L, "Can't read pattern");
@@ -1233,7 +1237,7 @@ leach_group_(lua_State *L, int check) {
 
 	int world_index = lua_gettop(L);
 
-	unsigned int index[MAX_COMPONENT];
+	int index[MAX_COMPONENT];
 	int mainkey = iter->k[0].id;
 
 	if (i > 0) {
@@ -1245,7 +1249,7 @@ leach_group_(lua_State *L, int check) {
 	}
 	for (;;) {
 		int idx = i++;
-		index[0] = idx + 1;
+		index[0] = idx;
 		int ret = query_index(iter, 1, mainkey, idx, index);
 		if (ret < 0)
 			return 0;
@@ -1275,7 +1279,7 @@ leach_group_check(lua_State *L) {
 static int
 lcount(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 1);
-	unsigned int index[MAX_COMPONENT];
+	int index[MAX_COMPONENT];
 	int mainkey = iter->k[0].id;
 	int count = 0;
 	int i;
@@ -1388,7 +1392,7 @@ static int
 lfirst(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 2);
 	int mainkey = iter->k[0].id;
-	unsigned int index[MAX_COMPONENT];
+	int index[MAX_COMPONENT];
 	int r = query_index(iter, 0, mainkey, 0, index);
 	if (r <= 0) {
 		return 0;
@@ -1818,12 +1822,16 @@ lremove(lua_State *L) {
 		int index = entity_id_find(&w->eid, lua_tointeger(L, 2));
 		if (index < 0)
 			return luaL_error(L, "No eid %d", lua_tointeger(L, 2));
-		entity_remove_(w, ENTITYID_TAG, index);
+		struct ecs_token t = { index };
+		entity_remove_(w, t);
 	} else {
 		luaL_checktype(L, 2, LUA_TTABLE);
 		int iter = get_integer(L, 2, 1, "index") - 1;
 		int mainkey = get_integer(L, 2, 2, "mainkey");
-		entity_remove_(w, mainkey, iter);
+		struct ecs_token t;
+		if (entity_iter_(w, mainkey, iter, &t)) {
+			entity_remove_(w, t);
+		}
 	}
 	return 0;
 }
@@ -1875,7 +1883,7 @@ lobject(lua_State *L) {
 		if (lua_type(L, 2) != LUA_TBOOLEAN)
 			return luaL_error(L, "%s is a tag, need boolean", iter->k[0].name);
 		if (!lua_toboolean(L, 2)) {
-			entity_disable_tag_(w, cid, index, cid);
+			entity_disable_tag_(w, cid, index);
 		}
 		return 1;
 	} else if (c->stride < 0) {
@@ -1935,15 +1943,16 @@ lfilter(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 3, "ENTITY_GROUPITER");
 	int mainkey = iter->k[0].id;
 	int i,j;
-	for (i = 0; entity_iter_(w, mainkey, i); i++) {
+	struct ecs_token token;
+	for (i = 0; entity_iter_(w, mainkey, i, &token); i++) {
 		for (j = 1; j < iter->nkey; j++) {
 			struct group_key *k = &iter->k[j];
-			if ((entity_sibling_index_(w, mainkey, i, k->id) != 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {
+			if ((entity_component_index_(w, token, k->id) >= 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {
 				break;
 			}
 		}
 		if (j == iter->nkey)
-			entity_enable_tag_(w, mainkey, i, tagid);
+			entity_enable_tag_(w, token, tagid);
 	}
 	return 0;
 }
@@ -1963,27 +1972,27 @@ laccess(lua_State *L) {
 		return luaL_error(L, "World mismatch");
 
 	int output = (lua_gettop(L) >= value_index);
-	int mainkey = ENTITYID_TAG;
 	struct group_key *k = &iter->k[0];
+	struct ecs_token token = { idx };
 
 	struct component_pool *c = &w->c[k->id];
 	if (c->stride == STRIDE_TAG) {
 		// It is a tag
 		if (output) {
 			if (lua_toboolean(L, value_index)) {
-				entity_enable_tag_(w, mainkey, idx, k->id);
+				entity_enable_tag_(w, token, k->id);
 			} else {
-				entity_disable_tag_(w, mainkey, idx, k->id);
+				entity_disable_tag_(w, k->id, idx);
 			}
 			return 0;
 		} else {
-			lua_pushboolean(L, entity_sibling_index_(w, mainkey, idx, k->id) != 0);
+			lua_pushboolean(L, entity_component_index_(w, token, k->id) >= 0);
 			return 1;
 		}
 	}
 
-	unsigned int index = entity_sibling_index_(w, mainkey, idx, k->id);
-	if (index == 0) {
+	int index = entity_component_index_(w, token, k->id);
+	if (index < 0) {
 		if (output)
 			return luaL_error(L, "No component .%s", k->name);
 		else
@@ -1996,7 +2005,7 @@ laccess(lua_State *L) {
 		if (lua_getiuservalue(L, world_index, k->id) != LUA_TTABLE) {
 			luaL_error(L, "Missing lua table for .%s", k->name);
 		}
-		uint64_t eid = ecs_get_eid(w, k->id, index-1);
+		uint64_t eid = ecs_get_eid(w, k->id, index);
 		if (output) {
 			lua_pushvalue(L, value_index);
 			lua_rawseti(L, -2, eid);
@@ -2008,7 +2017,7 @@ laccess(lua_State *L) {
 	}
 
 	// It is C component
-	void *buffer = get_ptr(c, index - 1);
+	void *buffer = get_ptr(c, index);
 	if (output) {
 		ecs_write_component_object_(L, k->field_n, iter->f, buffer);
 		return 0;

@@ -2,18 +2,19 @@
 #define LUA_ECS_CAPI_H
 
 #include <stdint.h>
+#include "luaecs.h"
 
 struct entity_world;
 
-void *entity_iter_(struct entity_world *w, int cid, int index);
+void *entity_iter_(struct entity_world *w, int cid, int index, struct ecs_token *t);
 void entity_clear_type_(struct entity_world *w, int cid);
-int entity_sibling_index_(struct entity_world *w, int cid, int index, int silbling_id);
-int entity_sibling_index_hint_(struct entity_world *w, int cid, int index, int silbling_id, int hint);
-void *entity_add_sibling_(struct entity_world *w, int cid, int index, int silbling_id, const void *buffer);
+int entity_component_index_(struct entity_world *w, struct ecs_token t, int cid);
+int entity_component_index_hint_(struct entity_world *w, struct ecs_token t, int cid, int hint);
+void * entity_component_add_(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
 int entity_new_(struct entity_world *w, int cid, const void *buffer);
-void entity_remove_(struct entity_world *w, int cid, int index);
-void entity_enable_tag_(struct entity_world *w, int cid, int index, int tag_id);
-void entity_disable_tag_(struct entity_world *w, int cid, int index, int tag_id);
+void entity_remove_(struct entity_world *w, struct ecs_token t);
+void entity_enable_tag_(struct entity_world *w, struct ecs_token t, int tag_id);
+void entity_disable_tag_(struct entity_world *w, int tag_id, int index);
 int entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
 int entity_count_(struct entity_world *w, int cid);
 int entity_index_(struct entity_world *w, void *eid);

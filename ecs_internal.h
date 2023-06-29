@@ -39,7 +39,13 @@ struct component_pool {
 	void *buffer;
 };
 
+struct component_lua {
+	unsigned int freelist;
+	unsigned int cap;
+};
+
 struct entity_world {
+	struct component_lua lua;
 	struct entity_id eid;
 	struct entity_group_arena group;
 	struct component_pool c[MAX_COMPONENT];

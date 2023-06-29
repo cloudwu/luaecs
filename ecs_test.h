@@ -70,7 +70,7 @@ static int
 lgetlua(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
 	int index = luaL_checkinteger(L, 2);
-	int t = entity_get_lua(ctx, COMPONENT_LUA, index, L);
+	int t = entity_get_lua(ctx, COMPONENT_LUA, index-1, L);
 	if (t) {
 		return 1;
 	}

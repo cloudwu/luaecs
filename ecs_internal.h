@@ -40,6 +40,7 @@ struct component_pool {
 };
 
 struct component_lua {
+	lua_State *L;	// for lua object table
 	unsigned int freelist;
 	unsigned int cap;
 };

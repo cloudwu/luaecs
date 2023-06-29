@@ -23,7 +23,7 @@ struct ecs_capi {
 	void (*remove)(struct entity_world *w, struct ecs_token t);
 	void (*enable_tag)(struct entity_world *w, struct ecs_token t, int tag_id);
 	void (*disable_tag)(struct entity_world *w, int tag_id, int index);
-	int (*get_lua)(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L);
+	int (*get_lua)(struct entity_world *w, int cid, int index, void *L);
 	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 	int (*count)(struct entity_world *w, int cid);
 	int (*index)(struct entity_world *w, void *eid);
@@ -122,8 +122,8 @@ entity_disable_tag(struct ecs_context *ctx, cid_t tag_id, int index) {
 static inline int
 entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L) {
 	int mid = real_id_(ctx, cid);
-	assert(index > 0);
-	return ctx->api->get_lua(ctx->world, mid, index - 1, ctx->L, 1, L);
+	assert(index >= 0);
+	return ctx->api->get_lua(ctx->world, mid, index, L);
 }
 
 static inline int
@@ -133,7 +133,7 @@ entity_component_lua(struct ecs_context *ctx, struct ecs_token t, cid_t cid, voi
 	if (id < 0) {
 		return 0;
 	} else {
-		return ctx->api->get_lua(ctx->world, realid, id, ctx->L, 1, L);
+		return ctx->api->get_lua(ctx->world, realid, id, L);
 	}
 }
 

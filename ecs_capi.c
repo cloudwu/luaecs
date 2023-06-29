@@ -234,24 +234,17 @@ entity_disable_tag_(struct entity_world *w, int tag_id, int index) {
 }
 
 int
-entity_get_lua_(struct entity_world *w, int cid, int index, void *wL, int world_index, void *L_) {
+entity_get_lua_(struct entity_world *w, int cid, int index, void *L_) {
 	lua_State *L = (lua_State *)L_;
 	struct component_pool *c = &w->c[cid];
 	++index;
-	if (c->stride != STRIDE_LUA || index <= 0 || index > c->n) {
+	if (c->stride != STRIDE_LUA || index < 0 || index >= c->n) {
 		return LUA_TNIL;
 	}
-	if (lua_getiuservalue(wL, world_index, cid) != LUA_TTABLE) {
-		lua_pop(wL, 1);
-		return LUA_TNIL;
-	}
-	int t = lua_rawgeti(wL, -1, index);
-	if (t == LUA_TNIL) {
-		lua_pop(wL, 2);
-		return LUA_TNIL;
-	}
-	lua_xmove(wL, L, 1);
-	lua_pop(wL, 1);
+	lua_State *tL = w->lua.L;
+	unsigned int *lua_index = (unsigned int *)c->buffer;
+	int t = lua_rawgeti(tL, 1, lua_index[index]);
+	lua_xmove(tL, L, 1);
 	return t;
 }
 

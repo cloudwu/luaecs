@@ -112,12 +112,11 @@ ecs_template_instance_component(lua_State *L) {
 	int index = luaL_checkinteger(L, 3) - 1;
 	struct component_pool *c = &w->c[cid];
 	if (c->stride == STRIDE_LUA) {
-		if (lua_getiuservalue(L, 1, 1) != LUA_TTABLE) {
-			luaL_error(L, "Missing lua object table");
-		}
-		unsigned int *lua_index = (unsigned int *)c->buffer;
+		lua_State *tL = w->lua.L;
 		lua_pushvalue(L, 4);
-		lua_rawseti(L, -2, lua_index[index]);
+		lua_xmove(L, tL, 1);
+		unsigned int *lua_index = (unsigned int *)c->buffer;
+		lua_rawseti(tL, 1, lua_index[index]);
 	} else {
 		size_t sz;
 		void *s;

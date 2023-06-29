@@ -499,7 +499,6 @@ remove_all(lua_State *L, struct entity_world *w, struct component_pool *removed,
 			move_lua(pool, i, index, removed_n);
 			++index;
 		}
-		lua_pop(L, 1); // pop lua object table
 		break;
 	case STRIDE_TAG: {
 		entity_index_t last = INVALID_ENTITY;

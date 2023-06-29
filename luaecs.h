@@ -30,6 +30,7 @@ struct ecs_capi {
 	struct ecs_cache * (*cache_create)(struct entity_world *w, int keys[], int n);
 	void (*cache_release)(struct ecs_cache *);
 	void* (*cache_fetch)(struct ecs_cache *, int index, int cid);
+	int (*cache_fetch_index)(struct ecs_cache *, int index, int cid);
 	int (*cache_sync)(struct ecs_cache *);
 };
 
@@ -82,10 +83,10 @@ static inline void *
 entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
 	int realid = real_id_(ctx, cid);
 	int id = ctx->api->component_index(ctx->world, t, realid);
-	if (id == 0) {
+	if (id < 0) {
 		return NULL;
 	} else {
-		return ctx->api->iter(ctx->world, realid, id - 1, NULL);
+		return ctx->api->iter(ctx->world, realid, id, NULL);
 	}
 }
 
@@ -129,10 +130,10 @@ static inline int
 entity_component_lua(struct ecs_context *ctx, struct ecs_token t, cid_t cid, void *L) {
 	int realid = real_id_(ctx, cid);
 	int id = ctx->api->component_index(ctx->world, t, realid);
-	if (id == 0) {
+	if (id < 0) {
 		return 0;
 	} else {
-		return ctx->api->get_lua(ctx->world, realid, id - 1, ctx->L, 1, L);
+		return ctx->api->get_lua(ctx->world, realid, id, ctx->L, 1, L);
 	}
 }
 
@@ -149,10 +150,12 @@ entity_count(struct ecs_context *ctx, int cid) {
 }
 
 static inline int
-entity_index(struct ecs_context *ctx, void *eid) {
-	return ctx->api->index(ctx->world, eid);
+entity_index(struct ecs_context *ctx, void *eid, struct ecs_token *t) {
+	int id = ctx->api->index(ctx->world, eid);
+	if (t)
+		t->id = id;
+	return id;
 }
-
 
 static inline struct ecs_cache *
 entity_cache_create(struct ecs_context *ctx, int keys[], int n) {
@@ -172,6 +175,12 @@ static inline void *
 entity_cache_fetch(struct ecs_context *ctx, struct ecs_cache *c, int index, int cid) {
 	int id = real_id_(ctx, cid);
 	return ctx->api->cache_fetch(c, index, id);
+}
+
+static inline int
+entity_cache_fetch_index(struct ecs_context *ctx, struct ecs_cache *c, int index, int cid) {
+	int id = real_id_(ctx, cid);
+	return ctx->api->cache_fetch_index(c, index, id);
 }
 
 static inline int

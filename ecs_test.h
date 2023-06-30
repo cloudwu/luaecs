@@ -26,11 +26,11 @@ ltest(lua_State *L) {
 	struct ecs_token token;
 	for (i = 0; (v = (struct vector2 *)entity_iter(ctx, COMPONENT_VECTOR2, i, &token)); i++) {
 		printf("vector2 %d: x=%f y=%f\n", i, v->x, v->y);
-		struct id *id = (struct id *)entity_component(ctx, token, COMPONENT_ID);
+		struct id *id = (struct id *)entity_component(ctx, token, COMPONENT_ID, NULL);
 		if (id) {
 			printf("\tid = %d\n", id->v);
 		}
-		void *mark = entity_component(ctx, token, TAG_MARK);
+		void *mark = entity_component(ctx, token, TAG_MARK, NULL);
 		if (mark) {
 			printf("\tMARK\n");
 		}

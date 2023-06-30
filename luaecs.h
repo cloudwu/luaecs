@@ -16,7 +16,7 @@ struct ecs_token { int id; };
 struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index, struct ecs_token *t);
 	void (*clear_type)(struct entity_world *w, int cid);
-	int (*component_index)(struct entity_world *w, struct ecs_token t, int cid);
+	void *(*component)(struct entity_world *w, struct ecs_token t, int cid, int *index);
 	void * (*component_add)(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
 	void (*remove)(struct entity_world *w, struct ecs_token t);
@@ -66,21 +66,10 @@ entity_clear_type(struct ecs_context *ctx, cid_t cid) {
 	ctx->api->clear_type(ctx->world, id);
 }
 
-static inline int
-entity_component_index(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
-	int id = real_id_(ctx, cid);
-	return ctx->api->component_index(ctx->world, t, id);
-}
-
 static inline void *
-entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
+entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid, int *index) {
 	int realid = real_id_(ctx, cid);
-	int id = ctx->api->component_index(ctx->world, t, realid);
-	if (id < 0) {
-		return NULL;
-	} else {
-		return ctx->api->iter(ctx->world, realid, id, NULL);
-	}
+	return ctx->api->component(ctx->world, t, realid, index);
 }
 
 static inline void *
@@ -122,11 +111,11 @@ entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L) {
 static inline int
 entity_component_lua(struct ecs_context *ctx, struct ecs_token t, cid_t cid, void *L) {
 	int realid = real_id_(ctx, cid);
-	int id = ctx->api->component_index(ctx->world, t, realid);
-	if (id < 0) {
-		return 0;
-	} else {
+	int id;
+	if (ctx->api->component(ctx->world, t, realid, &id)) {
 		return ctx->api->get_lua(ctx->world, realid, id, L);
+	} else {
+		return 0;
 	}
 }
 

@@ -83,18 +83,22 @@ entity_clear_type_(struct entity_world *w, int cid) {
 	c->n = 0;
 }
 
-int
-entity_component_index_(struct entity_world *w, struct ecs_token t, int cid) {
-	if (cid < 0)
-		return t.id;
+void *
+entity_component_(struct entity_world *w, struct ecs_token t, int cid, int *index) {
+	if (cid < 0) {
+		if (index) *index = t.id;
+		return entity_iter_(w, cid, t.id, NULL);
+	}
 	entity_index_t eid = make_index_(t.id);
 	struct component_pool *c = &w->c[cid];
 	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);
 	if (result_index >= 0) {
 		c->last_lookup = result_index;
-		return result_index;
+		if (index) *index = result_index;
+		return get_ptr(c, result_index);
 	}
-	return -1;
+	if (index) *index = -1;
+	return NULL;
 }
 
 int

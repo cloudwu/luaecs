@@ -689,7 +689,7 @@ ldeinit_world(lua_State *L) {
 	int i;
 	for (i=0;i<MAX_COMPONENT;i++) {
 		struct component_pool *c = &w->c[i];
-		if (c->stride > 0) {
+		if (c->stride != STRIDE_TAG) {
 			free(c->buffer);
 			c->buffer = NULL;
 			c->id = NULL;

@@ -23,6 +23,7 @@ struct ecs_capi {
 	void (*remove)(struct entity_world *w, struct ecs_token t);
 	void (*enable_tag)(struct entity_world *w, struct ecs_token t, int tag_id);
 	void (*disable_tag)(struct entity_world *w, int tag_id, int index);
+	void (*trim_tag)(struct entity_world *w, int tag_id, int from);
 	int (*get_lua)(struct entity_world *w, int cid, int index, void *L);
 	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 	int (*count)(struct entity_world *w, int cid);
@@ -106,6 +107,12 @@ static inline void
 entity_disable_tag(struct ecs_context *ctx, cid_t tag_id, int index) {
 	int tid = real_id_(ctx, tag_id);
 	ctx->api->disable_tag(ctx->world, tid, index);
+}
+
+static inline void
+entity_trim_tag(struct ecs_context *ctx, cid_t tag_id, int from) {
+	int tid = real_id_(ctx, tag_id);
+	ctx->api->trim_tag(ctx->world, tid, from);
 }
 
 static inline int

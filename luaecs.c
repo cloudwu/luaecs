@@ -631,6 +631,7 @@ lcontext(lua_State *L) {
 		entity_remove_,
 		entity_enable_tag_,
 		entity_disable_tag_,
+		entity_trim_tag_,
 		entity_get_lua_,
 		entity_group_enable_,
 		entity_count_,
@@ -1299,9 +1300,12 @@ leach_group_(lua_State *L, int check) {
 			lua_rawseti(L, 2, 3);
 		}
 	}
+	int mainkey_istag = (mainkey >= 0 && iter->world->c[mainkey].stride == STRIDE_TAG);
 	for (;;) {
 		int idx = i++;
 		index[0] = idx;
+		if (mainkey_istag)
+			entity_trim_tag_(iter->world, mainkey, idx);
 		int ret = query_index(iter, 1, mainkey, idx, index);
 		if (ret < 0)
 			return 0;
@@ -1346,7 +1350,10 @@ lcount(lua_State *L) {
 			return 1;
 		}
 	}
+	int mainkey_istag = (mainkey >= 0 && iter->world->c[mainkey].stride == STRIDE_TAG);
 	for (i = 0;; ++i) {
+		if (mainkey_istag)
+			entity_trim_tag_(iter->world, mainkey, i);
 		int ret = query_index(iter, 1, mainkey, i, index);
 		if (ret < 0)
 			break;

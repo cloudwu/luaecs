@@ -36,21 +36,23 @@ entity_iter_(struct entity_world *w, int cid, int index, struct ecs_token *outpu
 	assert(index >= 0);
 	if (index >= c->n)
 		return NULL;
-	if (c->stride == STRIDE_TAG) {
-		// it's a tag
-		entity_index_t eid = c->id[index];
-		if (index < c->n - 1 && ENTITY_INDEX_CMP(eid , c->id[index + 1])==0) {
-			remove_dup(c, index + 1);
-		}
-		if (output) {
-			output->id = (int)index_(eid);
-		}
-		return DUMMY_PTR;
-	}
 	if (output) {
 		output->id = (int)index_(c->id[index]);
 	}
 	return get_ptr(c, index);
+}
+
+void
+entity_trim_tag_(struct entity_world *w, int tag_id, int index) {
+	if (tag_id < 0)
+		return;
+	struct component_pool *c = &w->c[tag_id];
+	if (c->stride != STRIDE_TAG || index >= c->n)
+		return;
+	entity_index_t eid = c->id[index];
+	if (index < c->n - 1 && ENTITY_INDEX_CMP(eid , c->id[index + 1])==0) {
+		remove_dup(c, index + 1);
+	}
 }
 
 void

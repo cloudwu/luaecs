@@ -55,7 +55,6 @@ int
 ecs_cache_sync(struct ecs_cache *c) {
 	struct entity_world *w = c->w;
 	struct component_pool *mainkey = &w->c[c->mainkey];
-	entity_trim(w, c->mainkey);
 	int n = mainkey->n;
 	if (n > c->cap) {
 		size_t sz = c->keys_n * mainkey->cap * sizeof(entity_index_t);
@@ -69,15 +68,20 @@ ecs_cache_sync(struct ecs_cache *c) {
 
 int
 ecs_cache_fetch_index(struct ecs_cache *c, int index, int cid) {
-	if (index >= c->n)
-		return -1;
 	struct component_pool * mp = &c->w->c[c->mainkey];
+	if (index >= mp->n)
+		return -1;
 	assert(index < mp->n);
 	if (cid == c->mainkey) {
 		return index;
 	} else if (cid == ENTITYID_TAG) {
 		int id = (int)index_(mp->id[index]);
 		return id;
+	}
+	struct ecs_token token;
+	token.id = (int)index_(mp->id[index]);
+	if (index >= c->n) {
+		return entity_component_index_(c->w, token, cid);
 	}
 	struct component_pool * cp = &c->w->c[cid];
 	int offset = c->keys[cid];
@@ -87,8 +91,6 @@ ecs_cache_fetch_index(struct ecs_cache *c, int index, int cid) {
 	if (pos < cp->n && ENTITY_INDEX_CMP(mp->id[index], cp->id[pos]) == 0) {
 		return pos;
 	}
-	struct ecs_token token;
-	token.id = (int)index_(mp->id[index]);
 	int id = entity_component_index_hint_(c->w, token, cid, pos);
 	if (id < 0)
 		return -1;

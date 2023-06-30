@@ -98,22 +98,6 @@ entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token
 	return current_pos;
 }
 
-void
-entity_trim(struct entity_world *w, int cid) {
-	if (cid < 0)
-		return;
-	struct component_pool *c = &w->c[cid];
-	if (c->stride == STRIDE_TAG) {
-		int i;
-		for (i=0;i<c->n-1;i++) {
-			if (ENTITY_INDEX_CMP(c->id[i], c->id[i+1]) == 0) {
-				remove_dup(c, i);
-				break;
-			}
-		}
-	}
-}
-
 int
 entity_count_(struct entity_world *w, int cid) {
 	if (cid < 0)

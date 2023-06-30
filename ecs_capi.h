@@ -20,6 +20,5 @@ int entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_t
 int entity_get_lua_(struct entity_world *w, int cid, int index, void *L);
 int entity_count_(struct entity_world *w, int cid);
 int entity_index_(struct entity_world *w, void *eid);
-void entity_trim(struct entity_world *w, int cid);
 
 #endif

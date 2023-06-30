@@ -17,7 +17,6 @@ struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index, struct ecs_token *t);
 	void (*clear_type)(struct entity_world *w, int cid);
 	int (*component_index)(struct entity_world *w, struct ecs_token t, int cid);
-	int (*component_index_hint)(struct entity_world *w, struct ecs_token t, int cid, int hint);
 	void * (*component_add)(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
 	void (*remove)(struct entity_world *w, struct ecs_token t);
@@ -71,12 +70,6 @@ static inline int
 entity_component_index(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
 	int id = real_id_(ctx, cid);
 	return ctx->api->component_index(ctx->world, t, id);
-}
-
-static inline int
-entity_component_index_hint(struct ecs_context *ctx, struct ecs_token t, cid_t cid, int hint) {
-	int id = real_id_(ctx, cid);
-	return ctx->api->component_index_hint(ctx->world, t, id, hint);
 }
 
 static inline void *

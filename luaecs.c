@@ -2046,7 +2046,9 @@ laccess(lua_State *L) {
 			if (lua_toboolean(L, value_index)) {
 				entity_enable_tag_(w, token, k->id);
 			} else {
-				entity_disable_tag_(w, k->id, idx);
+				int index = entity_component_index_(w, token, k->id);
+				if (index >= 0)
+					entity_disable_tag_(w, k->id, index);
 			}
 			return 0;
 		} else {

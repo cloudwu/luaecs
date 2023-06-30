@@ -16,8 +16,9 @@ struct ecs_token { int id; };
 struct ecs_capi {
 	void *(*iter)(struct entity_world *w, int cid, int index, struct ecs_token *t);
 	void (*clear_type)(struct entity_world *w, int cid);
-	void *(*component)(struct entity_world *w, struct ecs_token t, int cid, int *index);
-	void * (*component_add)(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
+	void *(*component)(struct entity_world *w, struct ecs_token t, int cid);
+	int (*component_index)(struct entity_world *w, struct ecs_token t, int cid);
+	void *(*component_add)(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
 	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
 	void (*remove)(struct entity_world *w, struct ecs_token t);
 	void (*enable_tag)(struct entity_world *w, struct ecs_token t, int tag_id);
@@ -67,9 +68,15 @@ entity_clear_type(struct ecs_context *ctx, cid_t cid) {
 }
 
 static inline void *
-entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid, int *index) {
+entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
 	int realid = real_id_(ctx, cid);
-	return ctx->api->component(ctx->world, t, realid, index);
+	return ctx->api->component(ctx->world, t, realid);
+}
+
+static inline int
+entity_component_index(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
+	int realid = real_id_(ctx, cid);
+	return ctx->api->component_index(ctx->world, t, realid);
 }
 
 static inline void *
@@ -111,8 +118,8 @@ entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L) {
 static inline int
 entity_component_lua(struct ecs_context *ctx, struct ecs_token t, cid_t cid, void *L) {
 	int realid = real_id_(ctx, cid);
-	int id;
-	if (ctx->api->component(ctx->world, t, realid, &id)) {
+	int id = ctx->api->component_index(ctx->world, t, realid);
+	if (id >= 0) {
 		return ctx->api->get_lua(ctx->world, realid, id, L);
 	} else {
 		return 0;

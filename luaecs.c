@@ -625,6 +625,7 @@ lcontext(lua_State *L) {
 		entity_iter_,
 		entity_clear_type_,
 		entity_component_,
+		entity_component_index_,
 		entity_component_add_,
 		entity_new_,
 		entity_remove_,
@@ -1022,7 +1023,7 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 							if (k->id == mainkey)
 								disable_mainkey = 1;
 							else {
-								if (entity_component_(iter->world, token, k->id, NULL))
+								if (entity_component_index_(iter->world, token, k->id) >= 0)
 									entity_disable_tag_(iter->world, k->id, idx);
 							}
 						}
@@ -1039,8 +1040,8 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 				}
 			} else if ((k->attrib & COMPONENT_OUT)
 				&& get_write_component(L, lua_index, k->name, f, c)) {
-				int index;
-				if (entity_component_(iter->world, token, k->id, &index) == NULL) {
+				int index = entity_component_index_(iter->world, token, k->id);
+				if (index < 0) {
 					luaL_error(L, "Can't find component %s of %s", k->name, iter->k[0].name);
 				}
 				if (c->stride == STRIDE_LUA) {
@@ -1122,7 +1123,7 @@ check_update(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
 			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN) && k->id != ENTITYID_TAG) {
 				// readonly C component, check it
 				if (get_write_component(L, lua_index, k->name, f, c)) {
-					void *buffer = entity_component_(iter->world, token, k->id, NULL);
+					void *buffer = entity_component_(iter->world, token, k->id);
 					if (buffer) {
 						write_component_object_check(L, k->field_n, f, buffer, k->name);
 					}
@@ -1168,14 +1169,14 @@ query_index(struct group_iter *iter, int skip, int mainkey, int idx, int index[M
 	for (j = skip; j < iter->nkey; j++) {
 		struct group_key *k = &iter->k[j];
 		if (k->attrib & COMPONENT_ABSENT) {
-			if (entity_component_(iter->world, token, k->id, NULL) != NULL) {
+			if (entity_component_index_(iter->world, token, k->id) >= 0) {
 				// exist. try next
 				return 0;
 			}
 			index[j] = -1;
 		} else if (!is_temporary(k->attrib)) {
-			if (entity_component_(iter->world, token, k->id, &index[j]) == NULL) {
-				index[j] = -1;
+			index[j] = entity_component_index_(iter->world, token, k->id);
+			if (index[j] < 0) {
 				if (!(k->attrib & COMPONENT_OPTIONAL)) {
 					// required. try next
 					return 0;
@@ -1994,7 +1995,7 @@ lfilter(lua_State *L) {
 	for (i = 0; entity_iter_(w, mainkey, i, &token); i++) {
 		for (j = 1; j < iter->nkey; j++) {
 			struct group_key *k = &iter->k[j];
-			if ((entity_component_(w, token, k->id, NULL) != NULL) ^ (!(k->attrib & COMPONENT_ABSENT))) {
+			if ((entity_component_index_(w, token, k->id) >= 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {
 				break;
 			}
 		}
@@ -2033,13 +2034,13 @@ laccess(lua_State *L) {
 			}
 			return 0;
 		} else {
-			lua_pushboolean(L, entity_component_(w, token, k->id, NULL) != NULL);
+			lua_pushboolean(L, entity_component_index_(w, token, k->id) >= 0);
 			return 1;
 		}
 	}
 
-	int index;
-	if (entity_component_(w, token, k->id, &index) == NULL) {
+	int index = entity_component_index_(w, token, k->id);
+	if (index < 0) {
 		if (output)
 			return luaL_error(L, "No component .%s", k->name);
 		else

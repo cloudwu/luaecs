@@ -637,7 +637,7 @@ lcontext(lua_State *L) {
 		entity_remove_,
 		entity_enable_tag_,
 		entity_disable_tag_,
-		entity_trim_tag_,
+		entity_next_tag_,
 		entity_get_lua_,
 		entity_group_enable_,
 		entity_count_,
@@ -1168,22 +1168,29 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 
 // -1 : end ; 0 : next ; 1 : succ
 static int
-query_index(struct group_iter *iter, int skip, int mainkey, int idx, int index[MAX_COMPONENT]) {
-	struct ecs_token token;
-	if (entity_fetch_(iter->world, mainkey, idx, &token) == NULL) {
-		return -1;
+query_index(struct group_iter *iter, int skip, int mainkey, int *idx, int index[MAX_COMPONENT], struct ecs_token *token) {
+	struct ecs_token tmp;
+	if (token) {
+		*idx = entity_next_tag_(iter->world, mainkey, *idx, token);
+		if (*idx < 0)
+			return -1;
+	} else {
+		token = &tmp;
+		if (entity_fetch_(iter->world, mainkey, *idx, token) == NULL)
+			return -1;
+		++*idx;
 	}
 	int j;
 	for (j = skip; j < iter->nkey; j++) {
 		struct group_key *k = &iter->k[j];
 		if (k->attrib & COMPONENT_ABSENT) {
-			if (entity_component_index_(iter->world, token, k->id) >= 0) {
+			if (entity_component_index_(iter->world, *token, k->id) >= 0) {
 				// exist. try next
 				return 0;
 			}
 			index[j] = -1;
 		} else if (!is_temporary(k->attrib)) {
-			index[j] = entity_component_index_(iter->world, token, k->id);
+			index[j] = entity_component_index_(iter->world, *token, k->id);
 			if (index[j] < 0) {
 				if (!(k->attrib & COMPONENT_OPTIONAL)) {
 					// required. try next
@@ -1238,7 +1245,7 @@ lread(lua_State *L) {
 	int idx = get_integer(L, 3, 1, "index") - 1;
 	int mainkey = get_integer(L, 3, 2, "mainkey");
 	int index[MAX_COMPONENT];
-	int r = query_index(iter, 0, mainkey, idx, index);
+	int r = query_index(iter, 0, mainkey, &idx, index, NULL);
 	if (r <= 0) {
 		return luaL_error(L, "Can't read pattern");
 	}
@@ -1306,13 +1313,22 @@ leach_group_(lua_State *L, int check) {
 			lua_rawseti(L, 2, 3);
 		}
 	}
+	struct ecs_token tmp;
+	struct ecs_token *token = NULL;
 	int istag = mainkey_istag(iter);
+	if (istag) {
+		token = &tmp;
+		if (i > 0) {
+			if (lua_rawgeti(L, 2, 0) != LUA_TNUMBER) {
+				return luaL_error(L, "Invalid group iterator, missing token");
+			}
+			token->id = lua_tointeger(L, -1);
+			lua_pop(L, 1);
+		}
+	}
 	for (;;) {
-		int idx = i++;
-		index[0] = idx;
-		if (istag)
-			entity_trim_tag_(iter->world, mainkey, idx);
-		int ret = query_index(iter, 1, mainkey, idx, index);
+		index[0] = i;
+		int ret = query_index(iter, 1, mainkey, &i, index, token);
 		if (ret < 0)
 			return 0;
 		if (ret > 0)
@@ -1320,7 +1336,12 @@ leach_group_(lua_State *L, int check) {
 	}
 
 	lua_pushinteger(L, i);
-	lua_rawseti(L, 2, 1);
+	lua_rawseti(L, 2, 1);	// iterator
+
+	if (istag) {
+		lua_pushinteger(L, token->id);
+		lua_rawseti(L, 2, 0);	// token
+	}
 
 	read_iter(L, 2, iter, index);
 
@@ -1356,11 +1377,10 @@ lcount(lua_State *L) {
 			return 1;
 		}
 	}
-	int istag = mainkey_istag(iter);
-	for (i = 0;; ++i) {
-		if (istag)
-			entity_trim_tag_(iter->world, mainkey, i);
-		int ret = query_index(iter, 1, mainkey, i, index);
+	struct ecs_token token;
+	i = 0;
+	for (;;) {
+		int ret = query_index(iter, 1, mainkey, &i, index, &token);
 		if (ret < 0)
 			break;
 		if (ret > 0)
@@ -1458,7 +1478,7 @@ lfirst(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 2);
 	int mainkey = iter->k[0].id;
 	int index[MAX_COMPONENT];
-	int r = query_index(iter, 0, mainkey, 0, index);
+	int r = query_index(iter, 0, mainkey, 0, index, NULL);
 	if (r <= 0) {
 		return 0;
 	}
@@ -2005,10 +2025,8 @@ lfilter(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 3, "ENTITY_GROUPITER");
 	int mainkey = iter->k[0].id;
 	int i,j;
-	int istag = mainkey_istag(iter);
 	struct ecs_token token;
-	for (i = 0; entity_fetch_(w, mainkey, i, &token); i++) {
-		if (istag) entity_trim_tag_(w, mainkey, i);
+	for (i = 0; (i=entity_next_tag_(w, mainkey, i, &token)) >=0;) {
 		for (j = 1; j < iter->nkey; j++) {
 			struct group_key *k = &iter->k[j];
 			if ((entity_component_index_(w, token, k->id) >= 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {

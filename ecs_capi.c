@@ -42,17 +42,63 @@ entity_fetch_(struct entity_world *w, int cid, int index, struct ecs_token *outp
 	return get_ptr(c, index);
 }
 
-void
-entity_trim_tag_(struct entity_world *w, int tag_id, int index) {
-	if (tag_id < 0)
-		return;
-	struct component_pool *c = &w->c[tag_id];
-	if (c->stride != STRIDE_TAG || index >= c->n)
-		return;
-	entity_index_t eid = c->id[index];
-	if (index < c->n - 1 && ENTITY_INDEX_CMP(eid , c->id[index + 1])==0) {
-		remove_dup(c, index + 1);
+int
+entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token *t) {
+	if (tag_id < 0) {
+		if (index >= w->eid.n)
+			return -1;
+		if (t) {
+			t->id = index;
+		}
+		return index+1;
 	}
+	struct component_pool *c = &w->c[tag_id];
+	if (index >= c->n)
+		return -1;
+
+	int current_id = index_(c->id[index]);
+
+	if (index == 0 || c->stride != STRIDE_TAG || t == NULL) {
+		if (t) {
+			t->id = current_id;
+		}
+		return index+1;
+	}
+
+	int last_id = t->id;
+	if (current_id == last_id) {
+		if (index_(c->id[index-1]) == last_id) {
+			remove_dup(c, index);
+			if (index >= c->n)
+				return -1;
+			t->id = index_(c->id[index]);
+			return index + 1;
+		}
+	}
+	int i;
+	if (current_id <= last_id) {
+		for (i=index;i<c->n;i++) {
+			int id = index_(c->id[i]);
+			if (id > last_id) {
+				t->id = id;
+				return i+1;
+			}
+		}
+		return -1;
+	}
+	// current_id > last_id
+	int current_pos = index;
+	for (i=index-1;i>=0;i--) {
+		int id = index_(c->id[i]);
+		if (id > last_id) {
+			current_id = id;
+			current_pos = i;
+		} else {
+			break;
+		}
+	}
+	t->id = current_id;
+	return current_pos + 1;
 }
 
 void

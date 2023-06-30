@@ -1175,10 +1175,10 @@ query_index(struct group_iter *iter, int skip, int mainkey, int *idx, int index[
 		if (*idx < 0)
 			return -1;
 	} else {
+		++*idx;
 		token = &tmp;
 		if (entity_fetch_(iter->world, mainkey, *idx, token) == NULL)
 			return -1;
-		++*idx;
 	}
 	int j;
 	for (j = skip; j < iter->nkey; j++) {
@@ -1242,7 +1242,7 @@ static int
 lread(lua_State *L) {
 	struct group_iter *iter = (struct group_iter *)lua_touserdata(L, 2);
 	luaL_checktype(L, 3, LUA_TTABLE);
-	int idx = get_integer(L, 3, 1, "index") - 1;
+	int idx = get_integer(L, 3, 1, "index") - 2;
 	int mainkey = get_integer(L, 3, 2, "mainkey");
 	int index[MAX_COMPONENT];
 	int r = query_index(iter, 0, mainkey, &idx, index, NULL);
@@ -1326,16 +1326,17 @@ leach_group_(lua_State *L, int check) {
 			lua_pop(L, 1);
 		}
 	}
+	int idx = i - 1;
 	for (;;) {
-		index[0] = i;
-		int ret = query_index(iter, 1, mainkey, &i, index, token);
+		int ret = query_index(iter, 1, mainkey, &idx, index, token);
 		if (ret < 0)
 			return 0;
 		if (ret > 0)
 			break;
 	}
+	index[0] = idx;
 
-	lua_pushinteger(L, i);
+	lua_pushinteger(L, idx+1);
 	lua_rawseti(L, 2, 1);	// iterator
 
 	if (istag) {
@@ -1365,7 +1366,6 @@ lcount(lua_State *L) {
 	int index[MAX_COMPONENT];
 	int mainkey = iter->k[0].id;
 	int count = 0;
-	int i;
 	if (iter->nkey == 1) {
 		if (mainkey < 0) {
 			lua_pushinteger(L, iter->world->eid.n);
@@ -1378,9 +1378,9 @@ lcount(lua_State *L) {
 		}
 	}
 	struct ecs_token token;
-	i = 0;
+	int idx = -1;
 	for (;;) {
-		int ret = query_index(iter, 1, mainkey, &i, index, &token);
+		int ret = query_index(iter, 1, mainkey, &idx, index, &token);
 		if (ret < 0)
 			break;
 		if (ret > 0)
@@ -1478,7 +1478,8 @@ lfirst(lua_State *L) {
 	struct group_iter *iter = lua_touserdata(L, 2);
 	int mainkey = iter->k[0].id;
 	int index[MAX_COMPONENT];
-	int r = query_index(iter, 0, mainkey, 0, index, NULL);
+	int idx = -1;
+	int r = query_index(iter, 0, mainkey, &idx, index, NULL);
 	if (r <= 0) {
 		return 0;
 	}
@@ -2026,7 +2027,7 @@ lfilter(lua_State *L) {
 	int mainkey = iter->k[0].id;
 	int i,j;
 	struct ecs_token token;
-	for (i = 0; (i=entity_next_tag_(w, mainkey, i, &token)) >=0;) {
+	for (i = -1; (i=entity_next_tag_(w, mainkey, i, &token)) >=0;) {
 		for (j = 1; j < iter->nkey; j++) {
 			struct group_key *k = &iter->k[j];
 			if ((entity_component_index_(w, token, k->id) >= 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {

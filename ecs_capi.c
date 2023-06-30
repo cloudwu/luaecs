@@ -44,13 +44,12 @@ entity_fetch_(struct entity_world *w, int cid, int index, struct ecs_token *outp
 
 int
 entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token *t) {
+	++index;
 	if (tag_id < 0) {
 		if (index >= w->eid.n)
 			return -1;
-		if (t) {
-			t->id = index;
-		}
-		return index+1;
+		t->id = index;
+		return index;
 	}
 	struct component_pool *c = &w->c[tag_id];
 	if (index >= c->n)
@@ -58,11 +57,9 @@ entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token
 
 	int current_id = index_(c->id[index]);
 
-	if (index == 0 || c->stride != STRIDE_TAG || t == NULL) {
-		if (t) {
-			t->id = current_id;
-		}
-		return index+1;
+	if (index == 0 || c->stride != STRIDE_TAG) {
+		t->id = current_id;
+		return index;
 	}
 
 	int last_id = t->id;
@@ -72,7 +69,7 @@ entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token
 			if (index >= c->n)
 				return -1;
 			t->id = index_(c->id[index]);
-			return index + 1;
+			return index;
 		}
 	}
 	int i;
@@ -81,7 +78,7 @@ entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token
 			int id = index_(c->id[i]);
 			if (id > last_id) {
 				t->id = id;
-				return i+1;
+				return i;
 			}
 		}
 		return -1;
@@ -98,7 +95,7 @@ entity_next_tag_(struct entity_world *w, int tag_id, int index, struct ecs_token
 		}
 	}
 	t->id = current_id;
-	return current_pos + 1;
+	return current_pos;
 }
 
 void

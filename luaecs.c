@@ -1112,6 +1112,10 @@ check_update(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
 	int mainkey = iter->k[0].id;
 	int i;
 	struct group_field *f = iter->f;
+	struct ecs_token token;
+	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL) {
+		luaL_error(L, "mainkey[%d] absent", idx);
+	}
 	for (i = 0; i < iter->nkey; i++) {
 		struct group_key *k = &iter->k[i];
 		if (!(k->attrib & COMPONENT_FILTER)) {
@@ -1119,13 +1123,10 @@ check_update(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
 			if (c->stride > 0 && !(k->attrib & COMPONENT_OUT) && (k->attrib & COMPONENT_IN) && k->id != ENTITYID_TAG) {
 				// readonly C component, check it
 				if (get_write_component(L, lua_index, k->name, f, c)) {
-					struct ecs_token token;
-					if (entity_iter_(iter->world, mainkey, idx, &token)) {
-						int index = entity_component_index_(iter->world, token, k->id);
-						if (index >= 0) {
-							void *buffer = get_ptr(c, index);
-							write_component_object_check(L, k->field_n, f, buffer, k->name);
-						}
+					int index = entity_component_index_(iter->world, token, k->id);
+					if (index >= 0) {
+						void *buffer = get_ptr(c, index);
+						write_component_object_check(L, k->field_n, f, buffer, k->name);
 					}
 				}
 			}

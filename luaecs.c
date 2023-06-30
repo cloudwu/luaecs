@@ -36,6 +36,12 @@ new_lua_component_id(lua_State *L, struct entity_world *w) {
 	}
 }
 
+static inline int
+mainkey_istag(struct group_iter *iter) {
+	int mainkey = iter->k[0].id;
+	return (mainkey >= 0 && iter->world->c[mainkey].stride == STRIDE_TAG);
+}
+
 static void
 remove_lua_component(struct entity_world *w, unsigned int idx) {
 	lua_State *L = w->lua.L;
@@ -622,7 +628,7 @@ lcontext(lua_State *L) {
 	ctx->max_id = n;
 	ctx->world = w;
 	static struct ecs_capi c_api = {
-		entity_iter_,
+		entity_fetch_,
 		entity_clear_type_,
 		entity_component_,
 		entity_component_index_,
@@ -1004,7 +1010,7 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 		f += iter->k[i].field_n;
 	}
 	struct ecs_token token;
-	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL)
+	if (entity_fetch_(iter->world, mainkey, idx, &token) == NULL)
 		return luaL_error(L, "Invalid token");
 
 	for (i = skip; i < iter->nkey; i++) {
@@ -1115,7 +1121,7 @@ check_update(lua_State *L, int lua_index, struct group_iter *iter, int idx) {
 	int i;
 	struct group_field *f = iter->f;
 	struct ecs_token token;
-	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL) {
+	if (entity_fetch_(iter->world, mainkey, idx, &token) == NULL) {
 		luaL_error(L, "mainkey[%d] absent", idx);
 	}
 	for (i = 0; i < iter->nkey; i++) {
@@ -1164,7 +1170,7 @@ read_component_in_field(lua_State *L, int lua_index, const char *name, int n, st
 static int
 query_index(struct group_iter *iter, int skip, int mainkey, int idx, int index[MAX_COMPONENT]) {
 	struct ecs_token token;
-	if (entity_iter_(iter->world, mainkey, idx, &token) == NULL) {
+	if (entity_fetch_(iter->world, mainkey, idx, &token) == NULL) {
 		return -1;
 	}
 	int j;
@@ -1300,11 +1306,11 @@ leach_group_(lua_State *L, int check) {
 			lua_rawseti(L, 2, 3);
 		}
 	}
-	int mainkey_istag = (mainkey >= 0 && iter->world->c[mainkey].stride == STRIDE_TAG);
+	int istag = mainkey_istag(iter);
 	for (;;) {
 		int idx = i++;
 		index[0] = idx;
-		if (mainkey_istag)
+		if (istag)
 			entity_trim_tag_(iter->world, mainkey, idx);
 		int ret = query_index(iter, 1, mainkey, idx, index);
 		if (ret < 0)
@@ -1350,9 +1356,9 @@ lcount(lua_State *L) {
 			return 1;
 		}
 	}
-	int mainkey_istag = (mainkey >= 0 && iter->world->c[mainkey].stride == STRIDE_TAG);
+	int istag = mainkey_istag(iter);
 	for (i = 0;; ++i) {
-		if (mainkey_istag)
+		if (istag)
 			entity_trim_tag_(iter->world, mainkey, i);
 		int ret = query_index(iter, 1, mainkey, i, index);
 		if (ret < 0)
@@ -1888,7 +1894,7 @@ lremove(lua_State *L) {
 		int iter = get_integer(L, 2, 1, "index") - 1;
 		int mainkey = get_integer(L, 2, 2, "mainkey");
 		struct ecs_token t;
-		if (entity_iter_(w, mainkey, iter, &t)) {
+		if (entity_fetch_(w, mainkey, iter, &t)) {
 			entity_remove_(w, t);
 		}
 	}
@@ -1999,8 +2005,10 @@ lfilter(lua_State *L) {
 	struct group_iter *iter = luaL_checkudata(L, 3, "ENTITY_GROUPITER");
 	int mainkey = iter->k[0].id;
 	int i,j;
+	int istag = mainkey_istag(iter);
 	struct ecs_token token;
-	for (i = 0; entity_iter_(w, mainkey, i, &token); i++) {
+	for (i = 0; entity_fetch_(w, mainkey, i, &token); i++) {
+		if (istag) entity_trim_tag_(w, mainkey, i);
 		for (j = 1; j < iter->nkey; j++) {
 			struct group_key *k = &iter->k[j];
 			if ((entity_component_index_(w, token, k->id) >= 0) ^ (!(k->attrib & COMPONENT_ABSENT))) {

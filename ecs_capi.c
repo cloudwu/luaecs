@@ -22,7 +22,7 @@ remove_dup(struct component_pool *c, int index) {
 }
 
 void *
-entity_iter_(struct entity_world *w, int cid, int index, struct ecs_token *output) {
+entity_fetch_(struct entity_world *w, int cid, int index, struct ecs_token *output) {
 	if (cid < 0) {
 		assert(cid == ENTITYID_TAG);
 		if (index >= w->eid.n)

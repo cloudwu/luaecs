@@ -6,7 +6,7 @@
 
 struct entity_world;
 
-void *entity_iter_(struct entity_world *w, int cid, int index, struct ecs_token *t);
+void *entity_fetch_(struct entity_world *w, int cid, int index, struct ecs_token *t);
 void entity_clear_type_(struct entity_world *w, int cid);
 void *entity_component_(struct entity_world *w, struct ecs_token t, int cid);
 int entity_component_index_(struct entity_world *w, struct ecs_token t, int cid);

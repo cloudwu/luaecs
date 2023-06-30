@@ -14,7 +14,7 @@ struct ecs_cache;
 struct ecs_token { int id; };
 
 struct ecs_capi {
-	void *(*iter)(struct entity_world *w, int cid, int index, struct ecs_token *t);
+	void *(*fetch)(struct entity_world *w, int cid, int index, struct ecs_token *t);
 	void (*clear_type)(struct entity_world *w, int cid);
 	void *(*component)(struct entity_world *w, struct ecs_token t, int cid);
 	int (*component_index)(struct entity_world *w, struct ecs_token t, int cid);
@@ -57,9 +57,9 @@ real_id_(struct ecs_context *ctx, cid_t cid) {
 }
 
 static inline void *
-entity_iter(struct ecs_context *ctx, cid_t cid, int index, struct ecs_token *t) {
+entity_fetch(struct ecs_context *ctx, cid_t cid, int index, struct ecs_token *t) {
 	int id = real_id_(ctx, cid);
-	return ctx->api->iter(ctx->world, id, index, t);
+	return ctx->api->fetch(ctx->world, id, index, t);
 }
 
 static inline void

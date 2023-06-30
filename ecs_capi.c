@@ -105,8 +105,12 @@ entity_component_(struct entity_world *w, struct ecs_token t, int cid) {
 	if (cid < 0) {
 		return (void *)w->eid.id[id];
 	}
-	struct component_pool * cp = &w->c[cid];
-	return get_ptr(cp, id);
+	if (id >=0) {
+		struct component_pool * cp = &w->c[cid];
+		return get_ptr(cp, id);
+	} else {
+		return NULL;
+	}
 }
 
 int

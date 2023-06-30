@@ -1023,8 +1023,9 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 							if (k->id == mainkey)
 								disable_mainkey = 1;
 							else {
-								if (entity_component_index_(iter->world, token, k->id) >= 0)
-									entity_disable_tag_(iter->world, k->id, idx);
+								int tag_index = entity_component_index_(iter->world, token, k->id);
+								if (tag_index >= 0)
+									entity_disable_tag_(iter->world, k->id, tag_index);
 							}
 						}
 						if (!(k->attrib & COMPONENT_IN)) {

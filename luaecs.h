@@ -19,7 +19,7 @@ struct ecs_capi {
 	void *(*component)(struct entity_world *w, struct ecs_token t, int cid);
 	int (*component_index)(struct entity_world *w, struct ecs_token t, int cid);
 	void *(*component_add)(struct entity_world *w, struct ecs_token t, int cid, const void *buffer);
-	int (*new_entity)(struct entity_world *w, int cid, const void *buffer);
+	int (*new_entity)(struct entity_world *w, int cid, struct ecs_token *t);
 	void (*remove)(struct entity_world *w, struct ecs_token t);
 	void (*enable_tag)(struct entity_world *w, struct ecs_token t, int tag_id);
 	void (*disable_tag)(struct entity_world *w, int tag_id, int index);
@@ -87,9 +87,9 @@ entity_component_add(struct ecs_context *ctx, struct ecs_token t, cid_t cid, con
 }
 
 static inline int
-entity_new(struct ecs_context *ctx, cid_t cid, const void *buffer) {
+entity_new(struct ecs_context *ctx, cid_t cid, struct ecs_token *t) {
 	int mid = real_id_(ctx, cid);
-	return ctx->api->new_entity(ctx->world, mid, buffer);
+	return ctx->api->new_entity(ctx->world, mid, t);
 }
 
 static inline void

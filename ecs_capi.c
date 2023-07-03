@@ -175,23 +175,24 @@ entity_component_add_(struct entity_world *w, struct ecs_token t, int cid, const
 }
 
 int
-entity_new_(struct entity_world *w, int cid, const void *buffer) {
+entity_new_(struct entity_world *w, int cid, struct ecs_token *t) {
 	entity_index_t eid = ecs_new_entityid_(w);
 	if (INVALID_ENTITY_INDEX(eid)) {
 		return -1;
 	}
 	struct component_pool *c = &w->c[cid];
 	assert(c->cap > 0);
-	if (buffer == NULL) {
-		return ecs_add_component_id_(w, cid, eid);
-	} else {
-		assert(c->stride >= 0);
-		int index = ecs_add_component_id_(w, cid, eid);
-		assert(index >= 0);
-		void *ret = get_ptr(c, index);
-		memcpy(ret, buffer, c->stride);
-		return index;
+	int index = ecs_add_component_id_(w, cid, eid);
+	if (index >= 0) {
+		if (t != NULL) {
+			if (cid >= 0) {
+				t->id = index_(w->c[cid].id[index]);
+			} else {
+				t->id = index;
+			}
+		}
 	}
+	return index;
 }
 
 void

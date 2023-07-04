@@ -1,5 +1,6 @@
 local ecs = require "ecs.core"
 
+local all_accessor = {}
 local rawerror = error
 local selfsource <const> = debug.getinfo(1, "S").source
 local function error(errmsg)
@@ -588,6 +589,9 @@ function M:update(tagname)
 		id = assert(context[self].typenames[tagname]).id
 	end
 	self:_update(id)
+	if all_accessor[1] then
+		all_accessor = {}
+	end
 end
 
 function M:type(name)
@@ -628,6 +632,90 @@ do
 			end
 		end
 		return iter
+	end
+end
+
+do
+	-- accessor api
+	local function access(w, eid)
+		local types = setmetatable({}, {
+			__index = function(o, k)
+				local t = w:type(k)
+				o[k] = t
+				return t
+			end
+		})
+		local function reader(o, key)
+			local t = types[key]
+			if t == "tag" then
+				return w:access(eid,key)
+			end
+			local v = w:access(eid, key)
+			if type(v) == "table" then
+				-- lua or c
+				if t == "lua" then
+					rawset(o, key, v)
+					return v
+				else
+					-- it's c component
+					local proxy = setmetatable({}, { __index = v })
+					rawset(o, key, proxy)
+					return proxy
+				end
+			else
+				return v
+			end
+		end
+		local function writer(o, key, value)
+			assert(type(value) ~= "table")
+			local t = types[key]
+			if t == "tag" then
+				w:access(eid,key,value)
+			else
+				rawset(o, key, value)
+			end
+		end
+		local function sync(o)
+			for k,v in pairs(o) do
+				local t = types[k]
+				if type(v) == "table" then
+					if t == "c" then
+						-- sync table
+						if next(v) ~= nil then
+							-- changes
+							local data = getmetatable(v).__index
+							for key,value in pairs(v) do
+								data[key] = value
+								v[key] = nil
+							end
+							w:access(eid, k, data)
+						end
+					end
+					-- don't sync lua component
+				else
+					o[k] = nil
+					w:access(eid, k, v)
+				end
+			end
+		end
+		return {
+			__index = reader,
+			__newindex = writer,
+			__call = sync,
+		}
+	end
+
+	function M:accessor(eid)
+		local n = #all_accessor + 1
+		local proxy = setmetatable({} , access(self, eid))
+		all_accessor[n] = proxy
+		return proxy
+	end
+
+	function M:accessor_sync()
+		for i = 1, #all_accessor do
+			all_accessor[i]()
+		end
 	end
 end
 

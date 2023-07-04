@@ -588,10 +588,8 @@ function M:update(tagname)
 	if tagname then
 		id = assert(context[self].typenames[tagname]).id
 	end
+	self:accessor_reset()
 	self:_update(id)
-	if all_accessor[1] then
-		all_accessor = {}
-	end
 end
 
 function M:type(name)
@@ -706,15 +704,44 @@ do
 	end
 
 	function M:accessor(eid)
-		local n = #all_accessor + 1
-		local proxy = setmetatable({} , access(self, eid))
-		all_accessor[n] = proxy
-		return proxy
+		if not self:exist(eid) then
+			return
+		end
+		local all_accessor = context[self].all_accessor
+		return all_accessor[-eid]
 	end
 
 	function M:accessor_sync()
+		local all_accessor = context[self].all_accessor
 		for i = 1, #all_accessor do
 			all_accessor[i]()
+		end
+	end
+
+	local cache_accessor = {
+		__index = function (o, eid)
+			assert(eid < 0)
+			local n = #o + 1
+			local proxy = setmetatable({} , access(o.world, -eid))
+			o[n] = proxy
+			o[eid] = proxy
+			return proxy
+		end
+	}
+
+	local function accessor_empty(w)
+		return setmetatable({ world = w }, cache_accessor)
+	end
+
+	function M:accessor_reset()
+		local all_accessor = context[self].all_accessor
+		if not all_accessor then
+			context[self].all_accessor = accessor_empty(self)
+		elseif all_accessor[1] then
+			for i = 1, #all_accessor do
+				all_accessor[i]()
+			end
+			context[self].all_accessor = accessor_empty(self)
 		end
 	end
 end
@@ -733,6 +760,7 @@ function ecs.world()
 		size = 0,
 		tag = true,
 	}
+	w:accessor_reset()
 	return w
 end
 

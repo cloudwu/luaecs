@@ -656,7 +656,17 @@ do
 					return v
 				else
 					-- it's c component
-					local proxy = setmetatable({}, { __index = v })
+					local function update(o, k, newv)
+						v[k] = nil
+						rawset(o, k, newv)
+						if next(v) == nil then
+							-- all k update
+							types[key] = "c_all"
+						else
+							types[key] = "c_part"
+						end
+					end
+					local proxy = setmetatable({}, { __index = v, __newindex = update })
 					rawset(o, key, proxy)
 					return proxy
 				end
@@ -677,19 +687,18 @@ do
 			for k,v in pairs(o) do
 				local t = types[k]
 				if type(v) == "table" then
-					if t == "c" then
-						-- sync table
-						if next(v) ~= nil then
-							-- changes
-							local data = getmetatable(v).__index
-							for key,value in pairs(v) do
-								data[key] = value
-								v[key] = nil
-							end
-							w:access(eid, k, data)
+					if t == "c_part" then
+						-- merge and sync table
+						local data = getmetatable(v).__index
+						for key,value in pairs(v) do
+							data[key] = value
+							v[key] = nil
 						end
+						w:access(eid, k, data)
+					elseif t == "c_all" then
+						w:access(eid, k, v)
 					end
-					-- don't sync lua component
+					-- don't sync lua and c (not change) component
 				else
 					o[k] = nil
 					w:access(eid, k, v)

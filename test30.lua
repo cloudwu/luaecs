@@ -47,6 +47,7 @@ assert(a.name == "foo")
 
 a.name = "foobar"
 a.vector.x = 10
+a.vector.y = 20
 a.id = 24
 a.mark = false
 a.object.x = 0

@@ -746,11 +746,14 @@ do
 		local all_accessor = context[self].all_accessor
 		if not all_accessor then
 			context[self].all_accessor = accessor_empty(self)
-		elseif all_accessor[1] then
-			for i = 1, #all_accessor do
-				all_accessor[i]()
+		else
+			local n = #all_accessor
+			if n > 0 then
+				for i = 1, n do
+					all_accessor[i]()
+				end
+				context[self].all_accessor = accessor_empty(self)
 			end
-			context[self].all_accessor = accessor_empty(self)
 		end
 	end
 end

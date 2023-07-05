@@ -1,6 +1,5 @@
 local ecs = require "ecs.core"
 
-local all_accessor = {}
 local rawerror = error
 local selfsource <const> = debug.getinfo(1, "S").source
 local function error(errmsg)
@@ -588,7 +587,6 @@ function M:update(tagname)
 	if tagname then
 		id = assert(context[self].typenames[tagname]).id
 	end
-	self:accessor_reset()
 	self:_update(id)
 end
 
@@ -700,9 +698,9 @@ do
 					end
 					-- don't sync lua and c (not change) component
 				else
-					o[k] = nil
 					w:access(eid, k, v)
 				end
+				o[k] = nil
 			end
 		end
 		return {
@@ -717,25 +715,17 @@ do
 			return
 		end
 		local all_accessor = context[self].all_accessor
-		return all_accessor[-eid]
-	end
-
-	function M:accessor_sync()
-		local all_accessor = context[self].all_accessor
-		for i = 1, #all_accessor do
-			all_accessor[i]()
-		end
+		return all_accessor[eid]
 	end
 
 	local cache_accessor = {
 		__index = function (o, eid)
-			assert(eid < 0)
-			local n = #o + 1
-			local proxy = setmetatable({} , access(o.world, -eid))
-			o[n] = proxy
+			assert(eid > 0)
+			local proxy = setmetatable({} , access(o.world, eid))
 			o[eid] = proxy
 			return proxy
-		end
+		end,
+		__mode = "kv",
 	}
 
 	local function accessor_empty(w)
@@ -743,18 +733,7 @@ do
 	end
 
 	function M:accessor_reset()
-		local all_accessor = context[self].all_accessor
-		if not all_accessor then
-			context[self].all_accessor = accessor_empty(self)
-		else
-			local n = #all_accessor
-			if n > 0 then
-				for i = 1, n do
-					all_accessor[i]()
-				end
-				context[self].all_accessor = accessor_empty(self)
-			end
-		end
+		context[self].all_accessor = accessor_empty(self)
 	end
 end
 

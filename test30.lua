@@ -54,7 +54,7 @@ a.object.x = 0
 
 assert(a.name == "foobar")
 
-w:accessor_sync()
+a() -- sync
 
 for e in w:select "vector:in mark?in id:in object:in name:in" do
 	print(e.vector.x, e.vector.y)

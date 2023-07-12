@@ -149,7 +149,7 @@ static void
 init_buffers(struct component_pool *pool) {
 	int cap = pool->cap;
 	int stride = pool->stride;
-	if (stride < 0) {
+	if (stride <= 0) {
 		// only id
 		size_t id_sz = sizeof(entity_index_t) * cap;
 		pool->id = (entity_index_t *)malloc(id_sz);
@@ -169,7 +169,7 @@ static void
 move_buffers(struct component_pool *pool, void *buffer, entity_index_t *id) {
 	memcpy(pool->id, id, pool->n * sizeof(entity_index_t));
 	int stride = pool->stride;
-	if (stride < 0) {
+	if (stride <= 0) {
 		if (stride == STRIDE_LUA) {
 			stride = sizeof(unsigned int);
 		} else {
@@ -184,7 +184,7 @@ move_buffers(struct component_pool *pool, void *buffer, entity_index_t *id) {
 static void
 free_buffers(struct component_pool *c) {
 	int stride = c->stride;
-	if (stride < 0) {
+	if (stride <= 0) {
 		if (stride == STRIDE_LUA) {
 			stride = sizeof(unsigned int);
 		} else {

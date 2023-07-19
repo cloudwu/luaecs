@@ -347,6 +347,26 @@ do	-- newtype
 	end
 end
 
+function M:alias(alias, typename, field)
+	local ctx = context[self]
+	local typenames = ctx.typenames
+	local c = assert(typenames[typename])
+	assert(typenames[alias] == nil)
+	for _, f in ipairs(c) do
+		if f[2] == field then
+			typenames[alias] = {
+				id = c.id,
+				name = alias,
+				size = c.size,
+				type = f[1],
+				{ f[1], "v", f[3] }
+			}
+			return
+		end
+	end
+	error ("No field " .. field )
+end
+
 local function dump(obj)
 	for e,v in pairs(obj) do
 		if type(v) == "table" then

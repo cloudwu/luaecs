@@ -1523,7 +1523,14 @@ is_value(lua_State *L, struct group_field *f) {
 		return 0;
 	case LUA_TNUMBER:
 		f->key[0] = 0;
-		f->offset = 0;
+		if (lua_geti(L, -2, 1) != LUA_TTABLE) {
+			return luaL_error(L, "Invalid field 0");
+		}
+		if (lua_geti(L, -1, 3) != LUA_TNUMBER) {
+			luaL_error(L, "Invalid field 0 [3] offset");
+		}
+		f->offset = lua_tointeger(L, -1);
+		lua_pop(L, 2);
 		f->type = check_type(L);
 		return 1;
 	default:

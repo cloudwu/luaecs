@@ -15,10 +15,19 @@ w:new {
 	vector = { x = 1, y = 2 }
 }
 
+for e in w:select "vector:in vx:in vy:out" do
+	assert(e.vector.x == e.vx)
+	print(e.vx)
+	e.vy = - e.vx
+end
+
 for e in w:select "vector:in vx:in vy:in" do
 	assert(e.vector.x == e.vx)
 	assert(e.vector.y == e.vy)
+	assert(e.vx == - e.vy)
 	print(e.vx, e.vy)
 end
+
+
 
 

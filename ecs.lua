@@ -301,6 +301,18 @@ do	-- newtype
 		end
 	end
 
+	local function makealias(typenames, alias, c, field_id)
+		assert(typenames[alias] == nil)
+		local f = c[field_id]
+		typenames[alias] = {
+			id = c.id,
+			name = alias,
+			size = c.size,
+			type = f[1],
+			{ f[1], "v", f[3] }
+		}
+	end
+
 	function M:register(typeclass)
 		local name = assert(typeclass.name)
 		local ctx = context[self]
@@ -332,6 +344,10 @@ do	-- newtype
 			c.raw = true
 		elseif c.size > 0 then
 			align_struct(c)
+			for i = 1, #c do
+				local f = c[i]
+				makealias(typenames, name .. "_" .. f[2], c, i)
+			end
 		else
 			-- size == 0, one value
 			if ttype then
@@ -347,26 +363,6 @@ do	-- newtype
 		ctx.typeidtoname[id] = name
 		self:_newtype(id, c.size)
 	end
-end
-
-function M:alias(alias, typename, field)
-	local ctx = context[self]
-	local typenames = ctx.typenames
-	local c = assert(typenames[typename])
-	assert(typenames[alias] == nil)
-	for _, f in ipairs(c) do
-		if f[2] == field then
-			typenames[alias] = {
-				id = c.id,
-				name = alias,
-				size = c.size,
-				type = f[1],
-				{ f[1], "v", f[3] }
-			}
-			return
-		end
-	end
-	error ("No field " .. field )
 end
 
 local function dump(obj)

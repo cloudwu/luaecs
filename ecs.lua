@@ -362,7 +362,7 @@ do	-- newtype
 		typenames[name] = c
 		ctx.typeidtoname[id] = name
 		self:_newtype(id, c.size)
-		return id
+		return id, c.size
 	end
 end
 

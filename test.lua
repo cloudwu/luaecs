@@ -6,25 +6,25 @@ local N = 1
 local w = ecs.world()
 print("memory:", w:memory())
 
-w:register {
+assert(w:register {
 	name = "vector",
 	"x:float",
 	"y:float",
-}
+}, 1)
 
-w:register {
+assert(w:register {
 	name = "mark"
-}
+}, 2)
 
-w:register {
+assert(w:register {
 	name = "id",
 	type = "int"
-}
+}, 3)
 
-w:register {
+assert(w:register {
 	name = "object",
 	type = "lua",
-}
+}, 4)
 
 local t = {}
 for i = 1, N do

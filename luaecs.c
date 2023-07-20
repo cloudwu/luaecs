@@ -621,11 +621,8 @@ lcontext(lua_State *L) {
 	}
 	size_t sz = sizeof(struct ecs_context) + sizeof(int) * n;
 	struct ecs_context *ctx = (struct ecs_context *)lua_newuserdatauv(L, sz, 1);
-	ctx->L = (void *)lua_newthread(L);
 	lua_pushvalue(L, 1);
-	lua_xmove(L, ctx->L, 1); // put world in the index 1 of newthread
 	lua_setiuservalue(L, -2, 1);
-	ctx->max_id = n;
 	ctx->world = w;
 	static struct ecs_capi c_api = {
 		entity_fetch_,
@@ -649,18 +646,6 @@ lcontext(lua_State *L) {
 		ecs_cache_sync,
 	};
 	ctx->api = &c_api;
-	ctx->cid[0] = ENTITY_REMOVED;
-	int i;
-	for (i = 1; i <= n; i++) {
-		if (lua_geti(L, 2, i) != LUA_TNUMBER) {
-			return luaL_error(L, "Invalid id at index %d", i);
-		}
-		ctx->cid[i] = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-		int cid = ctx->cid[i];
-		if (cid < 0 || cid >= MAX_COMPONENT)
-			return luaL_error(L, "Invalid id (%d) at index %d", cid, i);
-	}
 	return 1;
 }
 

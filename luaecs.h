@@ -4,10 +4,7 @@
 #include <assert.h>
 #include <stddef.h>
 
-typedef unsigned int cid_t;
-
-#define MAKE_COMPONENT_ID(id) (cid_t)(0x80000000 | (id))
-#define COMPONENT_EID 0xffffffff
+#define COMPONENT_EID -1
 
 struct entity_world;
 struct ecs_cache;
@@ -38,57 +35,35 @@ struct ecs_capi {
 struct ecs_context {
 	struct ecs_capi *api;
 	struct entity_world *world;
-	void *L; // for memory allocator
-	int max_id;
-	int cid[1];
 };
 
-static inline int
-real_id_(struct ecs_context *ctx, cid_t cid) {
-	if (cid & 0x80000000) {
-		if (cid == COMPONENT_EID)
-			return -1;
-		int index = cid & 0x7fffffff;
-		assert(index >= 0 && index <= ctx->max_id);
-		return ctx->cid[index];
-	} else {
-		return (int)cid;
-	}
-}
-
 static inline void *
-entity_fetch(struct ecs_context *ctx, cid_t cid, int index, struct ecs_token *t) {
-	int id = real_id_(ctx, cid);
+entity_fetch(struct ecs_context *ctx, int id, int index, struct ecs_token *t) {
 	return ctx->api->fetch(ctx->world, id, index, t);
 }
 
 static inline void
-entity_clear_type(struct ecs_context *ctx, cid_t cid) {
-	int id = real_id_(ctx, cid);
+entity_clear_type(struct ecs_context *ctx, int id) {
 	ctx->api->clear_type(ctx->world, id);
 }
 
 static inline void *
-entity_component(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
-	int realid = real_id_(ctx, cid);
-	return ctx->api->component(ctx->world, t, realid);
+entity_component(struct ecs_context *ctx, struct ecs_token t, int cid) {
+	return ctx->api->component(ctx->world, t, cid);
 }
 
 static inline int
-entity_component_index(struct ecs_context *ctx, struct ecs_token t, cid_t cid) {
-	int realid = real_id_(ctx, cid);
-	return ctx->api->component_index(ctx->world, t, realid);
+entity_component_index(struct ecs_context *ctx, struct ecs_token t, int cid) {
+	return ctx->api->component_index(ctx->world, t, cid);
 }
 
 static inline void *
-entity_component_add(struct ecs_context *ctx, struct ecs_token t, cid_t cid, const void *buffer) {
-	int id = real_id_(ctx, cid);
+entity_component_add(struct ecs_context *ctx, struct ecs_token t, int id, const void *buffer) {
 	return ctx->api->component_add(ctx->world, t, id, buffer);
 }
 
 static inline int
-entity_new(struct ecs_context *ctx, cid_t cid, struct ecs_token *t) {
-	int mid = real_id_(ctx, cid);
+entity_new(struct ecs_context *ctx, int mid, struct ecs_token *t) {
 	return ctx->api->new_entity(ctx->world, mid, t);
 }
 
@@ -98,50 +73,43 @@ entity_remove(struct ecs_context *ctx, struct ecs_token t) {
 }
 
 static inline void
-entity_enable_tag(struct ecs_context *ctx, struct ecs_token t, cid_t tag_id) {
-	int tid = real_id_(ctx, tag_id);
+entity_enable_tag(struct ecs_context *ctx, struct ecs_token t, int tid) {
 	ctx->api->enable_tag(ctx->world, t, tid);
 }
 
 static inline void
-entity_disable_tag(struct ecs_context *ctx, cid_t tag_id, int index) {
-	int tid = real_id_(ctx, tag_id);
+entity_disable_tag(struct ecs_context *ctx, int tid, int index) {
 	ctx->api->disable_tag(ctx->world, tid, index);
 }
 
 static inline int
-entity_next(struct ecs_context *ctx, cid_t tag_id, int index, struct ecs_token *t) {
-	int tid = real_id_(ctx, tag_id);
+entity_next(struct ecs_context *ctx, int tid, int index, struct ecs_token *t) {
 	return ctx->api->next_tag_(ctx->world, tid, index, t);
 }
 
 static inline int
-entity_get_lua(struct ecs_context *ctx, cid_t cid, int index, void *L) {
-	int mid = real_id_(ctx, cid);
+entity_get_lua(struct ecs_context *ctx, int mid, int index, void *L) {
 	assert(index >= 0);
 	return ctx->api->get_lua(ctx->world, mid, index, L);
 }
 
 static inline int
-entity_component_lua(struct ecs_context *ctx, struct ecs_token t, cid_t cid, void *L) {
-	int realid = real_id_(ctx, cid);
-	int id = ctx->api->component_index(ctx->world, t, realid);
+entity_component_lua(struct ecs_context *ctx, struct ecs_token t, int cid, void *L) {
+	int id = ctx->api->component_index(ctx->world, t, cid);
 	if (id >= 0) {
-		return ctx->api->get_lua(ctx->world, realid, id, L);
+		return ctx->api->get_lua(ctx->world, cid, id, L);
 	} else {
 		return 0;
 	}
 }
 
 static inline void
-entity_group_enable(struct ecs_context *ctx, int tagid, int n, int groupid[]) {
-	int id = real_id_(ctx, tagid);
+entity_group_enable(struct ecs_context *ctx, int id, int n, int groupid[]) {
 	return ctx->api->group_enable(ctx->world, id, n, groupid);
 }
 
 static inline int
-entity_count(struct ecs_context *ctx, int cid) {
-	int id = real_id_(ctx, cid);
+entity_count(struct ecs_context *ctx, int id) {
 	return ctx->api->count(ctx->world, id);
 }
 
@@ -155,10 +123,6 @@ entity_index(struct ecs_context *ctx, void *eid, struct ecs_token *t) {
 
 static inline struct ecs_cache *
 entity_cache_create(struct ecs_context *ctx, int keys[], int n) {
-	int i;
-	for (i=0;i<n;i++) {
-		keys[i] = real_id_(ctx, keys[i]);
-	}
 	return ctx->api->cache_create(ctx->world, keys, n);
 }
 
@@ -168,14 +132,12 @@ entity_cache_release(struct ecs_context *ctx, struct ecs_cache *c) {
 }
 
 static inline void *
-entity_cache_fetch(struct ecs_context *ctx, struct ecs_cache *c, int index, int cid) {
-	int id = real_id_(ctx, cid);
+entity_cache_fetch(struct ecs_context *ctx, struct ecs_cache *c, int index, int id) {
 	return ctx->api->cache_fetch(c, index, id);
 }
 
 static inline int
-entity_cache_fetch_index(struct ecs_context *ctx, struct ecs_cache *c, int index, int cid) {
-	int id = real_id_(ctx, cid);
+entity_cache_fetch_index(struct ecs_context *ctx, struct ecs_cache *c, int index, int id) {
 	return ctx->api->cache_fetch_index(c, index, id);
 }
 

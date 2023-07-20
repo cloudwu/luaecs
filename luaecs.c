@@ -2149,7 +2149,7 @@ lmethods(lua_State *L) {
 		{ "_addcomponent", ladd_component },
 		{ "_update", lupdate },
 		{ "_clear", lclear_type },
-		{ "_context", lcontext },
+		{ "context", lcontext },
 		{ "_groupiter", lgroupiter },
 		{ "_mergeiter", lmergeiter },
 		{ "_fetch", lfetch },

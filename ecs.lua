@@ -465,19 +465,6 @@ function M:template_destruct(temp)
 	end
 end
 
-function M:context(t)
-	local typenames = context[self].typenames
-	local id = {}
-	for i, name in ipairs(t) do
-		local tc = typenames[name]
-		if not tc then
-			error ("Invalid component name " .. name)
-		end
-		id[i] = tc.id
-	end
-	return self:_context(id)
-end
-
 function M:select(pat)
 	return context[self].select[pat]()
 end

@@ -612,15 +612,7 @@ lclear_type(lua_State *L) {
 static int
 lcontext(lua_State *L) {
 	struct entity_world *w = getW(L);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	lua_len(L, 2);
-	int n = lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	if (n <= 0) {
-		return luaL_error(L, "Invalid length %d of table", n);
-	}
-	size_t sz = sizeof(struct ecs_context) + sizeof(int) * n;
-	struct ecs_context *ctx = (struct ecs_context *)lua_newuserdatauv(L, sz, 1);
+	struct ecs_context *ctx = (struct ecs_context *)lua_newuserdatauv(L, sizeof(struct ecs_context), 1);
 	lua_pushvalue(L, 1);
 	lua_setiuservalue(L, -2, 1);
 	ctx->world = w;

@@ -117,10 +117,12 @@ local function cache_world(obj, k)
 	local function gen_all_pat()
 		local desc = {}
 		local i = 1
-		for name,t in pairs(c.typenames) do
+		local typenames = c.typenames
+		for id , name in pairs(c.typeidtoname) do
+			local t = typenames[name]
 			local a = {
-				name = t.name,
-				id = t.id,
+				name = name,
+				id = id,
 				type = t.type,
 				opt = true,
 				r = true,

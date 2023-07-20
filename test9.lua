@@ -23,6 +23,9 @@ w:register {
 	type = "int",
 }
 
+w:alias("vx", "vector", "x")
+w:alias("vy", "vector", "y")
+
 w:new {
 	vector = { x = 1, y = 2 },
 	text = "Hello World",
@@ -36,7 +39,7 @@ w:new {
 	index = 1,
 }
 
-for v in w:select "mark" do
+for v in w:select "mark vx?in vy?in" do
 	w:readall(v)
 	for k,v in pairs(v) do
 		print(k,v)

@@ -757,6 +757,7 @@ function ecs.world()
 		size = 0,
 		tag = true,
 	}
+	context[w].typeidtoname[ecs._EID] = "eid"
 	w:accessor_reset()
 	return w
 end

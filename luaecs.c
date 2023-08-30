@@ -678,6 +678,25 @@ ldeinit_world(lua_State *L) {
 	return 0;
 }
 
+static int
+lreset_world(lua_State *L) {
+	struct entity_world *w = lua_touserdata(L, 1);
+	entity_group_deinit_(&w->group);
+	entity_id_deinit(&w->eid);
+	memset(&w->group, 0, sizeof(w->group));
+	memset(&w->eid, 0, sizeof(w->eid));
+	lua_settop(w->lua.L, 0);
+	lua_newtable(w->lua.L);
+	w->lua.freelist = 0;
+	w->lua.cap = 0;
+	int i;
+	for (i=0;i<MAX_COMPONENT;i++) {
+		struct component_pool *c = &w->c[i];
+		c->n = 0;
+	}
+	return 0;
+}
+
 static const int
 sizeof_type[TYPE_COUNT] = {
 	sizeof(int),
@@ -2149,6 +2168,7 @@ lmethods(lua_State *L) {
 		{ "_addcomponent", ladd_component },
 		{ "_update", lupdate },
 		{ "_clear", lclear_type },
+		{ "clearall", lreset_world },
 		{ "context", lcontext },
 		{ "_groupiter", lgroupiter },
 		{ "_mergeiter", lmergeiter },

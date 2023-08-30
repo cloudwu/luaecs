@@ -12,6 +12,11 @@ local function new_world()
 		name = "tag"
 	}
 
+	w:register {
+		name = "string",
+		type = "lua",
+	}
+
 	return w
 end
 
@@ -20,16 +25,18 @@ local w = new_world()
 
 w:new {
   value = 1,
+  string = "Hello",
 }
 
 w:new {
   value = 2,
   tag = true,
+  string = "World",
 }
 
 
-for v in w:select "value:in eid:in tag" do
-	print(v.value, v.eid)
+for v in w:select "value:in eid:in tag string:in" do
+	print(v.value, v.eid, v.string)
 end
 
 
@@ -62,8 +69,8 @@ w:new {
   tag = true,
 }
 
-for v in w:select "value:in eid:in tag" do
-	print(v.value, v.eid)
+for v in w:select "value:in eid:in tag string?in" do
+	print(v.value, v.eid, v.string)
 end
 
 -- You can use generate_eid instead of reading eid from file

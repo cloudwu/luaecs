@@ -109,6 +109,18 @@ entity_count_(struct entity_world *w, int cid) {
 void
 entity_clear_type_(struct entity_world *w, int cid) {
 	struct component_pool *c = &w->c[cid];
+	if (c->stride == STRIDE_LUA && c->n > 0) {
+		lua_State *L = w->lua.L;
+		unsigned int * lua_index = (unsigned int *)c->buffer;
+		int next = w->lua.freelist;
+		int i;
+		for (i=0;i<c->n;i++) {
+			lua_pushinteger(L, next);
+			next = lua_index[i];
+			lua_rawseti(L, 1, next);
+		}
+		w->lua.freelist = next;
+	}
 	c->n = 0;
 }
 

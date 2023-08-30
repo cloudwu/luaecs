@@ -134,7 +134,7 @@ entity_component_index_(struct entity_world *w, struct ecs_token t, int cid) {
 	struct component_pool *c = &w->c[cid];
 	int result_index = ecs_lookup_component_(c, eid, c->last_lookup);
 	if (result_index >= 0) {
-		c->last_lookup = result_index;
+		c->last_lookup = result_index + 1;
 		return result_index;
 	}
 	return -1;

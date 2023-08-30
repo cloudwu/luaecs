@@ -245,10 +245,9 @@ lcollect_memory(lua_State *L) {
 	return 0;
 }
 
-static inline int
-add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
+static inline void
+expand_pool(struct component_pool *pool) {
 	int cap = pool->cap;
-	int index = pool->n;
 	if (pool->n == 0) {
 		if (pool->id == NULL) {
 			init_buffers(pool);
@@ -261,6 +260,12 @@ add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
 		init_buffers(pool);
 		move_buffers(pool, buffer, id);
 	}
+}
+
+static inline int
+add_component_id_(struct component_pool *pool, int cid, entity_index_t eid) {
+	expand_pool(pool);
+	int index = pool->n;
 	int cmp;
 	if (index > 0 && (cmp = ENTITY_INDEX_CMP(pool->id[index-1], eid)) >= 0) {
 		do {
@@ -291,6 +296,22 @@ int
 ecs_add_component_id_(struct entity_world *w, int cid, entity_index_t eid) {
 	struct component_pool *pool = &w->c[cid];
 	return add_component_id_(pool, cid, eid);
+}
+
+void *
+entity_component_temp_(struct entity_world *w, int tag, int cid) {
+	struct component_pool *t = &w->c[tag];
+	struct component_pool *pool = &w->c[cid];
+	if (pool->n == t->n) {
+		if (entity_new_(w, tag, NULL) < 0)
+			return NULL;
+	} else if (pool->n > t->n) {
+		return NULL;
+	}
+	expand_pool(pool);
+	int index = pool->n++;
+	pool->id[index] = t->id[index];
+	return get_ptr(pool, index);
 }
 
 entity_index_t
@@ -583,6 +604,24 @@ ladd_component(lua_State *L) {
 }
 
 static int
+ladd_temp(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int tagid = check_cid(L, w, 2);
+	int cid = check_cid(L, w, 3);
+	if (entity_component_temp_(w, tagid, cid) == NULL) {
+		return luaL_error(L, "Add temp component fail");
+	}
+	struct component_pool *c = &w->c[cid];
+	int index = c->n;
+	if (c->stride == STRIDE_LUA) {
+		lua_pushnil(L);
+		new_lua_component(L, w, c, index - 1);
+	}
+	lua_pushinteger(L, index);
+	return 1;
+}
+
+static int
 lupdate(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int removed_id = luaL_optinteger(L, 2, ENTITY_REMOVED);
@@ -622,6 +661,7 @@ lcontext(lua_State *L) {
 		entity_component_,
 		entity_component_index_,
 		entity_component_add_,
+		entity_component_temp_,
 		entity_new_,
 		entity_remove_,
 		entity_enable_tag_,
@@ -2166,6 +2206,7 @@ lmethods(lua_State *L) {
 		{ "_newentity", lnew_entity },
 		{ "_indexentity", lindex_entity },
 		{ "_addcomponent", ladd_component },
+		{ "_addtemp", ladd_temp },
 		{ "_update", lupdate },
 		{ "_clear", lclear_type },
 		{ "clearall", lreset_world },

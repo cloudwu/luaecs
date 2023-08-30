@@ -397,6 +397,21 @@ local function _new_entity(self, eid, obj)
 	end
 end
 
+function M:temporary(tagname, name, v)
+	local ctx = context[self]
+	local typenames = ctx.typenames
+	local tc = typenames[name]
+	if not tc then
+		error ("Invalid type : ".. name)
+	end
+	local id = self:_addtemp(typenames[tagname].id, tc.id)
+	local init = tc.init
+	if init then
+		v = init(v)
+	end
+	cobject(ctx.ref[name], v, id)
+end
+
 function M:object(name, id, v)
 	local ctx = context[self]
 	local pat = ctx.ref[name]

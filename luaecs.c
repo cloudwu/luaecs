@@ -2198,6 +2198,27 @@ lgroup_get(lua_State *L) {
 }
 
 static int
+lswap_component(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid1 = check_cid(L, w, 2);
+	int cid2 = check_cid(L, w, 3);
+	struct component_pool *c1 = &w->c[cid1];
+	struct component_pool *c2 = &w->c[cid2];
+	if (c1->stride != c2->stride) {
+		return luaL_error(L, "Not the same type %d,%d", cid1, cid2);
+	}
+	struct component_pool tmp = *c1;
+	*c1 = *c2;
+	*c2 = tmp;
+	if (tmp.stride > 0) {
+		lua_pushlightuserdata(L, tmp.buffer);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+static int
 lmethods(lua_State *L) {
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
@@ -2228,6 +2249,7 @@ lmethods(lua_State *L) {
 		{ "group_add", lgroup_add },
 		{ "_group_enable", lgroup_enable },
 		{ "group_get", lgroup_get },
+		{ "_swap", lswap_component },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

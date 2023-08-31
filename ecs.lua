@@ -749,6 +749,14 @@ do
 	end
 end
 
+do
+	local cswap = M._swap
+	function M:swap(t1, t2)
+		local ctx = context[self]
+		return cswap(self, ctx.typenames[t1].id, ctx.typenames[t2].id)
+	end
+end
+
 function ecs.world()
 	local w = ecs._world(M)
 	context[w].typenames.REMOVED = {

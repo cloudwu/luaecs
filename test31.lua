@@ -27,6 +27,15 @@ for e in w:select "vector:in vector_x:in vector_y:in" do
 	print(e.vector_x, e.vector_y)
 end
 
+local t = w:template {
+	vector = { x = 100, y = 200 }
+}
+
+w:template_instance(w:new(), t, { vector_x = 42 })
+
+for e in w:select "vector:in" do
+	print(e.vector.x, e.vector.y)
+end
 
 
 

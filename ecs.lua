@@ -309,6 +309,7 @@ do	-- newtype
 			name = alias,
 			size = c.size,
 			type = f[1],
+			alias = true,
 			{ f[1], "v", f[3] }
 		}
 	end
@@ -379,7 +380,7 @@ local function dump(obj)
 end
 
 local cobject = M._object
-local function _new_entity(self, eid, obj)
+local function _new_entity(self, index, obj)
 	local ctx = context[self]
 	local typenames = ctx.typenames
 	local ref = ctx.ref
@@ -388,10 +389,15 @@ local function _new_entity(self, eid, obj)
 		if not tc then
 			error ("Invalid key : ".. k)
 		end
-		local id = self:_addcomponent(eid, tc.id)
-		local init = tc.init
-		if init then
-			v = init(v)
+		local id
+		if tc.alias then
+			id = self:_findcomponent(index, tc.id)
+		else
+			id = self:_addcomponent(index, tc.id)
+			local init = tc.init
+			if init then
+				v = init(v)
+			end
 		end
 		cobject(ref[k], v, id)
 	end

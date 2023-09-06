@@ -604,6 +604,21 @@ ladd_component(lua_State *L) {
 }
 
 static int
+lfind_component(lua_State *L) {
+	struct entity_world *w = getW(L);
+	uint32_t n = luaL_checkinteger(L, 2);
+	if (n >= MAX_ENTITY)
+		return luaL_error(L, "Invalid entity index %u", n);
+	struct ecs_token t = { n };
+	int cid = check_cid(L, w, 3);
+	int index = entity_component_index_(w, t, cid);
+	if (index < 0)
+		return luaL_error(L, "Component %d [%d] not found", cid, n);
+	lua_pushinteger(L, index + 1);
+	return 1;
+}
+
+static int
 ladd_temp(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int tagid = check_cid(L, w, 2);
@@ -2089,7 +2104,7 @@ laccess(lua_State *L) {
 	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
 	int idx = entity_id_find(&w->eid, eid);
 	if (idx < 0)
-		return luaL_error(L, "eid %d not found", idx);
+		return luaL_error(L, "eid %d not found", eid);
 	struct group_iter *iter = lua_touserdata(L, 3);
 	int value_index = 4;
 	if (iter->nkey > 1)
@@ -2227,6 +2242,7 @@ lmethods(lua_State *L) {
 		{ "_newentity", lnew_entity },
 		{ "_indexentity", lindex_entity },
 		{ "_addcomponent", ladd_component },
+		{ "_findcomponent", lfind_component },
 		{ "_addtemp", ladd_temp },
 		{ "_update", lupdate },
 		{ "_clear", lclear_type },

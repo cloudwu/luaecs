@@ -579,6 +579,10 @@ do
 				error ("Invalid key : ".. k)
 			end
 			buf[i] = tc.id
+			local init = tc.init
+			if init then
+				v = init(v)
+			end
 			if tc.marshal then
 				buf[i+1] = _serialize_lua(tc.marshal(v))
 			elseif tc.tag and v then

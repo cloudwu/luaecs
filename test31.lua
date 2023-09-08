@@ -33,9 +33,18 @@ local t = w:template {
 
 w:template_instance(w:new(), t, { vector_x = 42 })
 
+print("Inc Vector.x")
+
+for e in w:select "vector:in" do
+	w:extend(e, "vector_x:out")
+	print(e.vector.x, e.vector.y)
+	e.vector_x = e.vector.x + 1
+end
+
+print("Read Vector")
+
 for e in w:select "vector:in" do
 	print(e.vector.x, e.vector.y)
 end
-
 
 

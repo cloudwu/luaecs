@@ -1651,15 +1651,46 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct grou
 	}
 }
 
+static struct group_field *
+group_key_field(struct group_iter *iter, struct group_key *key) {
+	int n = key - iter->k;
+	int i;
+	int field_n = 0;
+	for (i=0;i<n;i++) {
+		field_n += iter->k[i].field_n;
+	}
+	return &iter->f[field_n];
+}
+
 static int
-need_input(struct group_iter *iter, struct group_key *key) {
+same_key(lua_State *L, struct group_iter *iter1, struct group_key *key1, struct group_iter *iter2, struct group_key *key2) {
+	if (key1->id != key2->id)
+		return 0;
+	if (key1->field_n != key2->field_n) {
+		if (key1->attrib & COMPONENT_EXIST)
+			return 0;
+		if ((key1->attrib & COMPONENT_OUT) && (key2->attrib & COMPONENT_OUT))
+			return luaL_error(L, "Mix C alias component output");
+		return 0;
+	}
+	if (key1->field_n == 1) {
+		struct group_field *f1 = group_key_field(iter1, key1);
+		struct group_field *f2 = group_key_field(iter2, key2);
+		return f1->offset == f2->offset;
+	}
+	return 1;
+}
+
+static int
+need_input(lua_State *L, struct group_iter *iter, struct group_iter *patch, int n) {
+	struct group_key *key = &patch->k[n];
 	int i;
 	if (!(key->attrib & COMPONENT_IN))
 		return 0;
 	if (key->attrib & COMPONENT_OPTIONAL) {
 		for (i=0;i<iter->nkey;i++) {
 			struct group_key * okey = &iter->k[i];
-			if (key->id == okey->id && !(okey->attrib & COMPONENT_FILTER))
+			if (!(okey->attrib & COMPONENT_FILTER) && same_key(L, iter, okey, patch, key))
 				return 0;
 		}
 		return 1;
@@ -1668,7 +1699,8 @@ need_input(struct group_iter *iter, struct group_key *key) {
 
 	for (i=0;i<iter->nkey;i++) {
 		struct group_key * okey = &iter->k[i];
-		if (key->id == okey->id && !(okey->attrib & COMPONENT_FILTER) && !(okey->attrib & COMPONENT_OPTIONAL))
+		if (!(okey->attrib & COMPONENT_FILTER) && !(okey->attrib & COMPONENT_OPTIONAL)
+			&& same_key(L, iter, okey, patch, key))
 			return 0;
 	}
 	return 1;
@@ -1698,7 +1730,7 @@ generate_diff(lua_State *L, struct group_iter *origin, struct group_iter *ext) {
 	int n = 0;
 	int i;
 	for (i=0;i<ext->nkey;i++) {
-		if (need_input(origin, &ext->k[i])) {
+		if (need_input(L, origin, ext, i)) {
 			++n;
 			field_n += ext->k[i].field_n;
 		}
@@ -1715,7 +1747,7 @@ generate_diff(lua_State *L, struct group_iter *origin, struct group_iter *ext) {
 	int field = 0;
 	for (i=0;i<ext->nkey;i++) {
 		int fn = ext->k[i].field_n;
-		if (need_input(origin, &ext->k[i])) {
+		if (need_input(L, origin, ext, i)) {
 			*key = ext->k[i];
 			++key;
 			memcpy(f, ext->f+field, fn * sizeof(struct group_field));
@@ -1729,12 +1761,13 @@ generate_diff(lua_State *L, struct group_iter *origin, struct group_iter *ext) {
 }
 
 static int
-merge_key(struct group_iter *origin, struct group_key *key) {
+merge_key(lua_State *L, struct group_iter *origin, struct group_iter *patch, struct group_key *key) {
 	struct group_key * okey = NULL;
 	int i;
 	for (i=0;i<origin->nkey;i++) {
-		if (origin->k[i].id == key->id) {
-			okey = &origin->k[i];
+		struct group_key * t = &origin->k[i];
+		if (same_key(L, origin, t, patch, key)) {
+			okey = t;
 			break;
 		}
 	}
@@ -1762,7 +1795,7 @@ generate_merge(lua_State *L, struct group_iter *origin, struct group_iter *ext) 
 	int i;
 	int dirty = 0;
 	for (i=0;i<ext->nkey;i++) {
-		int m = merge_key(origin, &ext->k[i]);
+		int m = merge_key(L, origin, ext, &ext->k[i]);
 		if (m >= 0) {
 			dirty = 1;
 			if (m > 0) {
@@ -1795,7 +1828,7 @@ generate_merge(lua_State *L, struct group_iter *origin, struct group_iter *ext) 
 
 	int field = 0;
 	for (i=0;i<ext->nkey;i++) {
-		int m = merge_key(origin, &ext->k[i]);
+		int m = merge_key(L, origin, ext, &ext->k[i]);
 		int fn = ext->k[i].field_n;
 		if (m > 0) {
 			*key = ext->k[i];

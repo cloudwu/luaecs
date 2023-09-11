@@ -267,7 +267,7 @@ local TYPENAME = {
 }
 
 -- make metatable
-local M = ecs._methods()
+local M = ecs._methods(ecs.DEBUG)
 M.__index = M
 
 do	-- newtype
@@ -380,6 +380,7 @@ local function dump(obj)
 end
 
 local cobject = M._object
+local cobject_check = M._object_check
 local function _new_entity(self, index, obj)
 	local ctx = context[self]
 	local typenames = ctx.typenames
@@ -399,7 +400,7 @@ local function _new_entity(self, index, obj)
 				v = init(v)
 			end
 		end
-		cobject(ref[k], v, id)
+		cobject_check(ref[k], v, id)
 	end
 end
 

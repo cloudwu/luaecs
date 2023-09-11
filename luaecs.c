@@ -1025,6 +1025,49 @@ ecs_write_component_object_(lua_State *L, int n, struct group_field *f, void *bu
 }
 
 static void
+check_redundant_key(lua_State *L, int n, struct group_field *f) {
+	int tn = 0;
+	lua_pushnil(L);
+	while (lua_next(L, -2) != 0) {
+		lua_pop(L, 1);
+		++tn;
+	}
+	if (tn == n)
+		return;
+	lua_pushnil(L);
+	while (lua_next(L, -2) != 0) {
+		lua_pop(L, 1);
+		const char * key = lua_tostring(L, -1);
+		if (key == NULL) {
+			luaL_error(L, "Invalid key (%s)", lua_typename(L, lua_type(L, -1)));
+		}
+		int i;
+		int valid = 0;
+		for (i=0; i < n; i++) {
+			if (strcmp(f[i].key, key) == 0) {
+				valid = 1;
+				break;
+			}
+		}
+		if (!valid) {
+			luaL_error(L, "Invalid key .%s",  key);
+		}
+	}
+}
+
+static void
+ecs_write_component_object_check(lua_State *L, int n, struct group_field *f, void *buffer) {
+	if (f->key[0] == 0) {
+		write_value(L, f, buffer);
+	} else {
+		// check redundant lua field
+		check_redundant_key(L, n, f);
+		write_component(L, n, f, -1, (char *)buffer);
+		lua_pop(L, 1);
+	}
+}
+
+static void
 write_component_object_check(lua_State *L, int n, struct group_field *f, const void *buffer, const char *name) {
 	if (f->key[0] == 0) {
 		write_value_check(L, f, buffer, name);
@@ -2026,8 +2069,11 @@ ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer) {
 	}
 }
 
+
+typedef void (*write_object_func)(lua_State *L, int n, struct group_field *f, void *buffer);
+
 static int
-lobject(lua_State *L) {
+lobject_(lua_State *L, write_object_func write_component) {
 	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
 	int index = luaL_checkinteger(L, 3) - 1;
 	int cid = iter->k[0].id;
@@ -2077,10 +2123,20 @@ lobject(lua_State *L) {
 		} else {
 			// write object
 			lua_pushvalue(L, 2);
-			ecs_write_component_object_(L, iter->k[0].field_n, iter->f, buffer);
+			write_component(L, iter->k[0].field_n, iter->f, buffer);
 		}
 	}
 	return 1;
+}
+
+static int
+lobject(lua_State *L) {
+	return lobject_(L, ecs_write_component_object_);
+}
+
+static int
+lobject_withcheck(lua_State *L) {
+	return lobject_(L, ecs_write_component_object_check);
 }
 
 static int
@@ -2268,6 +2324,7 @@ lswap_component(lua_State *L) {
 
 static int
 lmethods(lua_State *L) {
+	int debug = lua_toboolean(L, 1);
 	luaL_Reg m[] = {
 		{ "memory", lcount_memory },
 		{ "collect", lcollect_memory },
@@ -2288,6 +2345,7 @@ lmethods(lua_State *L) {
 		{ "remove", lremove },
 		{ "submit", lsubmit },
 		{ "_object", lobject },
+		{ "_object_check", lobject },
 		{ "_read", lread },
 		{ "_first", lfirst },
 		{ "_dumpid", ldumpid },
@@ -2302,6 +2360,10 @@ lmethods(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
+	if (debug) {
+		lua_pushcfunction(L, lobject_withcheck);
+		lua_setfield(L, -2, "_object_check");
+	}
 
 	return 1;
 }

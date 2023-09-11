@@ -1,3 +1,4 @@
+package.cpath = "./?.dll"
 local ecs_core = require "ecs.core"
 ecs_core.DEBUG = true	-- turn on DEBUG
 

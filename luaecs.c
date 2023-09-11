@@ -1981,21 +1981,7 @@ lgroupiter(lua_State *L) {
 	if (mainkey_attrib & COMPONENT_ABSENT) {
 		return luaL_error(L, "The main key can't be absent");
 	}
-	if (luaL_newmetatable(L, "ENTITY_GROUPITER")) {
-		lua_pushcfunction(L, lpairs_group);
-		lua_setfield(L, -2, "__call");
-	}
-	lua_setmetatable(L, -2);
 	return 1;
-}
-
-static int
-lcheck_iter(lua_State *L) {
-	int enable_check = lua_toboolean(L, 1);
-	luaL_newmetatable(L, "ENTITY_GROUPITER");
-	lua_pushcfunction(L, enable_check ? lpairs_group_check : lpairs_group);
-	lua_setfield(L, -2, "__call");
-	return 0;
 }
 
 static int
@@ -2069,12 +2055,19 @@ ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer) {
 	}
 }
 
+static struct group_iter *
+check_groupiter(lua_State *L, int index) {
+	struct group_iter *iter = lua_touserdata(L, index);
+	if (iter == NULL)
+		luaL_error(L, "Need Userdata Iterator");
+	return iter;
+}
 
 typedef void (*write_object_func)(lua_State *L, int n, struct group_field *f, void *buffer);
 
 static int
 lobject_(lua_State *L, write_object_func write_component) {
-	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
+	struct group_iter *iter = check_groupiter(L, 1);
 	int index = luaL_checkinteger(L, 3) - 1;
 	int cid = iter->k[0].id;
 	struct entity_world *w = iter->world;
@@ -2170,7 +2163,7 @@ lfilter(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int tagid = check_cid(L, w, 2);
 	entity_clear_type_(w, tagid);
-	struct group_iter *iter = luaL_checkudata(L, 3, "ENTITY_GROUPITER");
+	struct group_iter *iter = check_groupiter(L, 3);
 	int mainkey = iter->k[0].id;
 	int i,j;
 	struct ecs_token token;
@@ -2357,12 +2350,17 @@ lmethods(lua_State *L) {
 		{ "_group_enable", lgroup_enable },
 		{ "group_get", lgroup_get },
 		{ "_swap", lswap_component },
+		{ "_pairs", lpairs_group },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);
 	if (debug) {
-		lua_pushcfunction(L, lobject_withcheck);
-		lua_setfield(L, -2, "_object_check");
+		luaL_Reg patch[] = {
+			{ "_object_check", lobject_withcheck },
+			{ "_pairs", lpairs_group_check },
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, patch, 0);
 	}
 
 	return 1;
@@ -2374,7 +2372,6 @@ luaopen_ecs_core(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "_world", lnew_world },
 		{ "_methods", lmethods },
-		{ "check_select", lcheck_iter },
 		
 		/*library extension*/
 		{ "_persistence_methods", lpersistence_methods },

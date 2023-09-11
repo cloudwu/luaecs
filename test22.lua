@@ -1,3 +1,7 @@
+package.cpath = "./?.dll"
+local ecs_core = require "ecs.core"
+ecs_core.DEBUG = true	-- turn on DEBUG
+
 local ecs = require "ecs"
 
 local w = ecs.world()
@@ -21,12 +25,8 @@ local function foo()
 	end
 end
 
-foo()
-
 local v = w:first "size:in"
 assert(v.size.x == 42)
-
-ecs.check_select(true)
 
 print(pcall(foo))
 

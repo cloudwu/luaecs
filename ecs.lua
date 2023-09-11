@@ -487,8 +487,9 @@ function M:template_destruct(temp)
 	end
 end
 
+local cpairs = M._pairs
 function M:select(pat)
-	return context[self].select[pat]()
+	return cpairs(context[self].select[pat])
 end
 
 do

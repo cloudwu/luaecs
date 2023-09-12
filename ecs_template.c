@@ -40,7 +40,7 @@ varint_decode(lua_State *L, uint8_t *buffer, size_t sz, size_t *r) {
 
 int
 ecs_serialize_object(lua_State *L) {
-	struct group_iter *iter = luaL_checkudata(L, 1, "ENTITY_GROUPITER");
+	struct group_iter *iter = check_groupiter(L, 1);
 	int cid = iter->k[0].id;
 	struct entity_world *w = iter->world;
 	if (cid < 0 || cid >= MAX_COMPONENT) {

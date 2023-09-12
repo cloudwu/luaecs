@@ -101,6 +101,14 @@ check_tagid(lua_State *L, struct entity_world *w, int index) {
 	return cid;
 }
 
+static inline struct group_iter *
+check_groupiter(lua_State *L, int index) {
+	struct group_iter *iter = lua_touserdata(L, index);
+	if (iter == NULL)
+		luaL_error(L, "Need Userdata Iterator");
+	return iter;
+}
+
 static inline void *
 get_ptr(struct component_pool *c, int index) {
 	if (c->stride > 0)

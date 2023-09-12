@@ -2055,14 +2055,6 @@ ecs_read_object_(lua_State *L, struct group_iter *iter, void *buffer) {
 	}
 }
 
-static struct group_iter *
-check_groupiter(lua_State *L, int index) {
-	struct group_iter *iter = lua_touserdata(L, index);
-	if (iter == NULL)
-		luaL_error(L, "Need Userdata Iterator");
-	return iter;
-}
-
 typedef void (*write_object_func)(lua_State *L, int n, struct group_field *f, void *buffer);
 
 static int

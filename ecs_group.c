@@ -166,13 +166,14 @@ find_group(struct entity_group_arena *G, int groupid) {
 	if (h >= G->n) {
 		index = insert_group(G, groupid, 0, G->n);
 	} else {
-		struct entity_group *g = G->g[G->cache[h]];
+		int pos = G->cache[h];
+		struct entity_group *g = G->g[pos];
 		if (g->groupid == groupid) {
 			return g;
 		} else if (g->groupid < groupid) {
-			index = insert_group(G, groupid, h+1, G->n);
+			index = insert_group(G, groupid, pos+1, G->n);
 		} else {
-			index = insert_group(G, groupid, 0, h);
+			index = insert_group(G, groupid, 0, pos);
 		}
 	}
 
@@ -261,6 +262,7 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 	ctx.pos = 0;
 	ctx.lastid = 0;
 	int i;
+	// find groups are not empty
 	for (i=0;i<n;i++) {
 		ctx.group[i] = find_group(&w->group, groupid[i]);
 		foreach_begin(ctx.group[i], &ctx.iter[i]);
@@ -269,9 +271,11 @@ enable_(struct entity_world *w, int tagid, int n, int groupid[GROUP_COMBINE]) {
 		}
 	}
 	while (ctx.n > 0) {
+		// find minimal index
 		int index = tag_index(w, &ctx);
-		if (index >= 0)
+		if (index >= 0) {
 			ecs_add_component_id_(w, tagid, make_index_(index));
+		}
 	}
 }
 

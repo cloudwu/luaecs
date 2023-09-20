@@ -492,6 +492,21 @@ function M:select(pat)
 	return cpairs(context[self].select[pat])
 end
 
+function M:select2(pat1, pat2)
+	local selects = context[self].select
+	local f1, p1, v1 = cpairs(selects[pat1])
+	local f2, p2, v2 = cpairs(selects[pat2])
+	return function()
+		v1 = f1(p1, v1)
+		v2 = f2(p2, v2)
+		if v1 == nil then
+			assert(v2 == nil)
+			return
+		end
+		return v1, v2
+	end
+end
+
 do
 	local access = M._access
 	function M:access(eid, pat, ...)

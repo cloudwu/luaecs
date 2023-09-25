@@ -2026,8 +2026,10 @@ lremove(lua_State *L) {
 	if (lua_isinteger(L, 2)) {
 		// It's eid
 		int index = entity_id_find(&w->eid, lua_tointeger(L, 2));
-		if (index < 0)
-			return luaL_error(L, "No eid %d", lua_tointeger(L, 2));
+		if (index < 0) {
+			lua_pushboolean(L, 1);
+			return 1;
+		}
 		struct ecs_token t = { index };
 		entity_remove_(w, t);
 	} else {

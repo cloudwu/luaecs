@@ -131,13 +131,6 @@ local function cache_world(obj, k)
 			desc[i] = a
 			i = i + 1
 		end
-		desc[i] = {
-			name = "REMOVED",
-			id = ecs._REMOVED,
-			opt = true,
-			r = true,
-			tag = true,
-		}
 		return desc
 	end
 
@@ -806,6 +799,7 @@ function ecs.world()
 		tag = true,
 	}
 	context[w].typeidtoname[ecs._EID] = "eid"
+	context[w].typeidtoname[ecs._REMOVED] = "REMOVED"
 	w:accessor_reset()
 	return w
 end

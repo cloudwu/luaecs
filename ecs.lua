@@ -131,6 +131,13 @@ local function cache_world(obj, k)
 			desc[i] = a
 			i = i + 1
 		end
+		desc[i] = {
+			name = "REMOVED",
+			id = ecs._REMOVED,
+			opt = true,
+			r = true,
+			tag = true,
+		}
 		return desc
 	end
 

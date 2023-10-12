@@ -36,6 +36,10 @@ w:new {
 	index = 1,
 }
 
+for v in w:select "mark" do
+	w:remove(v)
+end
+
 for v in w:select "mark vector_x?in vector_y?in" do
 	w:readall(v)
 	for k,v in pairs(v) do

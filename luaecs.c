@@ -837,7 +837,7 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 		else {
 			int64_t v = lua_tointeger(L, -1);
 			if (v < 0 || v > 0xffffffff) {
-				luaL_error(L, "Invalid DWORD %d", (int)v);
+				luaL_error(L, "Invalid .%s (DWORD) %I", f->key[0] ? f->key : "*", v);
 			}
 			*(uint32_t *)ptr = v;
 		}

@@ -806,6 +806,11 @@ get_field(lua_State *L, int i, struct group_field *f) {
 	lua_pop(L, 1);
 }
 
+static inline const char *
+field_name(struct group_field *f) {
+	return f->key[0] ? f->key : "*";
+}
+
 static void
 write_value(lua_State *L, struct group_field *f, char *buffer) {
 	int luat = lua_type(L, -1);
@@ -813,65 +818,65 @@ write_value(lua_State *L, struct group_field *f, char *buffer) {
 	switch (f->type) {
 	case TYPE_INT:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (int)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (int)", field_name(f), lua_typename(L, luat));
 		*(int *)ptr = lua_tointeger(L, -1);
 		break;
 	case TYPE_FLOAT:
 		if (luat != LUA_TNUMBER)
-			luaL_error(L, "Invalid .%s type %s (float)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (float)", field_name(f), lua_typename(L, luat));
 		*(float *)ptr = lua_tonumber(L, -1);
 		break;
 	case TYPE_BOOL:
 		if (luat != LUA_TBOOLEAN)
-			luaL_error(L, "Invalid .%s type %s (bool)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (bool)", field_name(f), lua_typename(L, luat));
 		*(unsigned char *)ptr = lua_toboolean(L, -1);
 		break;
 	case TYPE_INT64:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (int64)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (int64)", field_name(f), lua_typename(L, luat));
 		*(int64_t *)ptr = lua_tointeger(L, -1);
 		break;
 	case TYPE_DWORD:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint32)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint32)", field_name(f), lua_typename(L, luat));
 		else {
 			int64_t v = lua_tointeger(L, -1);
 			if (v < 0 || v > 0xffffffff) {
-				luaL_error(L, "Invalid .%s (DWORD) %I", f->key[0] ? f->key : "*", v);
+				luaL_error(L, "Invalid .%s (DWORD) %I", field_name(f), v);
 			}
 			*(uint32_t *)ptr = v;
 		}
 		break;
 	case TYPE_WORD:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint16)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint16)", field_name(f), lua_typename(L, luat));
 		else {
 			int v = lua_tointeger(L, -1);
 			if (v < 0 || v > 0xffff) {
-				luaL_error(L, "Invalid WORD %d", v);
+				luaL_error(L, "Invalid .%s (WORD) %I", field_name(f), v);
 			}
 			*(uint16_t *)ptr = v;
 		}
 		break;
 	case TYPE_BYTE:
 		if (!lua_isinteger(L, -1))
-			luaL_error(L, "Invalid .%s type %s (uint8)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (uint8)", field_name(f), lua_typename(L, luat));
 		else {
 			int v = lua_tointeger(L, -1);
 			if (v < 0 || v > 255) {
-				luaL_error(L, "Invalid BYTE %d", v);
+				luaL_error(L, "Invalid .%s (BYTE) %I", field_name(f), v);
 			}
 			*(uint8_t *)ptr = v;
 		}
 		break;
 	case TYPE_DOUBLE:
 		if (luat != LUA_TNUMBER)
-			luaL_error(L, "Invalid .%s type %s (double)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (double)", field_name(f), lua_typename(L, luat));
 		*(double *)ptr = lua_tonumber(L, -1);
 		break;
 	case TYPE_USERDATA:
 		if (luat != LUA_TLIGHTUSERDATA)
-			luaL_error(L, "Invalid .%s type %s (pointer)", f->key[0] ? f->key : "*", lua_typename(L, luat));
+			luaL_error(L, "Invalid .%s type %s (pointer)", field_name(f), lua_typename(L, luat));
 		*(void **)ptr = lua_touserdata(L, -1);
 		break;
 	}

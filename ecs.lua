@@ -319,9 +319,12 @@ do	-- newtype
 		local ctx = context[self]
 		ctx.all = nil	-- clear all pattern
 		local typenames = ctx.typenames
-		local id = ctx.id + 1
+		local id = ctx.predefined and ctx.predefined[name]
+		if not id then
+			id = ctx.id + 1
+			ctx.id = id
+		end
 		assert(typenames[name] == nil and id <= ecs._MAXTYPE)
-		ctx.id = id
 		local c = {
 			id = id,
 			name = name,
@@ -784,23 +787,38 @@ do
 	end
 end
 
-function ecs.world()
+function ecs.world(predefined)
 	local w = ecs._world(M)
-	context[w].typenames.REMOVED = {
+	local ctx = context[w]
+	ctx.typenames.REMOVED = {
 		name = "REMOVED",
 		id = ecs._REMOVED,
 		size = 0,
 		tag = true,
 	}
-	context[w].typenames.eid = {
+	ctx.typenames.eid = {
 		name = "eid",
 		id = ecs._EID,
 		size = 0,
 		tag = true,
 	}
-	context[w].typeidtoname[ecs._EID] = "eid"
-	context[w].typeidtoname[ecs._REMOVED] = "REMOVED"
+	ctx.typeidtoname[ecs._EID] = "eid"
+	ctx.typeidtoname[ecs._REMOVED] = "REMOVED"
 	w:accessor_reset()
+	if predefined then
+		ctx.predefined = predefined
+		local maxid = 0
+		for name, id in pairs(predefined) do
+			local exist_name = ctx.typeidtoname[id]
+			if exist_name and exist_name ~= name then
+				error (name .. " is reserved")
+			end
+			if id > maxid then
+				maxid = id
+			end
+		end
+		ctx.id = maxid
+	end
 	return w
 end
 

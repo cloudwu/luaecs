@@ -1168,6 +1168,9 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 					new_lua_component(L, iter->world, c, index);
 				} else {
 					void *buffer = entity_component_add_(iter->world, token, k->id, NULL);
+					if (buffer == NULL) {
+						luaL_error(L, "component %d exist", k->id);
+					}
 					ecs_write_component_object_(L, k->field_n, f, buffer);
 				}
 			}

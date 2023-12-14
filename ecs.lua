@@ -787,6 +787,14 @@ do
 	end
 end
 
+do
+	local cpropagate = M._propagate
+	function M:propagate(c, tag)
+		local ctx = context[self]
+		return cpropagate(self, ctx.typenames[c].id, ctx.typenames[tag].id)
+	end
+end
+
 function ecs.world(predefined)
 	local w = ecs._world(M)
 	local ctx = context[w]

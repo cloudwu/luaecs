@@ -686,6 +686,7 @@ lcontext(lua_State *L) {
 		entity_group_enable_,
 		entity_count_,
 		entity_index_,
+		entity_propagate_tag_,
 		ecs_cache_create,
 		ecs_cache_release,
 		ecs_cache_fetch,
@@ -2318,6 +2319,18 @@ lswap_component(lua_State *L) {
 }
 
 static int
+lpropagate(lua_State *L) {
+	struct entity_world *w = getW(L);
+	int cid = check_cid(L, w, 2);
+	int tag = check_cid(L, w, 3);
+	int ok = entity_propagate_tag_(w, cid, tag);
+	if (ok < 0) {
+		return luaL_error(L, "Invalid components type");
+	}
+	return 0;
+}
+
+static int
 lmethods(lua_State *L) {
 	int debug = lua_toboolean(L, 1);
 	luaL_Reg m[] = {
@@ -2353,6 +2366,7 @@ lmethods(lua_State *L) {
 		{ "group_get", lgroup_get },
 		{ "_swap", lswap_component },
 		{ "_pairs", lpairs_group },
+		{ "_propagate", lpropagate },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, m);

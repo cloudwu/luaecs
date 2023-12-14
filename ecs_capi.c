@@ -313,3 +313,47 @@ entity_index_(struct entity_world *w, void *eid_) {
 	return index;
 }
 
+int
+entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
+	if (cid < 0 || cid >= MAX_COMPONENT) {
+		return -1;
+	}
+	struct component_pool *c = &w->c[cid];
+	if (c->cap == 0 || c->stride < sizeof(uint64_t)) {
+		// Should be a C Componet with an eid (uint64)
+		return -1;
+	}
+	struct component_pool *tag = &w->c[tag_id];
+	if (tag_id < 0 || tag_id >= MAX_COMPONENT || tag->stride != STRIDE_TAG) {
+		return -1;
+	}
+	if (tag->n == 0) {
+		// no tags
+		return 0;
+	}
+	ecs_reserve_component_(tag, tag_id, tag->n + c->n);
+	entity_index_t *root = &tag->id[c->n];
+	int root_n = tag->n;
+	memmove(root, &tag->id[0], tag->n * sizeof(tag->id[0]));
+	tag->n = 0;
+	char * parent = (char *)c->buffer;
+#define APPEND_EID(v) tag->id[tag->n++] = (v)
+	int i;
+	for (i=0;i<c->n;i++) {
+		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) == 0) {
+			APPEND_EID(*root);
+			++root;
+			--root_n;
+		} else {
+			uint64_t eid = *(uint64_t *)parent;
+			if (eid > 0) {
+				int index = entity_id_find(&w->eid, eid);
+				if (index >= 0 && ecs_lookup_component_(tag, make_index_(index), -1) >= 0) {
+					APPEND_EID(c->id[i]);
+				}
+			}
+		}
+		parent += c->stride;
+	}
+	return 0;
+}

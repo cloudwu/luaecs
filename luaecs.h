@@ -26,6 +26,7 @@ struct ecs_capi {
 	void (*group_enable)(struct entity_world *w, int tagid, int n, int groupid[]);
 	int (*count)(struct entity_world *w, int cid);
 	int (*index)(struct entity_world *w, void *eid);
+	int (*propagate_tag)(struct entity_world *w, int cid, int tag_id);
 	struct ecs_cache * (*cache_create)(struct entity_world *w, int keys[], int n);
 	void (*cache_release)(struct ecs_cache *);
 	void* (*cache_fetch)(struct ecs_cache *, int index, int cid);
@@ -125,6 +126,11 @@ entity_index(struct ecs_context *ctx, void *eid, struct ecs_token *t) {
 	if (t)
 		t->id = id;
 	return id;
+}
+
+static inline int
+entity_propagate_tag(struct ecs_context *ctx, int cid, int tag_id) {
+	return ctx->api->propagate_tag(ctx->world, cid, tag_id);
 }
 
 static inline struct ecs_cache *

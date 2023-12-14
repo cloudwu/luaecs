@@ -25,10 +25,12 @@ w:register {
 	B
 		C
 			H
+			I
 	D
 		E
 			F
 		G
+		J
 	DUMMY
 ]]
 
@@ -58,6 +60,8 @@ new ( { name = "F" }, "E" )
 new ( { name = "G" }, "D" )
 new ( { dummy = true , visible = true } )	-- no scene
 new ( { name = "H" }, "C" )
+new ( { name = "I" }, "C" )
+new ( { name = "I" }, "D" )
 
 for v in w:select "scene:in name:in eid:in visible?in" do
 	print(v.eid, v.name, v.scene.parent, v.visible)

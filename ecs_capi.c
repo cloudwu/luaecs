@@ -313,6 +313,39 @@ entity_index_(struct entity_world *w, void *eid_) {
 	return index;
 }
 
+#define HASHSET 127
+#define HASHSET_UNKNOWN 0
+#define HASHSET_SET 1
+#define HASHSET_UNSET 2
+
+struct eid_cache {
+	uint8_t flag[HASHSET];
+	entity_index_t id[HASHSET];
+};
+
+static inline void
+cache_init(struct eid_cache *c) {
+	memset(c->flag, HASHSET_UNKNOWN, sizeof(c->flag));
+}
+
+static inline int
+cache_flag(struct eid_cache *c, int idx) {
+	int key = idx % HASHSET;
+	uint8_t r = c->flag[key];
+	if (r == HASHSET_UNKNOWN)
+		return HASHSET_UNKNOWN;
+	if (index_(c->id[key]) == idx)
+		return r;
+	return HASHSET_UNKNOWN;
+}
+
+static inline void
+cache_set(struct eid_cache *c, int idx, uint8_t s) {
+	int key = idx % HASHSET;
+	c->flag[key] = s;
+	c->id[key] = make_index_(idx);
+}
+
 int
 entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	if (cid < 0 || cid >= MAX_COMPONENT) {
@@ -339,6 +372,8 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	char * parent = (char *)c->buffer;
 #define APPEND_EID(v) tag->id[tag->n++] = (v)
 	int i;
+	struct eid_cache cache;
+	cache_init(&cache);
 	for (i=0;i<c->n;i++) {
 		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) == 0) {
 			APPEND_EID(*root);
@@ -348,8 +383,23 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 			uint64_t eid = *(uint64_t *)parent;
 			if (eid > 0) {
 				int index = entity_id_find(&w->eid, eid);
-				if (index >= 0 && ecs_lookup_component_(tag, make_index_(index), -1) >= 0) {
-					APPEND_EID(c->id[i]);
+				if (index >= 0) {
+					switch (cache_flag(&cache, index)) {
+					case HASHSET_SET:
+						APPEND_EID(c->id[i]);
+						break;
+					case HASHSET_UNKNOWN:
+						if (ecs_lookup_component_(tag, make_index_(index), -1) >= 0) {
+							APPEND_EID(c->id[i]);
+							cache_set(&cache, index, HASHSET_SET);
+						} else {
+							cache_set(&cache, index, HASHSET_UNSET);
+						}
+						break;
+					case HASHSET_UNSET:
+					default:
+						break;
+					}
 				}
 			}
 		}

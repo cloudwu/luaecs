@@ -386,12 +386,12 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	int root_n = tag->n;
 	memmove(root, &tag->id[0], tag->n * sizeof(tag->id[0]));
 	tag->n = 0;
-	char * parent = (char *)c->buffer;
 #define APPEND_EID(v) tag->id[tag->n++] = (v)
 	int i;
 	struct eid_cache cache;
 	cache_init(&cache);
 	int start = find_first(c->id, c->n, *root);
+	char * parent = (char *)c->buffer + start * c->stride;
 	for (i=start;i<c->n;i++) {
 		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) >= 0) {
 			APPEND_EID(*root);

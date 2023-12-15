@@ -375,7 +375,7 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	struct eid_cache cache;
 	cache_init(&cache);
 	for (i=0;i<c->n;i++) {
-		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) == 0) {
+		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) >= 0) {
 			APPEND_EID(*root);
 			++root;
 			--root_n;
@@ -404,6 +404,10 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 			}
 		}
 		parent += c->stride;
+	}
+	for (i=0;i<root_n;i++) {
+		APPEND_EID(*root);
+		++root;
 	}
 	return 0;
 }

@@ -58,21 +58,23 @@ new ( { name = "D" }, "" )
 new ( { name = "E" , visible = true }, "D" )
 new ( { name = "F" }, "E" )
 new ( { name = "G" }, "D" )
-new ( { dummy = true , visible = true } )	-- no scene
+new ( { dummy = true , name = "dummy", visible = true } )	-- no scene
 new ( { name = "H" }, "C" )
 new ( { name = "I" }, "C" )
-new ( { name = "I" }, "D" )
+new ( { name = "J" }, "D" )
+new ( { dummy = true , name = "dummy2"} )	-- no scene
+new ( { dummy = true , name = "dummy3", visible = true } )	-- no scene
 
-for v in w:select "scene:in name:in eid:in visible?in" do
-	print(v.eid, v.name, v.scene.parent, v.visible)
+for v in w:select "name:in scene?in eid:in visible?in" do
+	print(v.eid, v.name, v.scene and v.scene.parent, v.visible)
 end
 
 print "propagate"
 
 w:propagate("scene", "visible")
 
-for v in w:select "scene:in name:in eid:in visible" do
-	print(v.eid, v.name, v.scene.parent)
+for v in w:select "name:in scene?in eid:in visible" do
+	print(v.eid, v.name, v.scene and v.scene.parent)
 end
 
 

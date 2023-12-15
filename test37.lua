@@ -51,6 +51,7 @@ local function new(v, parent)
 	end
 end
 
+new ( { name = "FIRST" }, "" )
 new ( { name = "A" }, "" )
 new ( { name = "B" , visible = true }, "" )
 new ( { name = "C" }, "B" )

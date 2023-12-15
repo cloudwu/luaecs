@@ -346,6 +346,23 @@ cache_set(struct eid_cache *c, int idx, uint8_t s) {
 	c->id[key] = make_index_(idx);
 }
 
+static int
+find_first(entity_index_t *id, int n, entity_index_t v) {
+	int begin = 0;
+	int end = n;
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		int c = ENTITY_INDEX_CMP(id[mid], v);
+		if (c == 0)
+			return mid;
+		if (c < 0)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+	return begin;
+}
+
 int
 entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	if (cid < 0 || cid >= MAX_COMPONENT) {
@@ -374,7 +391,8 @@ entity_propagate_tag_(struct entity_world *w, int cid, int tag_id) {
 	int i;
 	struct eid_cache cache;
 	cache_init(&cache);
-	for (i=0;i<c->n;i++) {
+	int start = find_first(c->id, c->n, *root);
+	for (i=start;i<c->n;i++) {
 		if (root_n > 0 && ENTITY_INDEX_CMP(c->id[i], *root) >= 0) {
 			APPEND_EID(*root);
 			++root;

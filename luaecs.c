@@ -1100,10 +1100,9 @@ remove_tag(lua_State *L, int lua_index, const char *name) {
 	return r;
 }
 
-static int
+static void
 update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int mainkey, int skip) {
 	struct group_field *f = iter->f;
-	int disable_mainkey = 0;
 
 	int i;
 	for (i = 0; i < skip; i++) {
@@ -1111,7 +1110,7 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 	}
 	struct ecs_token token;
 	if (entity_fetch_(iter->world, mainkey, idx, &token) == NULL)
-		return luaL_error(L, "Invalid token");
+		luaL_error(L, "Invalid token");
 
 	for (i = skip; i < iter->nkey; i++) {
 		struct group_key *k = &iter->k[i];
@@ -1127,9 +1126,7 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 						if (lua_toboolean(L, -1)) {
 							entity_enable_tag_(iter->world, token, k->id);
 						} else {
-							if (k->id == mainkey)
-								disable_mainkey = 1;
-							else {
+							if (k->id != mainkey) {
 								int tag_index = entity_component_index_(iter->world, token, k->id);
 								if (tag_index >= 0)
 									entity_disable_tag_(iter->world, k->id, tag_index);
@@ -1178,7 +1175,6 @@ update_iter(lua_State *L, int lua_index, struct group_iter *iter, int idx, int m
 		}
 		f += k->field_n;
 	}
-	return disable_mainkey;
 }
 
 static void
@@ -1365,15 +1361,15 @@ submit_index(lua_State *L, int iter_index, int i, int check) {
 	if (lua_rawgeti(L, iter_index, 3) != LUA_TUSERDATA) {
 		luaL_error(L, "Invalid iterator");
 	}
-	struct group_iter * update_iter = lua_touserdata(L, -1);
+	struct group_iter * iter = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	if (check) {
-		check_update(L, iter_index, update_iter, i);
+		check_update(L, iter_index, iter, i);
 	}
-	if (!update_iter->readonly) {
-		update_last_index(L, iter_index, update_iter, i);
+	if (!iter->readonly) {
+		update_last_index(L, iter_index, iter, i);
 	}
-	return update_iter;
+	return iter;
 }
 
 static int
@@ -1674,6 +1670,10 @@ get_key(struct entity_world *w, lua_State *L, struct group_key *key, struct grou
 	if (check_boolean(L, "absent")) {
 		attrib |= COMPONENT_ABSENT;
 	}
+	if ((attrib & COMPONENT_FILTER) &&
+		(attrib & (COMPONENT_IN | COMPONENT_OUT))) {
+		return luaL_error(L, "filter attrib can't be in/out");
+	}
 	key->attrib = attrib;
 	if (key->id == ENTITYID_TAG) {
 		attrib &= ~COMPONENT_IN;
@@ -1900,7 +1900,12 @@ generate_merge(lua_State *L, struct group_iter *origin, struct group_iter *ext) 
 			assert(okey);
 			if (is_temporary(ext->k[i].attrib) && !is_temporary(okey->attrib))
 				luaL_error(L, "Change temporary");
-			okey->attrib |= ext->k[i].attrib & (COMPONENT_IN | COMPONENT_OUT);
+			int attrib_inout = ext->k[i].attrib & (COMPONENT_IN | COMPONENT_OUT);
+			if (attrib_inout) {
+				// add in/out and remove filter
+				okey->attrib |= attrib_inout;
+				okey->attrib &= ~COMPONENT_FILTER;
+			}
 		}
 		field += fn;
 	}

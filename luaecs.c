@@ -1767,8 +1767,6 @@ create_group_iter(lua_State *L, int nkey, int field_n) {
 	size_t size = header_size + field_n * sizeof(struct group_field);
 	struct group_iter *iter = (struct group_iter *)lua_newuserdatauv(L, size, 1);
 	// refer world
-	iter->nkey = nkey;
-	iter->readonly = 1;
 	struct group_field *f = (struct group_field *)((char *)iter + header_size);
 	iter->nkey = nkey;
 	iter->f = f;

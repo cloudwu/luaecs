@@ -2032,28 +2032,36 @@ lfetch(lua_State *L) {
 	return 1;
 }
 
+// true: found	false : not found
+static int
+get_token(lua_State *L, struct entity_world *w, int index, struct ecs_token *t) {
+	if (lua_isinteger(L, index)) {
+		// It's eid
+		int id = entity_id_find(&w->eid, lua_tointeger(L, index));
+		if (id < 0) {
+			return 0;
+		}
+		t->id = id;
+		return 1;
+	} else {
+		luaL_checktype(L, index, LUA_TTABLE);
+		int iter = get_integer(L, index, 1, "index") - 1;
+		int mainkey = get_integer(L, index, 2, "mainkey");
+		return (entity_fetch_(w, mainkey, iter, t) != NULL);
+	}
+}
+
 static int
 lremove(lua_State *L) {
 	struct entity_world *w = getW(L);
-	if (lua_isinteger(L, 2)) {
-		// It's eid
-		int index = entity_id_find(&w->eid, lua_tointeger(L, 2));
-		if (index < 0) {
-			lua_pushboolean(L, 1);
-			return 1;
-		}
-		struct ecs_token t = { index };
+	struct ecs_token t;
+	if (get_token(L, w, 2, &t)) {
 		entity_remove_(w, t);
+		return 0;
 	} else {
-		luaL_checktype(L, 2, LUA_TTABLE);
-		int iter = get_integer(L, 2, 1, "index") - 1;
-		int mainkey = get_integer(L, 2, 2, "mainkey");
-		struct ecs_token t;
-		if (entity_fetch_(w, mainkey, iter, &t)) {
-			entity_remove_(w, t);
-		}
+		lua_pushboolean(L, 1);
+		return 1;
 	}
-	return 0;
 }
 
 void
@@ -2189,10 +2197,10 @@ lfilter(lua_State *L) {
 int
 laccess(lua_State *L) {
 	struct entity_world *w = getW(L);
-	uint64_t eid = (uint64_t)luaL_checkinteger(L, 2);
-	int idx = entity_id_find(&w->eid, eid);
-	if (idx < 0)
-		return luaL_error(L, "eid %d not found", eid);
+	struct ecs_token token;
+	if (!get_token(L, w, 2, &token)) {
+		return luaL_error(L, "entity not found");
+	}
 	struct group_iter *iter = lua_touserdata(L, 3);
 	int value_index = 4;
 	if (iter->nkey > 1)
@@ -2202,7 +2210,6 @@ laccess(lua_State *L) {
 
 	int output = (lua_gettop(L) >= value_index);
 	struct group_key *k = &iter->k[0];
-	struct ecs_token token = { idx };
 
 	struct component_pool *c = &w->c[k->id];
 	if (c->stride == STRIDE_TAG) {

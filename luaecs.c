@@ -1990,8 +1990,8 @@ lgroupiter(lua_State *L) {
 		}
 	}
 	int mainkey_attrib = iter->k[0].attrib;
-	if (mainkey_attrib & COMPONENT_ABSENT) {
-		return luaL_error(L, "The main key can't be absent");
+	if (mainkey_attrib & (COMPONENT_ABSENT | COMPONENT_OPTIONAL)) {
+		return luaL_error(L, "The main key can't be absent or optional");
 	}
 	return 1;
 }

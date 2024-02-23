@@ -1547,6 +1547,8 @@ lpairs_group_(lua_State *L, int check) {
 		for (i = 0; i < iter->nkey; i++) {
 			struct group_key *k = &iter->k[i];
 			if (k->attrib & COMPONENT_OPTIONAL) {
+				if (i == 0)
+					return luaL_error(L, "mainkey can't be optional");
 				lua_getfield(L, -2, k->name);
 				lua_setfield(L, -2, k->name);
 			}
@@ -1990,8 +1992,8 @@ lgroupiter(lua_State *L) {
 		}
 	}
 	int mainkey_attrib = iter->k[0].attrib;
-	if (mainkey_attrib & (COMPONENT_ABSENT | COMPONENT_OPTIONAL)) {
-		return luaL_error(L, "The main key can't be absent or optional");
+	if (mainkey_attrib & COMPONENT_ABSENT) {
+		return luaL_error(L, "The main key can't be absent");
 	}
 	return 1;
 }

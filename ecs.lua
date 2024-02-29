@@ -634,6 +634,10 @@ end
 
 function M:type(name)
 	local t = context[self].typenames[name]
+	if t == nil then
+		-- absent
+		return
+	end
 	if t.type then
 		return TYPENAME[t.type]
 	elseif t.tag then

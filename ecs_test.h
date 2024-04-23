@@ -7,6 +7,7 @@
 #define TAG_MARK 2
 #define COMPONENT_ID 3
 #define COMPONENT_LUA 4
+#define COMPONENT_USERDATA 1
 
 struct vector2 {
 	float x;
@@ -59,7 +60,8 @@ struct userdata_t {
 static int
 ltestuserdata(lua_State *L) {
 	struct ecs_context *ctx = lua_touserdata(L, 1);
-	struct userdata_t *ud = entity_fetch(ctx, 1, 0, NULL);
+	struct userdata_t *ud = entity_fetch(ctx, COMPONENT_USERDATA, 0, NULL);
+
 	ud->a = 1 - ud->a;
 	ud->b = ctx;
 	return 0;

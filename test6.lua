@@ -27,10 +27,9 @@ local function print_v()
 	w:extend(v, "t:in")
 	print(".a = ", v.t.a)
 	print(".a = ", v.t.b)
-
 end
 
-local ctx = w:context { "t" }
+local ctx = w:context()
 
 print("ctx = ", ctx)
 
@@ -59,7 +58,7 @@ w:new {
 	flag = true,
 }
 
-local v = w:first "flag:update t:in"
+local v = w:first "t:in flag:update"
 assert(v.t.a == true)
 v.flag = false
 w:submit(v)

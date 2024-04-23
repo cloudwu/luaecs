@@ -1580,13 +1580,19 @@ lfirst(lua_State *L) {
 	int mainkey = iter->k[0].id;
 	int index[MAX_COMPONENT];
 	int idx = -1;
-	int r = query_index(iter, 0, mainkey, &idx, index, NULL);
-	if (r <= 0) {
-		return 0;
+
+	for (;;) {
+		int ret = query_index(iter, 1, mainkey, &idx, index, NULL);
+		if (ret < 0)
+			return 0;
+		if (ret > 0)
+			break;
 	}
+	index[0] = idx;
+
 	if (lua_type(L, 3) == LUA_TTABLE) {
 		luaL_checktype(L, 3, LUA_TTABLE);
-		lua_pushinteger(L, 1);
+		lua_pushinteger(L, idx + 1);
 		lua_rawseti(L, 3, 1);
 		lua_pushinteger(L, mainkey);
 		lua_rawseti(L, 3, 2);

@@ -651,9 +651,9 @@ end
 
 do
 	local cfilter = M._filter
-	function M:filter(tagname, pat)
+	function M:filter(tagname, pat, keepexisting)
 		local ctx = context[self]
-		return cfilter(self, ctx.typenames[tagname].id, ctx.select[pat])
+		return cfilter(self, ctx.typenames[tagname].id, ctx.select[pat], keepexisting)
 	end
 end
 

@@ -2184,8 +2184,9 @@ static int
 lfilter(lua_State *L) {
 	struct entity_world *w = getW(L);
 	int tagid = check_cid(L, w, 2);
-	entity_clear_type_(w, tagid);
 	struct group_iter *iter = check_groupiter(L, 3);
+	if (lua_toboolean(L, 4) == 0)
+		entity_clear_type_(w, tagid);
 	int mainkey = iter->k[0].id;
 	int i,j;
 	struct ecs_token token;
@@ -2196,8 +2197,9 @@ lfilter(lua_State *L) {
 				break;
 			}
 		}
-		if (j == iter->nkey)
+		if (j == iter->nkey) {
 			entity_enable_tag_(w, token, tagid);
+		}
 	}
 	return 0;
 }

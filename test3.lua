@@ -39,3 +39,8 @@ for v in w:select "tag value:in" do
 	print("3x", v.value)
 end
 
+w:filter("tag", "value 2x", true)	-- filter add the value is 2x
+
+for v in w:select "tag value:in" do
+	print("3x or 2x", v.value)
+end

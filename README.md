@@ -24,7 +24,7 @@ w:register {
 
 -- Create a new entity with components vector and name.
 local eid = w:new {
-	vector = { 1.0, 2.0 },
+	vector = { x = 1.0, y = 2.0 },
 	name = "point",
 }
 
